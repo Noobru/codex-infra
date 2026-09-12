@@ -57,7 +57,7 @@ Consulte status, tentativas e artefatos antes de retry. `cancel JOB_ID` solicita
 
 Contexto atual, conhecimento promovido e grafo entram no caminho canônico de preview/prepare/run. Não é necessário indexar manualmente antes de cada tarefa. Fontes obrigatórias, validade, precedência, conflito, orçamento e truncamento permanecem explícitos. Referência não ganha autoridade por entrar no contexto.
 
-O ciclo de aprendizado usa `propose_learning`, `review_learning`, `learning_shadow_source`, `validate_learning`, `promote_learning` e `revert_learning`. A proposta deve estar ligada a uma tentativa real, a validação deve incluir os bytes exatos da proposta e a promoção exige decisão documentada do owner. Uma prática promovida alimenta contexto futuro; não instala scripts globais nem os executa automaticamente.
+O ciclo de aprendizado usa `propose_learning`, `review_learning`, `learning_shadow_source`, `validate_learning`, `promote_learning` e `revert_learning`. A proposta deve estar ligada a uma tentativa real ou a uma revisão imutável de interação, a validação deve incluir os bytes exatos da proposta e a promoção exige decisão documentada do owner. Uma prática promovida alimenta contexto futuro; não instala scripts globais nem os executa automaticamente.
 
 ## Segurança e recuperação
 

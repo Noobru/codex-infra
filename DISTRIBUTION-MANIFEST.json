@@ -89,8 +89,8 @@
     },
     {
       "path": "docs/INTERACTIONS.md",
-      "bytes": 2178,
-      "sha256": "54e726eb0ed06f08bbc24492dfd253bdae246c90a9439c827a32c04693f6222c"
+      "bytes": 2427,
+      "sha256": "9762a72134db4555fe188c933b29dbed4981dececa944280b6be4bb590f6f8a0"
     },
     {
       "path": "docs/PROPOSTA.md",
@@ -99,8 +99,8 @@
     },
     {
       "path": "docs/USO.md",
-      "bytes": 5989,
-      "sha256": "25bf676639ca7470983bd4aca8ac01fb4d6b49f8744132238e8e84151d2fd871"
+      "bytes": 6102,
+      "sha256": "9d9f2920653d9db872bb0ef93d8e735eb6f59fbf0d53b7a5a5d111a5d2bd6e50"
     },
     {
       "path": "fixtures/security-local/gate-ci.json",
@@ -692,5 +692,6 @@
     "sanitization": "passed",
     "localCi": "required-before-commit",
     "remoteWorkflows": "absent"
-  }
+  },
+  "updatedAt": "2026-09-12T19:36:55.970319+00:00"
 }

@@ -10,7 +10,9 @@ A skill usa `enter_interaction` com a identidade da conversa (`CODEX_THREAD_ID`,
 
 ## Migração de tarefas existentes
 
-`import_threads` recebe metadados locais selecionados, como ID, título, CWD, estado observado e referência da tarefa. A importação não lê transcrições, não executa o projeto e não interpreta `idle` como concluído. O estado inicial é `imported`; a próxima retomada confirma objetivo e continuidade. Atualizações locais posteriores não são apagadas por um inventário antigo.
+A CLI `node dist/src/cli.js interactions-import --file inventory.local.json` recebe metadados locais selecionados, como ID, título, CWD, estado observado e referência da tarefa. A importação não lê transcrições, não executa o projeto e não interpreta `idle` como concluído. O estado inicial é `imported`; a próxima retomada confirma objetivo e continuidade. Atualizações locais posteriores não são apagadas por um inventário antigo.
+
+Use `InteractionImportSchema` de `src/interactions.ts` para o JSON. Não existe tool MCP de importação em massa; a CLI reutiliza `InteractionStore.importThreads`.
 
 Antes de importar, identifique exatamente quais tarefas Codex locais estão no escopo. Conversas de outros clientes ou contas não são incluídas por associação. Metadados importados podem ser privados e permanecem na área de artefatos ignorada pelo Git.
 
