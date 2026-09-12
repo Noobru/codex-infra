@@ -16,7 +16,7 @@ export const states: Record<Status, { label: string; tone: Tone; icon: LucideIco
 export const views: { id: View; title: string; icon: LucideIcon; stage?: string; description: string }[] = [
   { id: 'overview', title: 'Overview', icon: LayoutDashboard, description: 'Recorded work, current states, and the evidence available to inspect.' },
   { id: 'live', title: 'Live Run', icon: Activity, description: 'Inspect one recorded run, its contract, routing, checks, and timeline.' },
-  { id: 'efficiency', title: 'Efficiency', icon: Zap, description: 'Observed quantities and the evidence still needed to measure a gain.' },
+  { id: 'efficiency', title: 'Efficiency', icon: Zap, description: 'How our results change over time, and which skills, scripts and practices accompanied those changes.' },
   { id: 'project', title: 'Project View', icon: Layers3, description: 'Registered projects and their recorded activity, ready to inspect.' },
   { id: 'evidence', title: 'Evidence & Recovery', icon: ShieldCheck, description: 'Recorded evidence, backup manifests and dated recovery checks.' },
   { id: 'learning', title: 'Learning Queue', icon: Sparkles, description: 'Review declared candidates and the signals that support a learning decision.' },
@@ -57,4 +57,3 @@ export function ScopeNote({ children }: { children: ReactNode }) {
 export function SectionHeading({ title, label, count }: { title: string; label: string; count?: string }) {
   return <div className="section-heading"><div><div className="section-kicker"><span className="eyebrow-dot cyan-dot" />{label}</div><h2>{title}</h2></div>{count && <span className="section-count">{count}</span>}</div>;
 }
-

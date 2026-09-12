@@ -29,6 +29,9 @@ test('aggregate views use canonical records and never require registered product
   assert.equal(searched.overview.page.total,1);
   assert.match(searched.overview.runs[0]!.objectiveExcerpt,/21/);
   const efficiency=await reader.screen({view:'efficiency'});
+  assert.equal(efficiency.history?.data?.points.length,14);
+  assert.equal(efficiency.history?.data?.telemetry.enabled,false);
+  assert.ok(efficiency.improvements?.data);
   const receipt=efficiency.evaluations.data!.items[0]!;
   assert.equal(receipt.technical.criticalGateStatus,'failed');
   assert.equal(receipt.acceptance.status,'not-recorded');
@@ -62,5 +65,9 @@ test('screen endpoint supplies complete bootstrap with conditional reads and sta
   assert.equal((await fetch(url+'/api/view?view=live&status=completed',{headers:{'If-None-Match':response.headers.get('etag')!}})).status,304);
   assert.equal((await fetch(url+'/api/view?status=invalid')).status,400);
   assert.equal((await fetch(url+'/api/view?view=invalid')).status,400);
+  const historical=await fetch(url+'/api/view?view=efficiency&history_days=30');
+  assert.equal(historical.status,200);
+  assert.equal(((await historical.json()) as any).history.data.points.length,30);
+  assert.equal((await fetch(url+'/api/view?view=efficiency&history_days=2')).status,400);
   assert.equal((await fetch(url+'/api/view',{method:'POST'})).status,405);
 });

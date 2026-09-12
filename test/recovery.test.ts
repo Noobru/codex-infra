@@ -85,6 +85,48 @@ test('snapshot excludes dependencies, credentials, logs and older backups', (t) 
   assert.throws(() => manager.snapshot(join(source, 'src/backup')), /copied source directory/);
 });
 
+test('recovery observations and restore accept the G-IDEIA templates included in R9 snapshots', async t => {
+  const { root, source, manager } = fixture(t);
+  const templates = ['contract', 'evidence', 'index', 'prd', 'prevc', 'spec'];
+  for (const template of templates) put(source, `templates/g-ideia/${template}.md`, `# Fixture ${template}\n`);
+  put(source, 'README.md', 'Infrastructure fixture');
+  const snapshotPath = join(source, 'recovery/backups/r9-g-ideia');
+  const manifest = manager.snapshot(snapshotPath);
+  const manifestBytes = readFileSync(join(snapshotPath, SNAPSHOT_MANIFEST));
+  assert.equal(manifest.files.filter(file => file.path.startsWith('templates/g-ideia/')).length, templates.length);
+
+  const observations = await manager.observations();
+  assert.deepEqual(observations.warnings, []);
+  assert.equal(observations.totalSnapshots, 1);
+  assert.deepEqual(observations.snapshots, [{
+    name: 'r9-g-ideia', createdAt: manifest.createdAt, files: manifest.files.length,
+    bytes: manifest.files.reduce((sum, file) => sum + file.bytes, 0),
+    manifestSha256: createHash('sha256').update(manifestBytes).digest('hex'),
+    evidence: `recovery/backups/r9-g-ideia/${SNAPSHOT_MANIFEST}`,
+  }]);
+  assert.deepEqual(observations.verifications, [], 'manifest observation must not invent a verification receipt');
+
+  const restored = join(root, 'restored-r9');
+  manager.restore(snapshotPath, restored);
+  for (const template of templates) {
+    assert.equal(readFileSync(join(restored, `templates/g-ideia/${template}.md`), 'utf8'), `# Fixture ${template}\n`);
+  }
+  assert.deepEqual(readFileSync(join(snapshotPath, SNAPSHOT_MANIFEST)), manifestBytes);
+});
+
+test('recovery observation preserves an invalid manifest and still reports other snapshots', async t => {
+  const { source, manager } = fixture(t);
+  put(source, 'templates/g-ideia/contract.md', '# Fixture contract');
+  manager.snapshot(join(source, 'recovery/backups/valid'));
+  const invalid = '{"version":1,"files":';
+  put(source, `recovery/backups/incomplete/${SNAPSHOT_MANIFEST}`, invalid);
+  const observation = await manager.observations();
+  assert.deepEqual(observation.snapshots.map(snapshot => snapshot.name), ['valid']);
+  assert.equal(observation.totalSnapshots, 2);
+  assert.deepEqual(observation.warnings, ['incomplete: recovery manifest unavailable or invalid.']);
+  assert.equal(readFileSync(join(source, 'recovery/backups/incomplete', SNAPSHOT_MANIFEST), 'utf8'), invalid);
+});
+
 test('existing destinations are preserved and damaged snapshots fail before restore creates files', (t) => {
   const { root, source, manager } = fixture(t);
   put(source, 'README.md', 'Original fixture');

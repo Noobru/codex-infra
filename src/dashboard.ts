@@ -8,12 +8,18 @@ import {RecoveryManager} from './recovery.js';
 import {EvidenceSanitizer} from './evidence.js';
 import {OperationsObservation} from './operations-observation.js';
 import type {InteractionRecord} from './interactions.js';
+import {OperationalInsights} from './operational-insights.js';
+import {RuntimeObservation} from './runtime-observation.js';
+import {EfficiencyHistory,EfficiencyHistoryInputSchema} from './efficiency-history.js';
+import {ImprovementImpactReader} from './improvement-impact.js';
+import {LearningApplications} from './learning-applications.js';
 
 export const DashboardViewSchema = z.enum(['overview','live','efficiency','project','evidence','learning']);
 export type DashboardView = z.output<typeof DashboardViewSchema>;
 export interface DashboardOptions extends ObservationOverviewOptions {
   view?:DashboardView; jobId?:string; afterEventId?:number; comparison?:EvaluationCompareInput;
   evaluationOffset?:number;
+  historyDays?:7|14|30|90;
   interactionOffset?:number; interactionLimit?:number; interactionStatus?:InteractionRecord['status'];
 }
 type SourceState = 'ready'|'empty'|'partial'|'unavailable';
@@ -24,13 +30,16 @@ export class DashboardReader {
   readonly reader:ObservationReader;
   private readonly registry:ProjectRegistry;
   private readonly evaluations:EvaluationStore;
+  private readonly runtime:RuntimeObservation;
   constructor(readonly root:string) {
     this.reader=new ObservationReader(root);
     this.registry=new ProjectRegistry(path.join(root,'profiles/registry.json'));
     this.evaluations=new EvaluationStore(root);
+    this.runtime=new RuntimeObservation(root);
   }
   async screen(options:DashboardOptions={}) {
     const view=DashboardViewSchema.parse(options.view??'overview');
+    const historyOptions=EfficiencyHistoryInputSchema.parse({projectId:options.projectId,days:options.historyDays});
     const [overview,profiles,activity,operations]=await Promise.all([
       this.reader.overview(options),
       this.source(async()=>{await fs.access(this.registry.registryPath);return this.registry.list();},'Project registry'),
@@ -49,6 +58,14 @@ export class DashboardReader {
     const recovery=view==='evidence'?await this.source(()=>new RecoveryManager(this.root).observations(),'Recovery metadata'):null;
     if(recovery?.data){recovery.warnings=recovery.data.warnings;recovery.state=recovery.warnings.length?'partial':recovery.data.snapshots.length||recovery.data.verifications.length?'ready':'empty';}
     const comparison=view==='efficiency'&&options.comparison?await this.source(()=>this.evaluations.compare(options.comparison!),'Evaluation comparison'):null;
+    const insights=view==='efficiency'||view==='learning'?await this.source(()=>new OperationalInsights(this.root).observations({projectId:options.projectId}),'Automatic findings'):null;
+    if(insights?.data){insights.warnings=insights.data.warnings;insights.state=insights.warnings.length||insights.data.truncated?'partial':insights.data.comparisons.length||insights.data.signals.length?'ready':'empty';}
+    const history=view==='efficiency'?await this.source(()=>new EfficiencyHistory(this.root).history(historyOptions),'Efficiency history'):null;
+    if(history?.data){history.warnings=history.data.coverage.warnings;history.state=history.warnings.length||history.data.coverage.truncated?'partial':'ready';}
+    const improvements=history?.data?await this.source(()=>new ImprovementImpactReader(this.root).read(history.data!,options.projectId),'Improvement effects'):null;
+    if(improvements?.data){improvements.warnings=improvements.data.warnings;improvements.state=improvements.warnings.length||improvements.data.truncated?'partial':improvements.data.cases.length?'ready':'empty';}
+    const learningEffects=improvements?.data?await this.source(()=>new LearningApplications(this.root).readEffects(improvements.data!.cases.map(candidate=>candidate.candidateId)),'Learning token effects'):null;
+    if(learningEffects?.data){learningEffects.warnings=learningEffects.data.warnings;learningEffects.state=learningEffects.warnings.length?'partial':'ready';}
     const learning=view==='learning'?{
       state:profiles.state,
       signalsState:profiles.state==='unavailable'||evaluations.state==='unavailable'?'partial' as const:evaluations.state,
@@ -59,7 +76,7 @@ export class DashboardReader {
       })))??null,
       signals:[
         ...(evaluations.data?.items.filter(e=>e.technical.criticalGateStatus!=='passed').map(e=>({projectId:e.projectId,jobId:e.jobId,kind:'evaluation',
-          reason:`Attempt ${e.attempt}: critical gate ${e.technical.criticalGateStatus}`,evidence:e.artifactPath}))??[]),
+          reason:`${e.projectId} · ${e.technical.criticalGateStatus}: ${e.technical.criteria.filter(c=>c.status!=='passed').map(c=>c.checkId+' ('+c.status+')').join(', ')||'missing check evidence'} · run ${e.jobId.slice(0,8)}, attempt ${e.attempt}`,evidence:e.artifactPath}))??[]),
         ...(profiles.data?.filter(p=>!options.projectId||p.id===options.projectId).flatMap(p=>p.sources.filter(s=>s.conflictsWith?.length).map(s=>({
           projectId:p.id,jobId:null,kind:'declared conflict',reason:EvidenceSanitizer.text(`${s.label}: ${s.conflictsWith!.join(', ')}`,400),evidence:'profiles/registry.json'})))??[]),
       ],
@@ -67,7 +84,7 @@ export class DashboardReader {
       limitations:['Signals do not create or promote candidates.', 'Candidate metadata is a registry declaration; no source file or product root was opened.', 'Review, shadow and promotion decisions require their own evidence.'],
     }:null;
     return {observedAt:new Date().toISOString(),view,overview,projects:{state:profiles.state,items:projects,warnings:profiles.warnings},
-      evaluations,run,recovery,comparison,learning,operations};
+      evaluations,run,recovery,comparison,learning,operations,insights,history,improvements,learningEffects,runtime:this.runtime.read()};
   }
   close(){this.reader.close();}
   private async source<T>(read:()=>Promise<T>,label:string):Promise<Source<T>> {

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { JobMode } from './state.js';
+import {PerformanceScopeSchema} from './performance-scope.js';
 
 const statements = z.array(z.string().trim().min(1).max(2000)).max(40);
 const identifier = z.string().trim().min(1).max(128);
@@ -27,6 +28,7 @@ export const OpenDecisionSchema = z.object({
   if(decision.status==='defaulted'&&decision.material)ctx.addIssue({code:'custom',message:'A material decision cannot use an automatic default.'});
 });
 export const TaskDetailsSchema = z.object({
+  performanceScope: PerformanceScopeSchema.optional(),
   acceptanceCriteria: statements.default([]),
   constraints: statements.default([]),
   nonGoals: statements.default([]),

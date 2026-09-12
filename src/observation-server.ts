@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {ObservationReader} from './observability.js';
 import {DashboardReader, DashboardViewSchema} from './dashboard.js';
 import {InteractionStatusSchema} from './interactions.js';
+import {EfficiencyHistoryInputSchema} from './efficiency-history.js';
 
 /** Local human view: one read-only reader, no dispatch endpoints or second source of truth. */
 export class ObservationServer {
@@ -33,6 +34,7 @@ export class ObservationServer {
           status:url.searchParams.get('status')||undefined,query:url.searchParams.get('query')||undefined,
           sort:url.searchParams.get('sort')==='oldest'?'oldest':'newest',limit:n('limit'),offset:n('offset'),afterEventId:n('after_event_id'),evaluationOffset:n('evaluation_offset'),
           interactionOffset:n('interaction_offset'),interactionLimit:n('interaction_limit'),
+          historyDays:EfficiencyHistoryInputSchema.shape.days.parse(n('history_days')),
           interactionStatus:url.searchParams.has('interaction_status')?InteractionStatusSchema.parse(url.searchParams.get('interaction_status')):undefined,
           ...(url.searchParams.has('baseline_id')?{comparison:{baselineId:url.searchParams.get('baseline_id')!,treatmentId:url.searchParams.get('treatment_id')??'',metricId:url.searchParams.get('metric_id')??''}}:{}),
         });

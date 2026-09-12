@@ -18,7 +18,7 @@ type ActiveWorker={id:string;projectId:string;status:JobStatus;attempts:number;o
   executionKind:'checks'|'codex';resourceKey:string};
 type WorkflowSummary={id:string;objective:string;revision:number;state:'preparing'|'prepared'|'superseded';
   nodes:{id:string;jobId:string|null;status:JobStatus|null}[];evidence:string};
-type LearningSummary={id:string;title:string;projectId:string;status:string;review:string|null;shadow:string|null;
+type LearningSummary={id:string;title:string;kind:string;contentExcerpt:string;source:string;projectId:string;status:string;review:string|null;shadow:string|null;
   promotionPath:string|null;evidence:string[];originJobId:string|null;originInteractionId:string|null;originInteractionRevision:number|null};
 type SecuritySummary={receiptId:string;projectId:string;stage:string;decision:string;effectiveExit:0|2|3|null;
   feedStatus:'DISABLED'|'READY'|'UNKNOWN'|null;publicationStatus:string|null;evidence:string[]};
@@ -107,7 +107,7 @@ export class OperationsObservation {
       warnings.push(...inventory.warnings.map(item=>'learning:'+EvidenceSanitizer.text(item,300)));
       const items=[...inventory.items].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
       if(items.length>100)warnings.push(`learning:truncated:${items.length}-to-100`);
-      return items.slice(0,100).map(item=>({id:item.id,title:EvidenceSanitizer.text(item.title,300),projectId:item.projectId,
+      return items.slice(0,100).map(item=>({id:item.id,title:EvidenceSanitizer.text(item.title,300),kind:item.kind,contentExcerpt:EvidenceSanitizer.text(item.content,4000),source:item.source,projectId:item.projectId,
         status:item.status,review:item.review?.decision??null,shadow:item.shadow?.status??null,
         promotionPath:this.relativeEvidence(item.promotion?.path)??null,
         evidence:[item.artifactPath,...item.originEvidence.refs].map(ref=>this.relativeEvidence(ref))

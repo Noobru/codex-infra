@@ -12,6 +12,15 @@ export const KnowledgeAuthorSchema = EvaluationReceiptSchema.shape.author;
 export const KnowledgeEvidenceSchema = EvaluationReceiptSchema.shape.evidence;
 export const KnowledgeHashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const KnowledgeProjectSchema = ProfileSchema.shape.id;
+export const KnowledgeKindSchema = z.enum(['script', 'skill', 'practice']);
+export const KnowledgeImpactSchema = z.object({
+  problem: KnowledgeTextSchema, language: KnowledgeTextSchema.optional(), expectedChange: KnowledgeTextSchema,
+  baselineEvaluationIds: z.array(z.uuid()).max(20).default([]),
+  affectedCheckIds: z.array(z.string().min(1).max(160)).max(100).default([]),
+}).strict();
+export const KnowledgeContentSchema = z.string().min(1).max(64000)
+  .refine(value => EvidenceSanitizer.text(value, 64000) === value,
+    'Proposal content contains material that cannot be preserved in ordinary evidence.');
 export const KnowledgeSourceSchema = ProfileSchema.shape.sources.element.omit({ maxChars: true }).extend({
   sha256: KnowledgeHashSchema, modifiedAt: z.iso.datetime(), totalChars: z.number().int().nonnegative(),
   excerpt: z.string().max(64000).transform(value => EvidenceSanitizer.text(value, 64000)), truncated: z.boolean(),

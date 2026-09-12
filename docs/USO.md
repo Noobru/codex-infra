@@ -76,6 +76,87 @@ Contexto atual, conhecimento promovido e grafo entram no caminho canônico de pr
 
 O ciclo de aprendizado usa `propose_learning`, `review_learning`, `learning_shadow_source`, `validate_learning`, `promote_learning` e `revert_learning`. A proposta deve estar ligada a uma tentativa real ou a uma revisão imutável de interação, a validação deve incluir os bytes exatos da proposta e a promoção exige decisão documentada do owner. Uma prática promovida alimenta contexto futuro; não instala scripts globais nem os executa automaticamente. Esse aprendizado complementa o write-back obrigatório do projeto e das notas pertinentes no vault, conforme seu contrato; não substitui a confirmação do PREVC.
 
+Resultados materiais registrados por `record_interaction` podem incluir `findings` explícitos. Cada achado sustentado gera um candidato com ID estável, evidência e revisão de origem; updates/replays repetidos não criam duplicatas. O retorno `findingProcessing` mostra candidatos e warnings. Se a gravação da interação passar e o processamento falhar, corrija a causa e use `reconcile_interaction_findings({id})` ou `node dist/src/cli.js interaction-findings INTERACTION_ID`. O replay conserva a revisão. [Interações e continuidade](INTERACTIONS.md) contém o JSON exato e os limites; ausência de achado não deve ser preenchida com uma prática inventada.
+
+## Avaliações e comparações automáticas
+
+Ao finalizar uma tentativa com checks, o motor processa os receipts reais e grava avaliações sem uma nova chamada de modelo. O recibo `artifacts/jobs/<jobId>/attempt-N/insights.json` registra avaliações e warnings. Uma falha dessa etapa preserva o resultado original do job. Dados insuficientes, checks truncados e tentativas ainda em execução não viram avaliação verde.
+
+Para histórico anterior à atualização, ou para repetir o processamento de evidência já existente:
+
+```powershell
+node dist/src/cli.js insights-reconcile --project projeto-exemplo --max-jobs 50
+```
+
+Substitua o projeto pelo ID explícito registrado. O comando lê receipts locais e grava avaliações idempotentes; não executa checks nem abre diretórios de produtos. MCP equivalente: `reconcile_insights({projectId:"projeto-exemplo",limit:50})`. O limite aceita 1–100, padrão 50; confira `warnings` e `truncated`. `read_insights({projectId:"projeto-exemplo",limit:50})` apenas consulta. A tela Efficiency apresenta as comparações automaticamente; a escolha manual continua disponível.
+
+A comparação usa o receipt anterior compatível de checks aprovados, ordenado pela janela medida. Projeto, contrato, rubrica, métrica, unidade, método, versão e coorte precisam coincidir. Durações de checks são medidas em `ms`, com identidade do comando na coorte. Falha seguida de recuperação e falha repetida são sinais separados, com links para evidência. Os resultados são descritivos: uma amostra não prova ganho causal nem economia da assinatura. Sem pares compatíveis, nenhuma comparação é fabricada; aceite do owner continua separado. Avaliações manuais com `record_evaluation` continuam disponíveis.
+
+## Efeito das melhorias ao longo das semanas
+
+Efficiency começa pelo problema e pela melhoria proposta: por exemplo, um erro de sintaxe confirmado → prática de prevenção → promoção explícita → tarefas posteriores com aquele conteúdo → resultados comparáveis. O agente declara o problema/linguagem e a mudança esperada em `findings[].impact`, ligando `baselineEvaluationIds` e `affectedCheckIds` reais. O campo `performanceScope` da interação mantém projeto/classe de trabalho/linguagem separados para o histórico de tokens. Veja os formatos em [Interações](INTERACTIONS.md).
+
+O painel relaciona candidatos, promoção/reversão, inclusão por caminho/hash no Context Pack e avaliações compatíveis. Falhas e novas tentativas são contagens observadas; não equivalem automaticamente a erro de sintaxe ou retrabalho humano. Inclusão de conteúdo não prova aplicação correta nem causa da diferença. Ausência de baseline, uso avaliado ou medidas pertinentes aparece como próxima evidência necessária.
+
+```powershell
+node dist/src/cli.js efficiency-history --project projeto-exemplo --days 14
+```
+
+MCP: `read_efficiency_history({input:{projectId:"projeto-exemplo",days:14}})`. A consulta retorna `{history,improvements}`, sem execução ou captura. Períodos aceitos: 7, 14, 30 e 90 dias, padrão 14. No gráfico, selecione fonte, métrica e coorte. Tokens medidos, jobs Codex, checks e ciclos de trabalho direto declarado ficam separados, com unidade/amostra e detalhes acessíveis. Duração de check é apoio à análise, não um score de qualidade. Lacunas não viram zero nem projeção futura; deltas entre dias são descritivos.
+
+## Telemetria local opcional
+
+A coleta de tokens do coordenador fica desativada sem `profiles/telemetry.local.json`. Para optar por ela, salve nesse arquivo um objeto JSON com o único campo `sessionsRoot`, contendo o caminho absoluto real da pasta `sessions` do Codex deste usuário. Resolva a pasta a partir de `CODEX_HOME` quando configurado; caso contrário, confira a pasta `.codex` do usuário. Preserve e revise qualquer configuração local já existente. O arquivo permanece ignorado pelo Git e fora da distribuição.
+
+O coletor procura apenas o rollout correspondente à identidade UUID de uma tarefa explicitamente entrada localmente e confirma sua identidade. Importação de metadados não ativa a leitura. Dos eventos locais ele deriva recibos com contadores, datas, IDs, revisão/escopo de origem e fingerprint/cursor; **não guarda nem exporta mensagens, prompts, respostas, chamadas de ferramenta ou transcrições**. O caminho da sessão também não entra no recibo. O estado derivado continua privado.
+
+Com essa configuração, `enter_interaction` persistente e `record_interaction` reconciliam até dez interações locais recentes, retornando um resumo `telemetry`. Uma entrada com `persist:false` não coleta. O turno em andamento pode permanecer parcial até uma próxima entrada/gravação observar seu término; não existe daemon. Para captura ou replay explícitos:
+
+```powershell
+node dist/src/cli.js telemetry-capture THREAD_UUID
+node dist/src/cli.js telemetry-reconcile --max-jobs 10
+node dist/src/cli.js telemetry-read --project projeto-exemplo --days 14
+```
+
+Substitua `THREAD_UUID` pelo UUID real da tarefa registrada. Apesar do nome da flag, `--max-jobs` limita **interações** recentes, de 1 a 10, padrão 10; não inicia jobs. MCP equivalente: `capture_interaction_telemetry({threadId})`, `reconcile_interaction_telemetry({limit:10})` e `read_interaction_telemetry({projectId:"projeto-exemplo",days:14})`. Leitura aceita 1–90 dias pela interface MCP e usa apenas recibos, sem consultar os rollouts. O dashboard também só lê a projeção já gravada.
+
+Os recibos ficam em `artifacts/telemetry/<interactionId>/turn-<turnId>.json`; um turno incompleto usa `.partial.json`. Status `complete`, `partial` e `unknown`, cobertura e warnings preservam limitações. A medição subtrai o snapshot anterior ao início do turno; duplicatas não somam novamente. Sem baseline, com reset de contador, sem término observado ou ao atingir limites de leitura, uso cumulativo não vira consumo completo daquele turno. Recibos completos são imutáveis.
+
+O gráfico usa somente turnos completos com projeto e `performanceScope` registrados na revisão vigente ao iniciar o turno. N é específico de cada contador: total, input, cache-read, output, reasoning e cache-write só aparecem quando observados; input sem cache é derivado de input/cache válidos. Campos ausentes continuam sem amostra. A média por turno divide pela amostra correspondente; o total diário também varia com volume. Contadores cumulativos de workers ficam separados e não entram nessa soma. Esses números não medem preço, cota da assinatura ou consumo causado por uma skill/erro particular.
+
+Para vincular a aplicação declarada de uma melhoria promovida ao turno observado, prepare `application.local.json` com `candidateId`, `threadId`, `turnId`, `author`, `source` e `evidence`, conforme [Interações](INTERACTIONS.md#aplicação-explícita-de-uma-melhoria):
+
+```powershell
+node dist/src/cli.js learning-application --file application.local.json
+node dist/src/cli.js learning-effects CANDIDATE_ID
+```
+
+MCP: `record_learning_application({input})` e `read_learning_effects({candidateId})`. A release precisa ter estado ativa no início do turno, com hash correspondente e telemetria existente. O recibo declara aplicação; não certifica execução correta. A comparação usa baseline anterior à primeira promoção e turnos posteriores completos com aplicação explícita, mantendo projeto/escopo e N de cada contador. A ausência de baseline, escopo ou término retorna `pending`; uma diferença de tokens não comprova por si só melhoria de qualidade ou economia de assinatura.
+
+## Como interpretar o painel
+
+| Situação | Leitura correta |
+|---|---|
+| Job `kind: checks`, sem worker de modelo | Modelo/esforço/tokens do worker são `not applicable`. O consumo da conversa coordenadora não é medido por esses checks. |
+| Job `kind: codex`, receipt ou métrica ausente | Informação desconhecida; não assumir zero consumo, cleanup concluído ou sucesso. |
+| Learning Queue mostra sinal de uma tentativa | É evidência para investigar. Candidato reutilizável exige achado explícito com conteúdo e referências. |
+| Não existem comparações compatíveis | Não há evidência suficiente para comparar; não é uma medida de ganho zero. |
+| Conteúdo promovido aparece no contexto posterior | O caminho/hash comprova inclusão. Uso correto e efeito sobre o resultado exigem evidência adicional. |
+| Série de tokens vazia | Confira opt-in, turnos completos e projeto/escopo declarados antes do turno. Contador ausente não é zero. |
+| Manifesto aparece inválido após atualização | Confira também a versão/fingerprint do processo observe; ele pode ainda estar carregando um reader antigo. |
+
+## Atualizar o observador
+
+O painel compara a versão e o fingerprint dos arquivos JavaScript de `dist/src` capturados ao iniciar o serviço com os instalados no disco. `restartRequired:true` identifica mudança mesmo sem alteração de versão do pacote. `null` indica que a evidência necessária não pôde ser lida. Refresh repete a consulta ao mesmo processo; não carrega módulos novos no backend.
+
+Depois do build e da validação local, se o painel indicar reinício necessário, encerre **somente o processo observe desta instalação** e inicie-o novamente:
+
+```powershell
+node dist/src/cli.js observe --port 4317 --timeout 7200000
+```
+
+Se estiver no terminal que iniciou esse processo, `Ctrl+C` o encerra. Para processo oculto, confira o PID/comando proprietário antes de pará-lo; não encerre todos os processos Node. Atualize o navegador e confira se o alerta desapareceu. Isso não exige reiniciar jobs, produtos, Docker ou o computador. O observador não se reinicia sozinho. Manifests e receipts históricos são preservados; não os recrie para ocultar um warning.
+
 ## Segurança e recuperação
 
 `security_report` consome relatórios existentes, com enriquecimento opcional `feeds.mode: enrich`. Feeds indisponíveis preservam informação desconhecida. A publicação GitHub usa dry-run por padrão; envio real exige configuração, credencial de ambiente e autorização exata/fresca. Essa ferramenta não faz scan, patch ou deploy.

@@ -13,9 +13,11 @@ O fluxo começa na conversa e no discovery. Ao formalizar ou executar engenharia
 | Contexto | Perfis explícitos, fontes com proveniência, seleção por tarefa e grafo de links locais. |
 | Execução | Estado em SQLite, checks nomeados, tentativas, cancelamento, recuperação e worktrees isoladas. |
 | Coordenação | Limites de workers e modelos, DAG de dependências, repasses de evidências e replanejamento limitado. |
-| Aprendizado | Proposta ligada a uma execução, revisão, validação pequena, promoção explícita e reversão. |
+| Aprendizado | Achados explícitos da interação geram candidatos ligados à revisão/evidência, com replay sem duplicatas; revisão, shadow, promoção explícita e reversão. |
+| Avaliação | Checks finalizados geram avaliações compatíveis; Efficiency acompanha problemas, melhorias, inclusão no contexto e resultados posteriores com evidência. |
+| Histórico | Janelas de 7/14/30/90 dias, fontes separadas e tokens por turno completo com telemetria local opcional; sem transcrições nos recibos. |
 | Segurança | Leitura de relatórios, enriquecimento opcional OSV/KEV e publisher GitHub com autorização por destino/SHA. |
-| Observação | Seis telas sobre o estado real, com navegação para tarefas e evidências. |
+| Observação | Seis telas sobre o estado real, com navegação para tarefas/evidências e alerta quando o backend carregado difere do build instalado. |
 | Integração | CLI e MCP compartilham o mesmo núcleo. Plugin e instrução de adoção acompanham o código. |
 
 ## Instalação inicial no Windows
@@ -71,6 +73,12 @@ node dist/src/cli.js observe --port 4317 --timeout 7200000
 
 Acesse o endereço loopback exibido no terminal. O painel consulta estado; seus cards não iniciam tarefas.
 
+Após uma atualização, Refresh não troca o código carregado pelo backend. Se o painel indicar diferença de versão/fingerprint, reinicie somente o processo `observe` dessa instalação após a validação local. [Instalação e operação](docs/USO.md) explica o reinício e distingue campos não aplicáveis de métricas ausentes.
+
+O agente registra resultados materiais pela entrada operacional. Quando houver achado reutilizável com evidência, inclui `findings`: o candidato aparece na Learning Queue, sem promoção automática. O campo opcional `impact` declara o problema, a mudança esperada e as baselines/checks pertinentes. Efficiency relaciona a melhoria aos contextos posteriores e às avaliações compatíveis; inclusão no contexto não atesta aplicação correta.
+
+Para acompanhar tokens ao longo das semanas, declare `performanceScope` na interação e opte pela telemetria local de contadores. O histórico separa projeto/classe/linguagem, apresenta média por turno completo ou total diário e preserva campos ausentes. Aplicação explícita de uma release pode ser ligada ao turno para comparar antes/depois dentro de escopo compatível. Os recibos não guardam transcrições nem convertem tokens em cota da assinatura. [Interações e continuidade](docs/INTERACTIONS.md) explica o registro; [Instalação e operação](docs/USO.md) explica a configuração opcional e as consultas.
+
 ## Ganhos esperados e mudança de hábito
 
 O objetivo é reduzir a reconstrução de contexto, o retrabalho e a supervisão manual, além de aproveitar melhor a cota disponível. **São hipóteses de benefício ainda não verificadas**: não há percentual de economia, ganho de produtividade ou melhoria de qualidade estabelecido para esta distribuição.
@@ -83,6 +91,7 @@ O mecanismo e o novo fluxo estão detalhados em [Proposta e hipóteses](docs/PRO
 - [Vault, G-IDEIA e fontes obrigatórias](docs/CONTEXT-CONTRACT.md)
 - [Como o workflow pessoal muda](docs/PROPOSTA.md)
 - [Adoção no contrato do agente](docs/ADOPTION.md)
+- [Interações, achados e continuidade](docs/INTERACTIONS.md)
 - [Privacidade e distribuição](docs/DISTRIBUICAO.md)
 - [Arquitetura e referência do código](docs/ARQUITETURA.md)
 - [Proveniência e dependências](THIRD_PARTY_NOTICES.md)

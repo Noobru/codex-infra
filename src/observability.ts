@@ -5,6 +5,7 @@ import { StateStore, type Job, type JobStatus } from './state.js';
 import { EvidenceSanitizer } from './evidence.js';
 import { readJson, resolveRealSubPath } from './legacy/command-os-utils.js';
 import { RoutingDecisionSchema } from './routing.js';
+import {PerformanceScopeSchema} from './performance-scope.js';
 
 const shortText = z.string().transform(value => EvidenceSanitizer.text(value, 400));
 const measuredNumber = z.number().finite().nonnegative();
@@ -29,11 +30,12 @@ const checksSchema = z.array(z.object({
 const contractSchema = z.object({
   version: z.number().int(), hash: shortText, kind: z.enum(['checks', 'codex']), mode: z.enum(['read-only', 'workspace-write']),
   checkIds: z.array(shortText), requirementIds: z.array(shortText).optional(),
-  details: z.object({ acceptanceCriteria: z.array(z.unknown()).optional(), constraints: z.array(z.unknown()).optional(), nonGoals: z.array(z.unknown()).optional() }).optional(),
+  details: z.object({ acceptanceCriteria: z.array(z.unknown()).optional(), constraints: z.array(z.unknown()).optional(), nonGoals: z.array(z.unknown()).optional(),performanceScope:PerformanceScopeSchema.optional() }).optional(),
 }).transform(value => ({
   version: value.version, hash: value.hash, kind: value.kind, mode: value.mode,
   checkIds: value.checkIds.slice(0, 100), requirementIds: value.requirementIds?.slice(0, 100) ?? [],
   acceptanceCriteriaCount: value.details?.acceptanceCriteria?.length ?? null,
+  performanceScope:value.details?.performanceScope??null,
   constraintsCount: value.details?.constraints?.length ?? null, nonGoalsCount: value.details?.nonGoals?.length ?? null,
 }));
 const contextSchema = z.object({
@@ -65,6 +67,8 @@ const manifestSchema = z.object({ kind: z.enum(['checks', 'codex']), checkIds: z
 const knowledgeSchema=z.object({indexId:shortText,graph:z.object({maxHops:z.number(),expandedLabels:z.array(shortText),traversed:z.array(z.unknown())})})
   .transform(value=>({indexId:value.indexId,maxHops:value.graph.maxHops,expandedLabels:value.graph.expandedLabels,edgesTraversed:value.graph.traversed.length}));
 const handoffSchema=z.object({jobId:shortText,handoffs:z.array(z.object({jobId:shortText,projectId:shortText,attempt:z.number(),summary:shortText,checksSha256:shortText}))});
+const insightsSchema=z.object({version:z.literal(1),jobId:z.uuid(),attempt:z.number().int().positive(),recordedAt:shortText,
+  status:z.enum(['processed','attention']),evaluationIds:z.array(z.uuid()),created:z.number().int().nonnegative(),reused:z.number().int().nonnegative(),warnings:z.array(shortText)});
 const statuses: JobStatus[] = ['ready', 'running', 'validating', 'waiting_user', 'waiting_quota', 'failed', 'cancelled', 'completed'];
 
 export interface ObservationSummary {
@@ -139,6 +143,7 @@ export class ObservationReader {
       const policy = await this.artifact(job.id, prefix + 'policy.json', policySchema, evidence, warnings);
       const knowledge=await this.artifact(job.id,prefix+'knowledge.json',knowledgeSchema,evidence,warnings);
       const handoffs=await this.artifact(job.id,prefix+'handoffs.json',handoffSchema,evidence,warnings);
+      const insights=await this.artifact(job.id,prefix+'insights.json',insightsSchema,evidence,warnings);
       const actualRouting = routingSchema.safeParse(worker?.receipt?.routingDecision);
       if (worker?.receipt?.routingDecision !== undefined && !actualRouting.success) warnings.push(`${prefix}worker.json: runtime routing evidence is invalid.`);
       const receipt = worker?.receipt;
@@ -158,7 +163,7 @@ export class ObservationReader {
           passed: check.exitCode === 0 && check.cleanupFailed !== true, cleanupFailed: check.cleanupFailed ?? false,
         })) ?? null,
         checksObserved: checks?.length ?? null, checksTruncated: (checks?.length ?? 0) > 100,
-        taskContract: contract, contextPack: context,capabilityPlan,policy,knowledge,handoffs,
+        taskContract: contract, contextPack: context,capabilityPlan,policy,knowledge,handoffs,insights,
         routing: actualRouting.success ? actualRouting.data : preparedRouting,
         routingSource: actualRouting.success ? 'worker-receipt' as const : preparedRouting ? 'prepared-decision' as const : null,
       });

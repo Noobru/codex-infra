@@ -1,6 +1,9 @@
 import {useState} from 'react';
 import {Activity,ArrowUpRight,Clipboard,Database,FileCheck2,Layers3,LockKeyhole,RefreshCw,ShieldCheck,Sparkles,TerminalSquare,Zap} from 'lucide-react';
 import type {DashboardObservation,DashboardOptions} from './api';
+import {EfficiencyHistory,type HistoryDays,type HistorySelection} from './EfficiencyHistory';
+import {ImprovementEffects} from './ImprovementEffects';
+import type {EvaluationComparison,EvaluationReceipt} from '../../src/evaluation';
 import {CopyId,EmptyState,InfoCard,MetricCard,ScopeNote,SectionHeading,timestamp,type CopyProps} from './components';
 
 type PanelProps={data:DashboardObservation;onOpenRun:(id:string)=>void}&CopyProps;
@@ -11,7 +14,7 @@ export function InteractionsView({data,onOpenRun,selection,onChange,pending,...c
   const source=data.operations.data?.interactions;
   return <>
     <SectionHeading label="Interaction records" title="Conversations and direct work" count={source?`${source.total} in this scope`:'unavailable'}/>
-    <ScopeNote>These records are separate from execution runs. Imported means metadata was observed; it does not mean work started or finished. The project filter applies here; run search and run state do not.</ScopeNote>
+    <ScopeNote>Direct is a conversation or work record, not a worker execution. Imported means metadata was observed, not that work started or finished. Execution evidence belongs to linked runs. The project filter applies here; run search and run state do not.</ScopeNote>
     <div className="pagination" aria-label="Interaction filters">
       <label className="select-wrap"><span>Interaction status</span><select aria-label="Interaction status" value={selection.interactionStatus??'all'} onChange={event=>onChange({...selection,interactionOffset:0,interactionStatus:event.target.value==='all'?undefined:event.target.value as DashboardOptions['interactionStatus']})}><option value="all">All interaction states</option>{['imported','open','completed','blocked','cancelled'].map(status=><option key={status} value={status}>{status}</option>)}</select></label>
       <label className="select-wrap"><span>Per page</span><select aria-label="Interactions per page" value={selection.interactionLimit??50} onChange={event=>onChange({...selection,interactionOffset:0,interactionLimit:Number(event.target.value)})}><option value={50}>50</option><option value={100}>100</option></select></label>
@@ -25,6 +28,7 @@ export function InteractionsView({data,onOpenRun,selection,onChange,pending,...c
       {!!item.jobIds.length&&<div className="card-list">{item.jobIds.map(id=><button className="subtle-link" type="button" key={id} onClick={()=>onOpenRun(id)}>Inspect linked run {id.slice(0,8)}<ArrowUpRight size={15}/></button>)}</div>}
       {!!item.workflowIds.length&&<div className="card-list">{item.workflowIds.map(id=><div className="hash-line" key={id}><span>Workflow</span><CopyId value={id} {...copy}/></div>)}</div>}
       <div className="hash-line"><span>Record</span><CopyId value={item.artifactPath} {...copy}/></div>
+      {!!item.findings?.length&&<details className="receipt-details"><summary>Recorded findings ({item.findings.length})</summary>{item.findings.map(finding=><div className="measurement-record" key={finding.id}><strong>{finding.title}</strong><span>{finding.kind} · {finding.projectId} · recorded in interaction revision {finding.recordedRevision}</span><span style={{whiteSpace:'pre-wrap'}}>{finding.content}</span><div className="hash-line"><span>Origin interaction</span><CopyId value={item.id} {...copy}/></div>{finding.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</div>)}</details>}
       {item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}
     </details>)}
     {!source?.items.length&&<EmptyState title={source?'No interactions match this scope':'Interaction source unavailable'} detail={source?'Choose another interaction status or project scope.':'Use Refresh to retry reading the interaction records.'}/>}
@@ -39,29 +43,59 @@ export function OperationsSummary({data,onOpenRun,...copy}:PanelProps){
     {!!ops?.workflows?.length&&<details className="receipt-details"><summary>Workflow plans ({ops.workflows.length})</summary><div className="evaluation-list">{ops.workflows.map(plan=><InfoCard key={plan.id} icon={Layers3} title={plan.objective} meta={`Revision ${plan.revision} · ${plan.nodes.every(node=>node.status==='completed')?'completed':plan.state}`}><div className="card-list">{plan.nodes.map(node=><span key={node.id}>{node.jobId?<button className="subtle-link" onClick={()=>onOpenRun(node.jobId!)}>{node.id} · {node.status??'unknown'}<ArrowUpRight size={15}/></button>:`${node.id} · preparing`}</span>)}</div><CopyId value={plan.evidence} {...copy}/></InfoCard>)}</div></details>}
   </>;
 }
-export function EfficiencyView({data,onOpenRun,onCompare,onPage,selection,...copy}:PanelProps&{onCompare:(value:DashboardOptions['comparison'])=>void;onPage:(offset:number)=>void;selection:DashboardOptions['comparison']}){
+function ComparisonEvidence({comparison,receipts,baselineJobId,treatmentJobId,onOpenRun,...copy}:CopyProps&{
+  comparison:EvaluationComparison;receipts:EvaluationReceipt[];baselineJobId?:string;treatmentJobId?:string;onOpenRun:(id:string)=>void;
+}){
+  const singleObservation=comparison.baseline?.sample?.size===1||comparison.treatment?.sample?.size===1;
+  const origins=[
+    {label:'Baseline',id:comparison.baselineId,jobId:baselineJobId??receipts.find(item=>item.id===comparison.baselineId)?.jobId},
+    {label:'Treatment',id:comparison.treatmentId,jobId:treatmentJobId??receipts.find(item=>item.id===comparison.treatmentId)?.jobId},
+  ];
+  return <>
+    <div className="measurement-record"><span>Baseline: {comparison.baseline?.value?.toLocaleString()??'not recorded'} {comparison.baseline?.unit??''} → Treatment: {comparison.treatment?.value?.toLocaleString()??'not recorded'} {comparison.treatment?.unit??''}</span><strong>Difference: {comparison.absoluteDelta==null?'not established':`${comparison.absoluteDelta>0?'+':''}${comparison.absoluteDelta.toLocaleString()} ${comparison.baseline?.unit??''}`}</strong><span>{singleObservation?'One observed execution per receipt':comparison.reason}</span></div>
+    <details className="receipt-details"><summary>Comparison method</summary><div className="card-list"><span>{comparison.reason}</span><span>Percentage: {comparison.percentageChange==null?'not established':`${comparison.percentageChange.toFixed(2)}%`} · {comparison.percentageReason}</span>{comparison.limitations.map((text,index)=><span key={index}>{text}</span>)}</div></details>
+    {origins.map(origin=><div className="card-list" key={origin.label}><div className="hash-line"><span>{origin.label} evaluation</span><CopyId value={origin.id} {...copy}/></div>{origin.jobId?<button className="subtle-link" type="button" onClick={()=>onOpenRun(origin.jobId!)}>Inspect {origin.label.toLowerCase()} run {origin.jobId.slice(0,8)}<ArrowUpRight size={15}/></button>:<span>Run link not available in these receipts.</span>}</div>)}
+  </>;
+}
+export function EfficiencyView({data,onOpenRun,onCompare,onPage,selection,historyDays,onDaysChange,historySelection,onHistorySelectionChange,pending,...copy}:PanelProps&{onCompare:(value:DashboardOptions['comparison'])=>void;onPage:(offset:number)=>void;selection:DashboardOptions['comparison'];historyDays:HistoryDays;onDaysChange:(days:HistoryDays)=>void;historySelection:HistorySelection;onHistorySelectionChange:(selection:HistorySelection)=>void;pending:boolean}){
   const [baseline,setBaseline]=useState(selection?.baselineId??''),[treatment,setTreatment]=useState(selection?.treatmentId??''),[metric,setMetric]=useState(selection?.metricId??'');
   const receipts=data.evaluations.data;
   const items=receipts?.items??[];
+  const automatic=data.insights?.data?.comparisons??[];
+  const automaticSourceAvailable=Boolean(data.insights?.data);
   const metricIds=[...new Set(items.flatMap(item=>item.metrics.map(value=>value.id)))];
   const comparison=data.comparison?.data;
+  const automaticCards=automatic.map(item=><InfoCard key={item.id} icon={Zap} title={item.metricLabel} meta={item.projectId+' · '+item.comparison.status}>
+      <ComparisonEvidence comparison={item.comparison} receipts={items} baselineJobId={item.baselineJobId} treatmentJobId={item.treatmentJobId} onOpenRun={onOpenRun} {...copy}/>
+      {!!item.evidence.length&&<details className="receipt-details"><summary>Comparison evidence ({item.evidence.length})</summary>{item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</details>}
+    </InfoCard>);
   return <>
-    <section className="efficiency-hero"><div className="efficiency-hero-copy"><div className="section-kicker">Evaluation receipts · {data.evaluations.state}</div><h2>Compare the evidence.</h2><p>Select a baseline, a treatment and one metric. The comparison preserves task class, cohort, method, version and critical gates.</p></div><div className="comparison-visual unknown-comparison"><span className="context-label">Treatment − baseline</span><strong>{comparison?.absoluteDelta==null?'unknown':`${comparison.absoluteDelta>0?'+':''}${comparison.absoluteDelta} ${comparison.baseline?.unit??''}`}</strong><span>{comparison?.reason??'Choose two recorded evaluations below.'}</span><span>Percentage: {comparison?.percentageChange==null?'not established':`${comparison.percentageChange.toFixed(2)}%`}</span></div></section>
-    <form className="comparison-form" onSubmit={event=>{event.preventDefault();onCompare({baselineId:baseline,treatmentId:treatment,metricId:metric});}}>
-      <label>Baseline<select aria-label="Baseline evaluation" required value={baseline} onChange={e=>setBaseline(e.target.value)}><option value="">Choose evaluation</option>{items.map(item=><option key={item.id} value={item.id}>{item.jobId.slice(0,8)} / attempt {item.attempt} · {item.technical.status}</option>)}</select></label>
-      <label>Treatment<select aria-label="Treatment evaluation" required value={treatment} onChange={e=>setTreatment(e.target.value)}><option value="">Choose evaluation</option>{items.map(item=><option key={item.id} value={item.id}>{item.jobId.slice(0,8)} / attempt {item.attempt} · {item.technical.status}</option>)}</select></label>
-      <label>Metric<select aria-label="Comparison metric" required value={metric} onChange={e=>setMetric(e.target.value)}><option value="">Choose metric</option>{metricIds.map(id=><option key={id}>{id}</option>)}</select></label><button className="refresh-button" type="submit" disabled={!baseline||!treatment||!metric}>Compare receipts</button>
-    </form>
-    {comparison&&<ScopeNote>{comparison.status} · {comparison.percentageReason} Accepted delivery comparison: {comparison.acceptedDeliveryComparison?'yes':'not established'}. {comparison.limitations.join(' ')}</ScopeNote>}
+    <ImprovementEffects source={data.improvements} tokenEffects={data.learningEffects} onOpenRun={onOpenRun} {...copy}/>
+    <EfficiencyHistory history={data.history?.data} days={historyDays} onDaysChange={onDaysChange} selection={historySelection} onSelectionChange={onHistorySelectionChange} pending={pending} error={data.history?.state==='unavailable'?'History could not be read. Refresh to retry.':undefined} onOpenRun={onOpenRun} {...copy}/>
+    <details className="receipt-details"><summary>Detailed check comparisons and evaluations</summary>
+    <SectionHeading label="Evaluation receipts" title="Automatic comparisons" count={data.insights?.data?String(automatic.length):data.insights?.state??'unavailable'}/>
+    <ScopeNote>The four most recent compatible comparisons appear first. These are observed check durations; details and earlier comparisons remain available below.</ScopeNote>
+    <div className="evaluation-list">{automaticCards.slice(0,4)}</div>
+    {automatic.length>4&&<details className="receipt-details"><summary>Earlier automatic comparisons ({automatic.length-4})</summary><div className="evaluation-list">{automaticCards.slice(4)}</div></details>}
+    {!automatic.length&&<EmptyState title={automaticSourceAvailable?'No compatible comparison in this scope':'Automatic comparisons unavailable'} detail={automaticSourceAvailable?'A pair needs compatible check receipts and passing critical gates. A single observation does not establish a gain.':'Refresh to retry the recorded insights.'}/>}
+    <details className="receipt-details"><summary>Choose evaluations manually</summary>
+      <form className="comparison-form" onSubmit={event=>{event.preventDefault();onCompare({baselineId:baseline,treatmentId:treatment,metricId:metric});}}>
+        <label>Baseline<select aria-label="Baseline evaluation" required value={baseline} onChange={e=>setBaseline(e.target.value)}><option value="">Choose evaluation</option>{items.map(item=><option key={item.id} value={item.id}>{item.projectId} · {item.jobId.slice(0,8)} / attempt {item.attempt} · {item.technical.status}</option>)}</select></label>
+        <label>Treatment<select aria-label="Treatment evaluation" required value={treatment} onChange={e=>setTreatment(e.target.value)}><option value="">Choose evaluation</option>{items.map(item=><option key={item.id} value={item.id}>{item.projectId} · {item.jobId.slice(0,8)} / attempt {item.attempt} · {item.technical.status}</option>)}</select></label>
+        <label>Metric<select aria-label="Comparison metric" required value={metric} onChange={e=>setMetric(e.target.value)}><option value="">Choose metric</option>{metricIds.map(id=><option key={id}>{id}</option>)}</select></label><button className="refresh-button" type="submit" disabled={!baseline||!treatment||!metric}>Compare receipts</button>
+      </form>
+      {comparison&&<><ComparisonEvidence comparison={comparison} receipts={items} onOpenRun={onOpenRun} {...copy}/><ScopeNote>{comparison.status} · Accepted delivery comparison: {comparison.acceptedDeliveryComparison?'yes':'not established'}. {comparison.limitations.join(' ')}</ScopeNote></>}
+    </details>
     <SectionHeading label="Recorded evaluations" title="Outcomes and measurements" count={receipts?`${items.length} of ${receipts.total} in inspected inventory`:data.evaluations.state}/>
-    <div className="evaluation-list">{items.map(item=><InfoCard key={item.id} icon={FileCheck2} title={`${item.taskClass} · attempt ${item.attempt}`} meta={`${item.technical.status} / critical ${item.technical.criticalGateStatus}`}>
-      <div className="card-list"><span>{item.projectId} · {timestamp(item.recordedAt)}</span><span>Rubric {item.rubric.id} / {item.rubric.version}</span><span>Owner acceptance: {item.acceptance.status}</span><span>Source: {item.source}</span></div>
+    <div className="evaluation-list">{items.map(item=><InfoCard key={item.id} icon={FileCheck2} title={`${item.projectId} · ${item.taskClass} · attempt ${item.attempt}`} meta={`${item.technical.status} / critical ${item.technical.criticalGateStatus}`}>
+      <div className="card-list"><span>{timestamp(item.recordedAt)} · run {item.jobId.slice(0,8)}</span><span>Rubric {item.rubric.id} / {item.rubric.version}</span><span>Owner acceptance: {item.acceptance.status}</span><span>Source: {item.source}</span></div>
       <button className="subtle-link" type="button" onClick={()=>onOpenRun(item.jobId)}>Inspect run {item.jobId.slice(0,8)}<ArrowUpRight size={15}/></button>
       {item.metrics.map(value=><div className="measurement-record" key={value.id}><strong>{value.id}: {value.value??'unknown'} {value.unit??''}</strong><span>{value.classification} · {value.method??'method unknown'} · version {value.version??'unknown'}</span><span>Cohort: {value.cohort??'unknown'} · sample N={value.sample?.size??'?'} · {value.sample?.representative?'declared representative':'not representative / unknown'}</span><span>Window: {timestamp(value.window?.start)} → {timestamp(value.window?.end)}</span><span>Source: {value.source??'unknown'}</span>{value.sample&&<span>Selection: {value.sample.selection}</span>}{value.classification==='estimated'&&<span>Estimate basis: {value.estimateBasis}</span>}{value.classification==='unknown'&&<span>{value.reason}</span>}</div>)}
       <div className="hash-line"><CopyId value={item.artifactPath} {...copy}/></div>
     </InfoCard>)}</div>
-    {!items.length&&<EmptyState title={data.evaluations.state==='unavailable'?'Evaluation source unavailable':'No evaluations recorded in this scope'} detail="A completed run does not automatically create an evaluation or record owner acceptance."/>}
+    {!items.length&&<EmptyState title={data.evaluations.state==='unavailable'?'Evaluation source unavailable':'No evaluations recorded in this scope'} detail={data.evaluations.state==='unavailable'?'Refresh to retry reading evaluation receipts.':'Completed checks produce automatic evaluations when their receipts and named-check contract are available. Owner acceptance remains separate.'}/>}
     {receipts&&<div className="pagination"><span>{receipts.truncated?'Inventory limited to 500 recent receipts.':'Inventory read from owned evaluation receipts.'}</span><button className="refresh-button" disabled={receipts.offset===0} onClick={()=>onPage(Math.max(0,receipts.offset-receipts.limit))}>Previous evaluations</button><button className="refresh-button" disabled={receipts.nextOffset===null} onClick={()=>onPage(receipts.nextOffset!)}>Next evaluations</button></div>}
+    </details>
   </>;
 }
 
@@ -85,19 +119,39 @@ export function EvidenceRecoveryView({data,...copy}:Omit<PanelProps,'onOpenRun'>
       <div className="evaluation-list">{data.operations.data?.security?.map(receipt=><InfoCard key={receipt.receiptId} icon={ShieldCheck} title={`${receipt.projectId} · ${receipt.decision}`} meta={`${receipt.stage} · exit ${receipt.effectiveExit??'unknown'}`}><div className="card-list"><span>Feeds: {receipt.feedStatus??'not requested'}</span><span>Publication: {receipt.publicationStatus??'not recorded'}</span></div>{receipt.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</InfoCard>)}</div>
       {!data.operations.data?.security?.length&&<EmptyState title="No security receipts in this scope" detail="Evaluate a registered report through the CLI or MCP to record the effective gate and feed provenance."/>}
       <SectionHeading label="Selected run" title="Receipt references and cleanup" count={run?run.summary.id:'none selected'}/>
-      {run?<><section className="panel evidence-reference-list">{run.evidence.map(ref=><div className="evidence-reference" key={ref}><FileCheck2 size={16}/><CopyId value={ref} {...copy}/></div>)}</section><section className="panel"><table className="runs-table"><thead><tr><th>Attempt</th><th>Worker state</th><th>Cleanup</th><th>Finished</th></tr></thead><tbody>{run.attempts.map(attempt=><tr key={attempt.attempt}><td>{attempt.attempt}</td><td>{attempt.worker?.status??'unknown'}</td><td>{attempt.worker?.cleanupConfirmed==null?'unknown':attempt.worker.cleanupConfirmed?'confirmed in receipt':'not confirmed'}</td><td>{timestamp(attempt.worker?.finishedAt)}</td></tr>)}</tbody></table></section></>:<EmptyState title="No run evidence selected" detail="Select a recorded run to inspect its receipts. Global recovery evidence remains available above."/>}
+      {run?<><section className="panel evidence-reference-list">{run.evidence.map(ref=><div className="evidence-reference" key={ref}><FileCheck2 size={16}/><CopyId value={ref} {...copy}/></div>)}</section><section className="panel"><table className="runs-table"><thead><tr><th>Attempt</th><th>Model worker</th><th>Cleanup</th><th>Worker finished</th></tr></thead><tbody>{run.attempts.map(attempt=>{
+        const checksOnly=(attempt.taskContract?.kind??run.prepared.kind)==='checks'&&!attempt.worker;
+        const checksConfirmed=checksOnly&&Boolean(attempt.checks?.length)&&!attempt.checksTruncated&&attempt.checks!.every(check=>check.exitCode!==null&&check.cleanupFailed===false);
+        const cleanup=attempt.worker?.cleanupConfirmed!=null?(attempt.worker.cleanupConfirmed?'confirmed in worker receipt':'not confirmed')
+          :checksConfirmed?'confirmed in check receipts':attempt.checks?.some(check=>check.cleanupFailed)?'not confirmed':'not established';
+        return <tr key={attempt.attempt}><td>{attempt.attempt}</td><td>{checksOnly?'Not applicable':attempt.worker?.status??'unknown'}</td><td>{cleanup}</td><td>{checksOnly?'Not applicable':timestamp(attempt.worker?.finishedAt)}</td></tr>;
+      })}</tbody></table></section></>:<EmptyState title="No run evidence selected" detail="Select a recorded run to inspect its receipts. Global recovery evidence remains available above."/>}
       <ScopeNote>References can be copied for local inspection. Full logs and arbitrary file contents are not served. Cleanup, restore and owner acceptance are separate observations.</ScopeNote>
     </>;
 }
 
 export function LearningQueueView({data,onOpenRun,...copy}:PanelProps){
-  const learning=data.learning,ledger=data.operations.data?.learning;
-  return <><section className="learning-hero"><div><div className="section-kicker">Reusable knowledge · {data.operations.state}</div><h2>From a result to a reusable practice.</h2><p>Inspect each candidate, its review, shadow validation and release history.</p></div><div className="learning-loop"><Clipboard size={24}/><strong>Review → validate → promote</strong></div></section>
+  const learning=data.learning,ledger=data.operations.data?.learning,signals=data.insights?.data?.signals??[];
+  const hasSignals=signals.length>0||Boolean(learning?.signals.length);
+  const signalsUnavailable=!data.insights?.data||!learning||['partial','unavailable'].includes(learning.signalsState);
+  return <><section className="learning-hero"><div><div className="section-kicker">Reusable knowledge · {data.operations.state}</div><h2>From a result to a reusable practice.</h2><p>Declared findings create traceable candidates. Review and shadow validation still precede explicit promotion.</p></div><div className="learning-loop"><Clipboard size={24}/><strong>Review → validate → promote</strong></div></section>
     <section className="learning-metrics"><MetricCard label="Recorded candidates" value={ledger?String(ledger.length):'unknown'} note="selected project scope" tone="cyan" icon={Sparkles}/><MetricCard label="Shadow passed" value={ledger?String(ledger.filter(c=>c.shadow==='passed').length):'unknown'} note="bound to candidate content" tone="green" icon={FileCheck2}/><MetricCard label="Active promotions" value={ledger?String(ledger.filter(c=>c.status==='promoted').length):'unknown'} note="available to future context" tone="cyan" icon={Zap}/><MetricCard label="Reverted" value={ledger?String(ledger.filter(c=>c.status==='reverted').length):'unknown'} note="history preserved" tone="neutral" icon={LockKeyhole}/></section>
     <SectionHeading label="Learning ledger" title="Candidates and decisions"/>
-    <div className="evaluation-list">{ledger?.map(item=><InfoCard key={item.id} icon={Clipboard} title={item.title} meta={item.projectId+' · '+item.status}><div className="card-list"><span>Review: {item.review??'not recorded'} · shadow: {item.shadow??'not recorded'}</span></div>{item.originJobId&&<button className="subtle-link" onClick={()=>onOpenRun(item.originJobId!)}>Inspect origin run<ArrowUpRight size={15}/></button>}{item.originInteractionId&&<><div className="hash-line"><span>Origin interaction</span><CopyId value={item.originInteractionId} {...copy}/></div><ScopeNote>Interaction revision {item.originInteractionRevision}. Its exact record is included in the evidence below.</ScopeNote></>}{item.promotionPath&&<div className="hash-line"><span>Release</span><CopyId value={item.promotionPath} {...copy}/></div>}{item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</InfoCard>)}</div>
-    {!ledger?.length&&<EmptyState title={ledger?'No learning candidates in this scope':'Learning ledger unavailable'} detail="Candidates come from recorded attempts or interaction evidence through the CLI or MCP."/>}
+    <div className="evaluation-list">{ledger?.map(item=><InfoCard key={item.id} icon={Clipboard} title={item.title} meta={item.projectId+' · '+item.kind+' · '+item.status}>
+      <div className="card-list">{item.contentExcerpt&&<p>{item.contentExcerpt}</p>}<span>Source: {item.source}</span><span>Review: {item.review??'not recorded'} · shadow: {item.shadow??'not recorded'}</span></div>
+      {item.originJobId&&<button className="subtle-link" type="button" onClick={()=>onOpenRun(item.originJobId!)}>Inspect origin run<ArrowUpRight size={15}/></button>}
+      {item.originInteractionId&&<><div className="hash-line"><span>Origin interaction · revision {item.originInteractionRevision}</span><CopyId value={item.originInteractionId} {...copy}/></div></>}
+      {item.promotionPath&&<div className="hash-line"><span>Release</span><CopyId value={item.promotionPath} {...copy}/></div>}
+      <details className="receipt-details"><summary>Candidate evidence ({item.evidence.length})</summary>{item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</details>
+    </InfoCard>)}</div>
+    {!ledger?.length&&<EmptyState title={ledger?'No learning candidates in this scope':'Learning ledger unavailable'} detail={ledger?'A declared finding must include its project, content and evidence. Recording it creates a candidate; promotion is a separate decision.':'Refresh to retry reading candidate records.'}/>}
     {!!learning?.candidates?.length&&<details className="receipt-details"><summary>Candidate references in project registry ({learning.candidates.length})</summary>{learning.candidates.map((item,i)=><InfoCard key={i} icon={Clipboard} title={item.label} meta={item.projectId+' · '+item.status}><CopyId value={item.evidence} {...copy}/></InfoCard>)}</details>}
-    <SectionHeading label="Observed signals" title="Evidence to review"/>{learning?.signals.map((item,i)=><InfoCard key={i} icon={TerminalSquare} title={item.reason} meta={item.kind+' · '+item.projectId}><CopyId value={item.evidence} {...copy}/>{item.jobId&&<button className="subtle-link" onClick={()=>onOpenRun(item.jobId!)}>Inspect source run<ArrowUpRight size={15}/></button>}</InfoCard>)}
+    <SectionHeading label="Observed signals" title="Evidence to review" count={data.insights?.state??'unavailable'}/>
+    <div className="evaluation-list">{signals.map(item=><InfoCard key={item.id} icon={TerminalSquare} title={item.reason} meta={item.kind+' · '+item.projectId}>
+      <div className="card-list"><span>Attempts: {item.attempts.join(' → ')}</span></div>
+      <button className="subtle-link" type="button" onClick={()=>onOpenRun(item.jobId)}>Inspect source run {item.jobId.slice(0,8)}<ArrowUpRight size={15}/></button>
+      <details className="receipt-details"><summary>Signal evidence ({item.evidence.length})</summary>{item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</details>
+    </InfoCard>)}{learning?.signals.map((item,i)=><InfoCard key={item.kind+'-'+item.projectId+'-'+i} icon={TerminalSquare} title={item.reason} meta={item.kind+' · '+item.projectId}><CopyId value={item.evidence} {...copy}/>{item.jobId&&<button className="subtle-link" type="button" onClick={()=>onOpenRun(item.jobId!)}>Inspect source run<ArrowUpRight size={15}/></button>}</InfoCard>)}</div>
+    {!hasSignals&&<EmptyState title={signalsUnavailable?'Signal inventory unavailable or incomplete':'No failure or recovery signals observed'} detail={signalsUnavailable?'Refresh to retry reading recorded insights.':'Signals describe recorded outcomes; they do not establish a cause or promote a reusable practice.'}/>}
   </>;
 }

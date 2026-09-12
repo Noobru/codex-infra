@@ -16,6 +16,8 @@ import { CapabilityPlanner } from './capability-planner.js';
 import { ExecutionEvidence } from './execution-evidence.js';
 import { ExecutionPolicyManager } from './execution-policy.js';
 import {WorkflowStore} from './workflow.js';
+import {OperationalInsights} from './operational-insights.js';
+import {EvidenceSanitizer} from './evidence.js';
 
 export interface PrepareInput {
   project: string; objective: string; idempotencyKey: string; mode: JobMode;
@@ -32,11 +34,13 @@ export class TaskEngine {
   readonly state: StateStore;
   readonly profiles: ProfileManager;
   readonly execution: ExecutionPolicyManager;
+  readonly insights: OperationalInsights;
   constructor(readonly root: string, private worker: Pick<CodexWorker, 'run'> = new CodexWorker()) {
     this.registry = new ProjectRegistry(path.join(root, 'profiles/registry.json'));
     this.state = new StateStore(path.join(root, 'state/jobs.sqlite'));
     this.profiles = new ProfileManager(this.registry, this.state, root);
     this.execution = new ExecutionPolicyManager(root,this.profiles,this.state);
+    this.insights = new OperationalInsights(root);
   }
   artifactDir(id: string): string { this.state.get(id); return path.join(this.root, 'artifacts/jobs', id); }
   async projectContext(project:string) {return new KnowledgeLearningStore(this.root).augmentContext(await this.registry.context(await this.registry.resolve(project)));}
@@ -228,7 +232,28 @@ export class TaskEngine {
       await atomicWriteJson(path.join(attempt, 'failure.json'), {message: errorMessage(error), capturedAt: new Date().toISOString(), ...(error instanceof ProcessCleanupError ? {process:error.result} : {})});
       if (error instanceof ProcessCleanupError) return this.state.transition(id, this.state.get(id).status, {error: 'Unconfirmed cleanup: ' + errorMessage(error)});
       return this.state.transition(id, 'failed', {error: errorMessage(error)});
-    } finally { clearInterval(poll);dispatch.signal?.removeEventListener('abort',abort); }
+    } finally {
+      clearInterval(poll);dispatch.signal?.removeEventListener('abort',abort);
+      await this.recordInsights(id,attempt,job.attempts);
+    }
+  }
+  private async recordInsights(jobId:string,attemptDirectory:string,attemptNumber:number):Promise<void> {
+    let receipt;
+    try {
+      const job=this.state.get(jobId);
+      if(!['completed','failed','cancelled','waiting_user','waiting_quota'].includes(job.status))return;
+      const captured=await this.insights.captureJob(jobId);
+      receipt={version:1,jobId,attempt:attemptNumber,recordedAt:new Date().toISOString(),status:captured.warnings.length?'attention':'processed',...captured};
+    }catch(error){
+      receipt={version:1,jobId,attempt:attemptNumber,recordedAt:new Date().toISOString(),status:'attention',evaluationIds:[],created:0,reused:0,
+        warnings:[EvidenceSanitizer.text(errorMessage(error),1000)]};
+    }
+    try {await atomicWriteJson(path.join(attemptDirectory,'insights.json'),receipt);}
+    catch(error){
+      // Reporting must never replace the execution result, including when its evidence volume is unavailable.
+      process.stderr.write(JSON.stringify({type:'insights-receipt-unavailable',jobId,attempt:attemptNumber,warnings:receipt.warnings,
+        error:EvidenceSanitizer.text(errorMessage(error),1000)})+'\n');
+    }
   }
   async cancel(id: string,expectedOwner?:{pid:number;attempt:number}): Promise<Job> {
     const job = this.state.get(id);

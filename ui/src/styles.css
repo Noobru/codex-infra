@@ -447,7 +447,7 @@ body { font-size: 15px; line-height: 1.5; }
 .empty-state span { font-size:13px; }
 .update-status { line-height:1.5; }
 @media(max-width:1100px){.comparison-form{grid-template-columns:1fr 1fr}.comparison-form button{justify-self:start}}
-@media(max-width:900px){.live-grid{grid-template-columns:minmax(0,1fr)}.live-side-column{display:grid;grid-template-columns:minmax(0,1fr)}}
+@media(max-width:900px){.sidebar{width:72px}.live-grid{grid-template-columns:minmax(0,1fr)}.live-side-column{display:grid;grid-template-columns:minmax(0,1fr)}}
 @media(max-width:650px){
  .sidebar{width:60px;padding-left:7px;padding-right:7px}.nav-item{height:46px;justify-content:center;padding:0}.content-wrap{padding:24px 16px}
  .topbar{padding:12px 16px;gap:12px}.topbar-right{min-width:0}.update-status{font-size:12px;max-width:160px}

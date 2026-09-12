@@ -20,6 +20,11 @@ import { EvaluationStore } from './evaluation.js';
 import { InteractionEntry } from './interaction-entry.js';
 import { InteractionStore } from './interactions.js';
 import { GIdeiaBootstrap } from './g-ideia-bootstrap.js';
+import { OperationalInsights } from './operational-insights.js';
+import { EfficiencyHistory,EfficiencyHistoryInputSchema } from './efficiency-history.js';
+import { InteractionTelemetry } from './interaction-telemetry.js';
+import { ImprovementImpactReader } from './improvement-impact.js';
+import { LearningApplications } from './learning-applications.js';
 
 export const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const {values, positionals} = parseArgs({allowPositionals: true, options: {
@@ -31,18 +36,36 @@ const {values, positionals} = parseArgs({allowPositionals: true, options: {
   file: {type:'string'}, replace: {type:'boolean',default:false}, 'fresh-thread': {type:'boolean',default:false}, evidence: {type:'string'},
   port:{type:'string',default:'4317'}, projects:{type:'string'},
   concurrency:{type:'string'}, jobs:{type:'string'}, apply:{type:'boolean',default:false},
+  days:{type:'string'},
 }});
 const root = path.resolve(values.root ?? process.env.CODEX_INFRA_ROOT ?? defaultRoot);
 const command = positionals[0] ?? 'help';
 const print = (value: unknown) => process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 let engine: TaskEngine | undefined;
 try {
-  if (command === 'help') print({commands: ['bootstrap-g-ideia --file INPUT.json [--apply]','enter-interaction --file INPUT.json','record-interaction ID --file UPDATE.json','interactions [ID] [--file FILTERS.json]','interactions-import --file INVENTORY.json','doctor [--project ID]','projects','register --file PROFILE.json [--replace]','context --project ID','models','route --file ROUTING.json','task-context --file TASK.json','prepare --file TASK.json','prepare --project ID --objective TEXT --key KEY --kind checks|codex --checks id,id [--depends ID,ID] [--requirements IG-01] [--workspace worktree --base-ref REF]','execution-policy [--file POLICY.json]','workflow-prepare --file WORKFLOW.json','workflow-status WORKFLOW_ID','workflow-run WORKFLOW_ID [--concurrency N] [--timeout MILLISECONDS]','workflow-start WORKFLOW_ID [--concurrency N] [--timeout MILLISECONDS]','workflow-cancel WORKFLOW_ID','workflow-replan WORKFLOW_ID --file REPLAN.json','knowledge-index --project ID','knowledge-search --file SEARCH.json','learning-list [--project ID]','learning-read CANDIDATE_ID','learning-propose --file PROPOSAL.json','learning-review CANDIDATE_ID --file REVIEW.json','learning-shadow-source CANDIDATE_ID','learning-shadow CANDIDATE_ID --file SHADOW.json','learning-promote CANDIDATE_ID --file DECISION.json','learning-revert CANDIDATE_ID --file DECISION.json','security-report --project ID --file GATE-INPUT.json','evaluation-record --file EVALUATION.json','evaluation EVALUATION_ID','evaluation-compare --file COMPARISON.json','observe [--port 4317] [--timeout MILLISECONDS (1000-7200000; default 300000)]','run JOB_ID','drain --max-jobs N --timeout MILLISECONDS [--concurrency N] [--jobs ID,ID]','start-queue --max-jobs N --timeout MILLISECONDS [--concurrency N] [--jobs ID,ID]','queue-status SUPERVISOR_ID','stop-queue SUPERVISOR_ID','status [JOB_ID]','events JOB_ID','cancel JOB_ID','retry JOB_ID [--fresh-thread]','confirm-stopped JOB_ID --evidence TEXT','reconcile','probe','snapshot --target DIR','restore --snapshot DIR --target NEW_DIR','activate-restore [--projects id,id] [--root-overrides FILE.json]'],root});
+  if (command === 'help') print({commands: ['efficiency-history [--project ID] [--days 7|14|30|90]','telemetry-capture THREAD_UUID','telemetry-reconcile [--max-jobs 1..10]','telemetry-read [--project ID] [--days N]','learning-application --file INPUT.json','learning-effects CANDIDATE_ID','bootstrap-g-ideia --file INPUT.json [--apply]','enter-interaction --file INPUT.json','record-interaction ID --file UPDATE.json','interactions [ID] [--file FILTERS.json]','interactions-import --file INVENTORY.json','interaction-findings ID','insights-reconcile [--project ID] [--max-jobs N]','doctor [--project ID]','projects','register --file PROFILE.json [--replace]','context --project ID','models','route --file ROUTING.json','task-context --file TASK.json','prepare --file TASK.json','prepare --project ID --objective TEXT --key KEY --kind checks|codex --checks id,id [--depends ID,ID] [--requirements IG-01] [--workspace worktree --base-ref REF]','execution-policy [--file POLICY.json]','workflow-prepare --file WORKFLOW.json','workflow-status WORKFLOW_ID','workflow-run WORKFLOW_ID [--concurrency N] [--timeout MILLISECONDS]','workflow-start WORKFLOW_ID [--concurrency N] [--timeout MILLISECONDS]','workflow-cancel WORKFLOW_ID','workflow-replan WORKFLOW_ID --file REPLAN.json','knowledge-index --project ID','knowledge-search --file SEARCH.json','learning-list [--project ID]','learning-read CANDIDATE_ID','learning-propose --file PROPOSAL.json','learning-review CANDIDATE_ID --file REVIEW.json','learning-shadow-source CANDIDATE_ID','learning-shadow CANDIDATE_ID --file SHADOW.json','learning-promote CANDIDATE_ID --file DECISION.json','learning-revert CANDIDATE_ID --file DECISION.json','security-report --project ID --file GATE-INPUT.json','evaluation-record --file EVALUATION.json','evaluation EVALUATION_ID','evaluation-compare --file COMPARISON.json','observe [--port 4317] [--timeout MILLISECONDS (1000-7200000; default 300000)]','run JOB_ID','drain --max-jobs N --timeout MILLISECONDS [--concurrency N] [--jobs ID,ID]','start-queue --max-jobs N --timeout MILLISECONDS [--concurrency N] [--jobs ID,ID]','queue-status SUPERVISOR_ID','stop-queue SUPERVISOR_ID','status [JOB_ID]','events JOB_ID','cancel JOB_ID','retry JOB_ID [--fresh-thread]','confirm-stopped JOB_ID --evidence TEXT','reconcile','probe','snapshot --target DIR','restore --snapshot DIR --target NEW_DIR','activate-restore [--projects id,id] [--root-overrides FILE.json]'],root});
   else if (command === 'bootstrap-g-ideia') {
     if (!values.file) throw new Error('--file bootstrap.local.json is required');
     const bootstrap = new GIdeiaBootstrap(root), input = await readJson(values.file, null);
     print(values.apply ? await bootstrap.apply(input) : await bootstrap.plan(input));
   }
+  else if (command === 'insights-reconcile') {
+    print(await new OperationalInsights(root).reconcile({projectId:values.project,limit:values['max-jobs']===undefined?undefined:Number(values['max-jobs'])}));
+  }
+  else if (command === 'interaction-findings') print(await new InteractionEntry(root).reconcileFindings(positionals[1]??''));
+  else if (command === 'efficiency-history') {
+    const input=EfficiencyHistoryInputSchema.parse({projectId:values.project,days:values.days===undefined?undefined:Number(values.days)});
+    const history=await new EfficiencyHistory(root).history(input);
+    print({history,improvements:await new ImprovementImpactReader(root).read(history,values.project)});
+  }
+  else if (command === 'telemetry-capture') print(await new InteractionTelemetry(root).capture(positionals[1]??''));
+  else if (command === 'telemetry-reconcile') print(await new InteractionTelemetry(root).reconcile({limit:values['max-jobs']===undefined?undefined:Number(values['max-jobs'])}));
+  else if (command === 'telemetry-read') print(await new InteractionTelemetry(root).read({projectId:values.project,days:values.days===undefined?undefined:Number(values.days)}));
+  else if (command === 'learning-application') {
+    if(!values.file)throw new Error('--file application.json is required');
+    print(await new LearningApplications(root).record(await readJson(values.file,null)));
+  }
+  else if (command === 'learning-effects') print(await new LearningApplications(root).getEffects(positionals[1]??''));
   else if (['enter-interaction','record-interaction','interactions-import','interactions'].includes(command)) {
     if (!values.file && command !== 'interactions') throw new Error('--file input.json is required');
     const input = values.file ? await readJson(values.file, null) : {};

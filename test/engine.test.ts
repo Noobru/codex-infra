@@ -5,6 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import {TaskEngine} from '../src/engine.js';
 import {CodexWorker} from '../src/codex-worker.js';
+import {EvaluationStore} from '../src/evaluation.js';
+import {OperationalInsights} from '../src/operational-insights.js';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
 
 async function fixture(t: TestContext, worker?: Pick<CodexWorker,'run'>) {
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'infra-engine-'));
@@ -33,6 +38,41 @@ test('job preserves its original contract, validates real checks and is idempote
   assert.equal(completed.status,'completed'); assert.match(completed.result!,/does not certify/);
   assert.deepEqual(await engine.run(job.id),completed);
   assert.equal(engine.state.events(job.id).filter(e=>e.toStatus==='validating').length,1);
+  const evaluations=await new EvaluationStore(root).list();
+  assert.equal(evaluations.total,1);assert.equal(evaluations.items[0]!.technical.status,'passed');
+  assert.equal(evaluations.items[0]!.acceptance.status,'not-recorded');
+  const processing=JSON.parse(await fs.readFile(path.join(engine.artifactDir(job.id),'attempt-1/insights.json'),'utf8'));
+  assert.equal(processing.status,'processed');assert.equal(processing.created,1);
+});
+
+test('post-execution insight failure is observable and cannot replace the original job result',async t=>{
+  const {root,engine}=await fixture(t);
+  engine.insights.captureJob=async()=>{throw new Error('Fixture evaluation storage unavailable');};
+  const job=await engine.prepare({project:'test',objective:'Verify unchanged execution result',idempotencyKey:'postprocessing-failure',mode:'read-only',kind:'checks',checkIds:['pass']});
+  const completed=await engine.run(job.id);
+  assert.equal(completed.status,'completed');assert.equal(completed.error,null);
+  const receipt=JSON.parse(await fs.readFile(path.join(engine.artifactDir(job.id),'attempt-1/insights.json'),'utf8'));
+  assert.equal(receipt.status,'attention');assert.match(receipt.warnings[0],/storage unavailable/);
+  assert.equal((await new EvaluationStore(root).list()).total,0);
+});
+
+test('CLI insight backfill reuses automatic receipts and observational reads do not write',async t=>{
+  let workerCalls=0;
+  const {root,engine}=await fixture(t,{run:async()=>{workerCalls++;return {status:'completed',summary:'One owned fixture turn'};}});
+  let checkCalls=0;
+  const check=engine.registry.check.bind(engine.registry);
+  engine.registry.check=async(...args)=>{checkCalls++;return check(...args);};
+  const job=await engine.prepare({project:'test',objective:'Capture evidence from one fixture turn',idempotencyKey:'cli-insights',mode:'read-only',kind:'codex',checkIds:['pass']});
+  assert.equal((await engine.run(job.id)).status,'completed');
+  const listing=await new EvaluationStore(root).list(),before=await fs.readFile(path.join(root,listing.items[0]!.artifactPath));
+  const cli=fileURLToPath(new URL('../src/cli.js',import.meta.url));
+  const {stdout}=await promisify(execFile)(process.execPath,[cli,'insights-reconcile','--root',root,'--project','test','--max-jobs','1']);
+  const backfill=JSON.parse(stdout);assert.equal(backfill.created,0);assert.equal(backfill.reused,1);assert.deepEqual(backfill.warnings,[]);
+  const eventsBefore=engine.state.events(job.id);
+  await new OperationalInsights(root).observations({projectId:'test'});
+  assert.deepEqual(await fs.readFile(path.join(root,listing.items[0]!.artifactPath)),before);
+  assert.deepEqual(engine.state.events(job.id),eventsBefore);
+  assert.equal(workerCalls,1);assert.equal(checkCalls,1);assert.equal((await new EvaluationStore(root).list()).total,1);
 });
 test('a successful model answer cannot override a failed acceptance check',async t=>{
   const {engine}=await fixture(t,{run:async()=>({status:'completed',summary:'Model claims success'})});

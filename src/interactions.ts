@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { EvidenceSanitizer } from './evidence.js';
-import { KnowledgeFiles, KnowledgeProjectSchema, KnowledgeTextSchema } from './knowledge-store.js';
+import { PerformanceScopeSchema } from './performance-scope.js';
+import { KnowledgeFiles, KnowledgeProjectSchema, KnowledgeTextSchema, KnowledgeEvidenceSchema,
+  KnowledgeKindSchema, KnowledgeContentSchema, KnowledgeImpactSchema } from './knowledge-store.js';
 
 const identity = z.string().trim().min(1).max(200);
 const titleInput = z.string().min(1).max(1_000_000).refine(value => value.trim().length > 0, 'Title cannot be blank.').nullable();
@@ -13,6 +15,12 @@ export const InteractionStatusSchema = z.enum(['imported', 'open', 'completed', 
 export const InteractionOriginSchema = z.object({
   source: KnowledgeTextSchema, observedAt: timestamp, sourceRef: KnowledgeTextSchema.nullable().default(null),
 });
+export const InteractionFindingSchema = z.object({
+  id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/),
+  projectId: KnowledgeProjectSchema, title: KnowledgeTextSchema, kind: KnowledgeKindSchema,
+  content: KnowledgeContentSchema, evidence: KnowledgeEvidenceSchema, impact: KnowledgeImpactSchema.optional(),
+}).strict();
+export const InteractionRecordedFindingSchema = InteractionFindingSchema.extend({ recordedRevision: z.number().int().positive() });
 const links = {
   jobIds: z.array(z.uuid()).max(500),
   workflowIds: z.array(z.string().regex(/^workflow_[a-f0-9-]{36}$/)).max(500),
@@ -28,6 +36,7 @@ export const InteractionBeginSchema = z.object({
   projectId: KnowledgeProjectSchema.nullable().default(null), title: titleInput,
   cwd: cwd.nullable().default(null), intent: InteractionIntentSchema.default('conversation'),
   route: InteractionRouteSchema.default('direct'), objective: KnowledgeTextSchema.nullable().default(null),
+  performanceScope: PerformanceScopeSchema.optional(),
   source: KnowledgeTextSchema, observedAt: timestamp.optional(), sourceRef: KnowledgeTextSchema.nullable().optional(),
 }).strict().refine(input => Boolean(input.threadId || input.idempotencyKey), 'threadId or idempotencyKey is required.');
 
@@ -38,7 +47,9 @@ export const InteractionUpdateSchema = z.object({
   intent: InteractionIntentSchema.optional(), route: InteractionRouteSchema.optional(),
   status: z.enum(['open', 'completed', 'blocked', 'cancelled']).optional(),
   objective: KnowledgeTextSchema.nullable().optional(), summary: KnowledgeTextSchema.nullable().optional(),
+  performanceScope: PerformanceScopeSchema.optional(),
   evidence: z.array(KnowledgeTextSchema).max(50).default([]),
+  findings: z.array(InteractionFindingSchema).max(50).default([]),
   jobIds: links.jobIds.default([]), workflowIds: links.workflowIds.default([]),
 }).strict();
 
@@ -60,7 +71,9 @@ export const InteractionRecordSchema = z.object({
   threadId: identity.nullable(), idempotencyKey: KnowledgeTextSchema.nullable(), projectId: KnowledgeProjectSchema.nullable(),
   ...titleFields, cwd: cwd.nullable(), intent: InteractionIntentSchema, route: InteractionRouteSchema, status: InteractionStatusSchema,
   objective: KnowledgeTextSchema.nullable(), summary: KnowledgeTextSchema.nullable(),
+  performanceScope: PerformanceScopeSchema.optional(),
   evidence: z.array(KnowledgeTextSchema).max(1000), ...links,
+  findings: z.array(InteractionRecordedFindingSchema).max(1000).default([]),
   origin: InteractionOriginSchema, createdAt: timestamp, updatedAt: timestamp, locallyUpdatedAt: timestamp.nullable(),
   imported: importedMetadata.nullable(),
   change: z.object({ kind: z.enum(['begin', 'update', 'import']), origin: InteractionOriginSchema, previousRevision: z.number().int().positive().nullable() }),
@@ -96,14 +109,14 @@ export class InteractionStore {
     const record = existing ? {
       ...existing, ...(existing.locallyUpdatedAt === null ? {
         ...this.title(input.title), projectId: input.projectId, cwd: input.cwd ?? existing.cwd,
-        intent: input.intent, route: input.route, objective: input.objective,
+        intent: input.intent, route: input.route, objective: input.objective, performanceScope: input.performanceScope,
       } : {}), status: 'open' as const,
       revision: existing.revision + 1, updatedAt: now, locallyUpdatedAt: now,
       change: { kind: 'begin' as const, origin, previousRevision: existing.revision },
     } : this.initial(id, {
       threadId: input.threadId ?? null, idempotencyKey: input.idempotencyKey ? EvidenceSanitizer.text(input.idempotencyKey, 200) : null,
       projectId: input.projectId, ...this.title(input.title), cwd: input.cwd, intent: input.intent,
-      route: input.route, objective: input.objective, origin,
+      route: input.route, objective: input.objective, performanceScope: input.performanceScope, origin,
     }, 'open', now);
     try { return await this.publish(record); }
     catch (error) {
@@ -146,10 +159,19 @@ export class InteractionStore {
     if (input.expectedRevision !== existing.revision) throw new Error('Interaction revision conflict; re-read before updating.');
     const now = new Date().toISOString();
     const { expectedRevision: _revision, source: _source, observedAt: _observed, sourceRef: _ref,
-      title: newTitle, evidence, jobIds, workflowIds, ...fields } = input;
+      title: newTitle, evidence, findings, jobIds, workflowIds, ...fields } = input;
+    const mergedFindings = new Map(existing.findings.map(finding => [finding.id, finding]));
+    for (const finding of findings) {
+      const prior = mergedFindings.get(finding.id);
+      if (prior) {
+        const { recordedRevision: _recordedRevision, ...original } = prior;
+        if (JSON.stringify(original) !== JSON.stringify(finding)) throw new Error('Interaction finding ID is already bound to different input: ' + finding.id);
+      } else mergedFindings.set(finding.id, { ...finding, recordedRevision: existing.revision + 1 });
+    }
     const record: InteractionRecord = {
       ...existing, ...fields, ...(newTitle === undefined ? {} : this.title(newTitle)),
       evidence: [...new Set([...existing.evidence, ...evidence])],
+      findings: [...mergedFindings.values()],
       jobIds: [...new Set([...existing.jobIds, ...jobIds])], workflowIds: [...new Set([...existing.workflowIds, ...workflowIds])],
       revision: existing.revision + 1, updatedAt: now, locallyUpdatedAt: now,
       change: { kind: 'update', origin: this.origin(input, now), previousRevision: existing.revision },
@@ -198,9 +220,9 @@ export class InteractionStore {
   private origin(input: { source: string; observedAt?: string; sourceRef?: string | null }, now: string) {
     return InteractionOriginSchema.parse({ source: input.source, observedAt: input.observedAt ?? now, sourceRef: input.sourceRef ?? null });
   }
-  private initial(id: string, fields: Pick<InteractionRecord, 'threadId' | 'idempotencyKey' | 'projectId' | 'title' | 'titleOriginalChars' | 'titleTruncated' | 'cwd' | 'intent' | 'route' | 'objective' | 'origin'>,
+  private initial(id: string, fields: Pick<InteractionRecord, 'threadId' | 'idempotencyKey' | 'projectId' | 'title' | 'titleOriginalChars' | 'titleTruncated' | 'cwd' | 'intent' | 'route' | 'objective' | 'origin' | 'performanceScope'>,
     status: 'imported' | 'open', now: string): InteractionRecord {
-    return { version: 1, id, revision: 1, ...fields, status, summary: null, evidence: [], jobIds: [], workflowIds: [],
+    return { version: 1, id, revision: 1, ...fields, status, summary: null, evidence: [], findings: [], jobIds: [], workflowIds: [],
       createdAt: now, updatedAt: now, locallyUpdatedAt: status === 'open' ? now : null, imported: null,
       change: { kind: status === 'open' ? 'begin' : 'import', origin: fields.origin, previousRevision: null }, artifactPath: this.revisionPath(id, 1) };
   }

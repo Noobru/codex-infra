@@ -108,3 +108,21 @@ test('list is filtered and paginated, and stale imports cannot replace newer sou
   assert.equal(stale.unchanged, 1);
   assert.equal((await fixture.store.read(fresh.items[0]!.id)).title, 'Current source');
 });
+
+test('explicit findings preserve their first revision, deduplicate identical input and reject conflicting reuse', async t => {
+  const f = await InteractionFixture.create(t), first = await f.begin('finding-revisions');
+  const finding = { id: 'observer-version', projectId: 'fixture', title: 'Observe runtime version', kind: 'practice' as const,
+    content: 'Compare startup and installed build fingerprints after rebuilding.', evidence: ['fixture runtime comparison'] };
+  const recorded = await f.store.update(first.id, { expectedRevision: first.revision, source: 'Fixture finding', findings: [finding, finding] });
+  assert.deepEqual(recorded.findings, [{ ...finding, recordedRevision: 2 }]);
+  assert.deepEqual((await f.store.read(first.id, 1)).findings, []);
+  const later = await f.store.update(first.id, { expectedRevision: 2, source: 'Later progress', summary: 'Progress', findings: [finding] });
+  assert.deepEqual(later.findings, recorded.findings);
+  await assert.rejects(f.store.update(first.id, { expectedRevision: 3, source: 'Conflicting finding',
+    findings: [{ ...finding, content: 'A different practice under the same ID.' }] }), /finding ID.*different input/);
+  assert.equal((await f.store.read(first.id)).revision, 3);
+  await assert.rejects(f.store.update(first.id, { expectedRevision: 3, source: 'Missing evidence', findings: [{ ...finding, evidence: [] }] }));
+  await assert.rejects(f.store.update(first.id, { expectedRevision: 3, source: 'Unsafe content',
+    findings: [{ ...finding, content: 'Contact tester@example.org to disclose details.' }] }), /cannot be preserved/);
+  assert.equal((await f.store.read(first.id)).revision, 3);
+});

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ObservationReader } from './observability.js';
 import { EvidenceSanitizer } from './evidence.js';
-import { atomicWriteJson, readJson, resolveRealSubPath } from './legacy/command-os-utils.js';
+import { atomicWriteJson, atomicWriteNew, deterministicUuid, readJson, resolveRealSubPath } from './legacy/command-os-utils.js';
 
 const identifier = z.string().min(1).max(160).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
 const text = z.string().trim().min(1).max(2000).transform(value => EvidenceSanitizer.text(value, 2000));
@@ -84,6 +84,39 @@ export class EvaluationStore {
   constructor(readonly root: string) { this.directory = path.join(root, 'artifacts/evaluations'); }
 
   async record(input: EvaluationInput): Promise<EvaluationReceipt> {
+    const receipt = await this.buildReceipt(input, randomUUID());
+    await atomicWriteJson(await this.destination(receipt.id), receipt);
+    return receipt;
+  }
+
+  /** A source-derived key makes repeated hooks/backfills exclusive without changing explicit recordings. */
+  async recordOnce(input: EvaluationInput, idempotencyKey: string): Promise<{receipt: EvaluationReceipt; created: boolean}> {
+    z.string().min(1).max(2000).parse(idempotencyKey);
+    const id = deterministicUuid('evaluation/v1', idempotencyKey);
+    const parsed = EvaluationInputSchema.parse(input);
+    const existing = async () => {
+      const receipt = await this.read(id);
+      if (JSON.stringify(EvaluationInputSchema.parse(receipt)) !== JSON.stringify(parsed)) {
+        throw new Error('Evaluation idempotency key is already bound to different input.');
+      }
+      return {receipt, created: false};
+    };
+    try { await fs.access(path.join(this.directory, `${id}.json`)); return await existing(); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    const receipt = await this.buildReceipt(parsed, id);
+    try { await atomicWriteNew(await this.destination(id), JSON.stringify(receipt, null, 2) + '\n'); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') return existing(); throw error; }
+    return {receipt, created: true};
+  }
+
+  private async destination(id: string): Promise<string> {
+    await fs.mkdir(this.directory, { recursive: true });
+    const ownedDirectory = await resolveRealSubPath(this.directory, this.root);
+    if (!ownedDirectory) throw new Error('Evaluation directory must remain inside the infrastructure root.');
+    return path.join(ownedDirectory, `${id}.json`);
+  }
+
+  private async buildReceipt(input: EvaluationInput, id: string): Promise<EvaluationReceipt> {
     const parsed = EvaluationInputSchema.parse(input);
     const reader = new ObservationReader(this.root);
     let observation;
@@ -99,7 +132,6 @@ export class EvaluationStore {
         exitCode: check?.exitCode ?? null, cleanupFailed: check?.cleanupFailed ?? null,
       };
     });
-    const id = randomUUID();
     const checksReference = `artifacts/jobs/${parsed.jobId}/attempt-${parsed.attempt}/checks.json`;
     const receipt = EvaluationReceiptSchema.parse({
       ...parsed, version: 1, id, recordedAt: new Date().toISOString(),
@@ -112,10 +144,6 @@ export class EvaluationStore {
         taskContractHash: attempt.taskContract?.hash ?? null, criteria, warnings: observation.warnings,
       },
     });
-    await fs.mkdir(this.directory, { recursive: true });
-    const ownedDirectory = await resolveRealSubPath(this.directory, this.root);
-    if (!ownedDirectory) throw new Error('Evaluation directory must remain inside the infrastructure root.');
-    await atomicWriteJson(path.join(ownedDirectory, `${id}.json`), receipt);
     return receipt;
   }
 

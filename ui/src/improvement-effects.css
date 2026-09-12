@@ -1,0 +1,5 @@
+.comparison-values {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:22px 0}
+.comparison-values>div {display:flex;flex-direction:column;gap:7px;border-left:2px solid var(--border,#263741);padding-left:12px;min-width:0}
+.comparison-values strong {font-size:1.2rem;overflow-wrap:anywhere}
+.comparison-values span {color:var(--text-muted,#9dadba);font-size:.88rem}
+@media(max-width:700px){.comparison-values{grid-template-columns:1fr}}

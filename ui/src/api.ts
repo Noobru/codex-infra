@@ -29,6 +29,7 @@ class ObservationClient {
     const query=new URLSearchParams({view:options.view??'overview',limit:'20',offset:String(options.offset??0),sort:options.sort??'newest'});
     const fields={project_id:options.projectId,job_id:options.jobId,status:options.status,query:options.query,
       after_event_id:options.afterEventId,evaluation_offset:options.evaluationOffset,
+      history_days:options.historyDays,
       interaction_offset:options.interactionOffset,interaction_limit:options.interactionLimit,interaction_status:options.interactionStatus,
       baseline_id:options.comparison?.baselineId,treatment_id:options.comparison?.treatmentId,metric_id:options.comparison?.metricId};
     for(const [key,value] of Object.entries(fields))if(value!==undefined&&value!=='')query.set(key,String(value));

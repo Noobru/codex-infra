@@ -7,17 +7,18 @@ import { ObservationReader } from './observability.js';
 import { InteractionIdSchema, InteractionStore } from './interactions.js';
 import type { ContextSource, ProjectContext } from './registry.js';
 import { EvidenceSanitizer } from './evidence.js';
-import { isSubPath } from './legacy/command-os-utils.js';
+import { deterministicUuid, isSubPath } from './legacy/command-os-utils.js';
 import { KnowledgeFiles, KnowledgeAuthorSchema, KnowledgeDecisionSchema, KnowledgeOwnerDecisionSchema,
-  KnowledgeTextSchema, KnowledgeEvidenceSchema, KnowledgeHashSchema, KnowledgeProjectSchema } from './knowledge-store.js';
+  KnowledgeTextSchema, KnowledgeEvidenceSchema, KnowledgeHashSchema, KnowledgeProjectSchema,
+  KnowledgeKindSchema, KnowledgeContentSchema, KnowledgeImpactSchema } from './knowledge-store.js';
 
 export const KnowledgeJobOriginSchema = z.object({ jobId: z.uuid(), attempt: z.number().int().positive(), evaluationId: z.uuid().optional() }).strict();
 export const KnowledgeInteractionOriginSchema = z.object({ interactionId: InteractionIdSchema, revision: z.number().int().positive() }).strict();
 export const KnowledgeOriginSchema = z.union([KnowledgeJobOriginSchema, KnowledgeInteractionOriginSchema]);
 export const KnowledgeProposalSchema = z.object({
   projectId: KnowledgeProjectSchema, origin: KnowledgeOriginSchema, title: KnowledgeTextSchema,
-  kind: z.enum(['script', 'skill', 'practice']), content: z.string().min(1).max(64000),
-  author: KnowledgeAuthorSchema, source: KnowledgeTextSchema,
+  kind: KnowledgeKindSchema, content: KnowledgeContentSchema,
+  author: KnowledgeAuthorSchema, source: KnowledgeTextSchema, impact: KnowledgeImpactSchema.optional(),
 });
 export const KnowledgeReviewSchema = KnowledgeDecisionSchema.extend({ decision: z.enum(['approved', 'rejected']) });
 export const KnowledgeShadowSchema = KnowledgeDecisionSchema.extend({ jobId: z.uuid(), attempt: z.number().int().positive(), evaluationId: z.uuid() });
@@ -41,18 +42,51 @@ export class KnowledgeLearningStore {
   constructor(readonly root: string) { this.files = new KnowledgeFiles(root); this.evaluations = new EvaluationStore(root); }
 
   async propose(input: KnowledgeProposal): Promise<KnowledgeCandidate> {
+    return this.publishProposal(input, randomUUID());
+  }
+
+  /** Stable keyed proposals can be retried after partial writes without resetting review or promotion. */
+  async proposeOnce(input: KnowledgeProposal, key: string): Promise<KnowledgeCandidate> {
+    z.string().min(1).max(2000).parse(key);
+    return this.publishProposal(input, deterministicUuid('knowledge-proposal/v1', key));
+  }
+
+  private async publishProposal(input: KnowledgeProposal, id: string): Promise<KnowledgeCandidate> {
     const proposal = KnowledgeProposalSchema.parse(input);
-    if (EvidenceSanitizer.text(proposal.content, 64000) !== proposal.content) throw new Error('Proposal content contains material that cannot be preserved in ordinary evidence.');
+    const requestPath = `artifacts/learning/candidates/${id}/proposal-input.json`;
+    const assertSame = (original: KnowledgeProposal) => {
+      if (JSON.stringify(original) !== JSON.stringify(proposal)) throw new Error('Knowledge proposal idempotency key is already bound to different input.');
+    };
+    const names = await this.files.names(`artifacts/learning/candidates/${id}`);
+    if (names.includes('revision-000001.json')) {
+      assertSame(KnowledgeProposalSchema.parse(await this.read(id, 1)));
+      return this.read(id);
+    }
+    if (names.includes('proposal-input.json')) assertSame(await this.files.read(requestPath, KnowledgeProposalSchema));
     const originEvidence = await this.originEvidence(proposal);
-    const id = randomUUID(), recordedAt = new Date().toISOString();
+    // Bind the complete request first, including when a prior attempt stopped between these files.
+    try { await this.files.writeJsonNew(requestPath, proposal); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      assertSame(await this.files.read(requestPath, KnowledgeProposalSchema));
+    }
+    const recordedAt = new Date().toISOString();
     const contentPath = `artifacts/learning/candidates/${id}/proposal.txt`;
     const candidate = KnowledgeCandidateSchema.parse({ ...proposal, version: 1, id, revision: 1, createdAt: recordedAt, updatedAt: recordedAt,
       status: 'proposed', contentHash: KnowledgeFiles.hash(proposal.content), contentPath, artifactPath: this.revisionPath(id, 1),
       originEvidence,
       review: null, shadow: null, promotion: null, reversal: null });
-    await this.files.writeNew(contentPath, candidate.content);
-    await this.files.writeJsonNew(candidate.artifactPath, candidate);
-    return candidate;
+    try { await this.files.writeNew(contentPath, candidate.content); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      await this.verifyContent(candidate);
+    }
+    try { await this.files.writeJsonNew(candidate.artifactPath, candidate); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      assertSame(KnowledgeProposalSchema.parse(await this.read(id, 1)));
+    }
+    return this.read(id);
   }
 
   async read(id: string, revision?: number): Promise<KnowledgeCandidate> {
@@ -156,12 +190,19 @@ export class KnowledgeLearningStore {
   }
   private async originEvidence(proposal: KnowledgeProposal): Promise<KnowledgeCandidate['originEvidence']> {
     const origin = proposal.origin;
+    const impactRefs:string[]=[];
+    for(const id of proposal.impact?.baselineEvaluationIds??[]) {
+      const baseline=await this.evaluations.read(id);
+      if(baseline.projectId!==proposal.projectId)throw new Error('Impact baseline belongs to another project.');
+      if(proposal.impact?.affectedCheckIds?.some(checkId=>!baseline.rubric.criteria.some(criterion=>criterion.checkId===checkId)))throw new Error('Impact check is absent from the baseline rubric.');
+      impactRefs.push(baseline.artifactPath);
+    }
     if ('interactionId' in origin) {
       const interaction = await new InteractionStore(this.root).read(origin.interactionId, origin.revision);
       if (interaction.projectId !== null && interaction.projectId !== proposal.projectId) throw new Error('Candidate origin belongs to another project.');
       // A general conversation can inform a proposed destination. This explicit project is the
       // author's intent, not evidence of applicability or technical acceptance for that project.
-      return {refs: [...new Set([interaction.artifactPath, ...interaction.evidence])], checkResults: [],
+      return {refs: [...new Set([interaction.artifactPath, ...impactRefs, ...interaction.evidence, ...interaction.findings.flatMap(finding => finding.evidence)])], checkResults: [],
         jobStatusAtCapture: 'interaction-declared:' + interaction.status};
     }
     const observation = await this.observation(origin.jobId);
@@ -171,7 +212,7 @@ export class KnowledgeLearningStore {
     if (origin.evaluationId) await this.boundEvaluation(proposal.projectId, origin);
     const refs = observation.evidence.filter(ref => ref.includes(`/attempt-${origin.attempt}/`));
     if (origin.evaluationId) refs.push(`artifacts/evaluations/${origin.evaluationId}.json`);
-    return {refs, checkResults: attempt.checks?.map(check => ({checkId: check.checkId, passed: check.passed})) ?? [],
+    return {refs:[...new Set([...refs,...impactRefs])], checkResults: attempt.checks?.map(check => ({checkId: check.checkId, passed: check.passed})) ?? [],
       jobStatusAtCapture: observation.summary.status};
   }
   private async observation(jobId: string) { const reader = new ObservationReader(this.root); try { return await reader.run(jobId); } finally { reader.close(); } }
