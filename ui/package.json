@@ -1,0 +1,19 @@
+{
+  "name": "codex-infra-observability",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run check && node build.mjs",
+    "check": "node ../node_modules/typescript/bin/tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "lucide-react": "0.453.0",
+    "react": "19.2.1",
+    "react-dom": "19.2.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.25.12"
+  }
+}

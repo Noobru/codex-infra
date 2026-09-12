@@ -1,0 +1,16 @@
+{
+  "reportPath": "fixtures/security-local/report.json",
+  "format": "trivy-json",
+  "subject": {
+    "asset": "synthetic-fixture-only",
+    "environment": "local",
+    "sha": "0000000000000000000000000000000000000000",
+    "stage": "ci"
+  },
+  "source": {
+    "name": "expired-synthetic-fixture",
+    "version": "1",
+    "fetchedAt": "2026-09-12T17:24:00.567Z",
+    "expiresAt": "2026-09-12T17:25:00.567Z"
+  }
+}

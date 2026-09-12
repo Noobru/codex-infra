@@ -1,0 +1,4 @@
+interface:
+  display_name: "CodexInfra"
+  short_description: "Contexto, execução e evidências locais"
+  default_prompt: "Use $start-project para carregar o projeto e cumprir o objetivo informado."

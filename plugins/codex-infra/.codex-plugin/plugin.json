@@ -1,0 +1,25 @@
+{
+  "name": "codex-infra",
+  "version": "0.3.0",
+  "description": "Contexto de projetos, execução persistente e evidências para Codex local.",
+  "author": {
+    "name": "CodexInfra"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "CodexInfra",
+    "shortDescription": "Contexto, execução e evidências locais.",
+    "longDescription": "CLI, MCP e contexto compartilhados para trabalho autorizado com projetos locais.",
+    "developerName": "CodexInfra",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Carregue o contexto do projeto indicado e trabalhe no objetivo informado."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

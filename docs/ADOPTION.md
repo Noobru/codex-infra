@@ -1,0 +1,9 @@
+# Adoção no contrato do agente
+
+Incorpore o bloco abaixo ao `AGENTS.md` global existente do seu Codex. Preserve regras próprias de autorização, fontes, segurança e entrega. O arquivo `LOCAL-ADOPTION.md` gerado no bootstrap informa a raiz local para o fallback CLI.
+
+> Para cada nova interação de trabalho no Codex local, use a infraestrutura CodexInfra como ponto de entrada. Carregue a skill `start-project` do plugin `codex-infra` e identifique o objetivo, o projeto quando existente e o estado necessário à retomada. Consulte o MCP disponível e registre apenas o contexto e o resultado proporcionais à tarefa. Uma conversa exploratória ou seleção sem objetivo permanece em leitura. Menção hipotética não seleciona projeto. Não reproduza conversas inteiras nem conteúdo sensível no registro. Preserve o trabalho já autorizado durante perguntas e correções do usuário.
+>
+> Escolha execução direta, tarefa persistente ou workflow conforme utilidade, dependências e isolamento. Reutilize CLI/MCP e os gerenciadores canônicos; não crie outra fila, executor ou cadastro. Workers não criam outros workers recursivamente. Limites de concorrência e modelo continuam vigentes. Feche a interação com resultado, estado e evidência pertinente. Sugestões reutilizáveis seguem proposta, revisão, validação e promoção autorizada. Se a infraestrutura estiver indisponível, informe o problema concreto, preserve um checkpoint local mínimo no escopo da tarefa e continue trabalho independente autorizado; reconcilie o registro quando voltar. Não invente persistência nem declare tools ausentes como executadas.
+
+A instalação do plugin disponibiliza capacidades. O contrato global determina que o agente as consulte como fluxo padrão; o usuário continua definindo objetivos e autorizações. Tarefas existentes devem receber um checkpoint de adoção com referência à sua identidade local, sem transformar histórico em trabalho pendente executável.
