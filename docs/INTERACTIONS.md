@@ -6,7 +6,7 @@ O registro não define sozinho o escopo autorizado. Engenharia segue o vault de 
 
 ## Entrada e atualização
 
-A skill usa `enter_interaction` com a identidade da conversa (`CODEX_THREAD_ID`, quando disponível), título real, fonte do pedido e projeto explicitamente escolhido. A resposta agrega registro anterior, política e contexto pertinente. `persist:false` atende pedidos explícitos de nenhuma gravação. Projetos inferidos de títulos, exemplos ou CWD não são ativados automaticamente.
+A skill usa `enter_interaction` com a identidade da conversa (`CODEX_THREAD_ID`, quando disponível), título real, fonte do pedido e projeto explicitamente escolhido. A resposta agrega registro anterior, política e contexto pertinente. Uma entrada persistente de trabalho pode iniciar manutenção de aprendizado já autorizada pela política permanente; `productDispatch:false` preserva os limites do produto. `persist:false`, leitura e consultas do painel não iniciam manutenção. Projetos não são inferidos de títulos, exemplos ou CWD.
 
 `record_interaction` atualiza o registro com `expectedRevision`, fonte, resumo breve, status e evidências. IDs de jobs/workflows só entram quando esses objetos existem. Registrar conclusão de trabalho direto é um estado reportado pela conversa; os checks dos jobs preservam sua evidência separada.
 
@@ -80,11 +80,13 @@ A interação é salva primeiro. O processamento produz um candidato automaticam
 
 `impact` acompanha essa origem imutável. As listas vazias do exemplo informam que ainda faltam baselines/checks; substitua-as apenas por vínculos reais. Novo conteúdo ou hipótese para achado já gravado exige novo ID. Depois da promoção, o hash e o caminho no Context Pack comprovam inclusão, sem certificar uso correto. Efficiency distingue essa inclusão, o resultado avaliado e a evidência ainda necessária para comparar.
 
-Sem achado explícito, o sistema não inventa uma prática a partir de falha genérica. `Attempt 1` identifica uma tentativa que originou um sinal; não significa um aprendizado nem placeholder. A fila de candidatos pode estar vazia enquanto existirem apenas sinais para investigar. Não há captura automática de toda mensagem: o agente registra os resultados materiais pelo contrato de entrada.
+`Attempt 1` identifica uma tentativa que originou um sinal; não significa um aprendizado. A descoberta agrupa retrabalho sustentado em receipts compatíveis e incorpora os achados explícitos; falha genérica isolada não produz uma prática inventada. Não há captura de toda mensagem: o agente registra os resultados materiais pelo contrato de entrada.
 
-Propostas manuais continuam aceitando `origin:{interactionId,revision}` ou `{jobId,attempt,evaluationId?}`. O ciclo de revisão, shadow test, promoção explícita do owner e reversão permanece obrigatório. Candidato não é executado, instalado ou promovido automaticamente; a conversa inteira não deve ser copiada para ele. Consulte [Instalação e operação](USO.md) para avaliações/comparações automáticas e interpretação dos campos.
+Sob a política permanente, o [ciclo de aprendizado executável](AUTONOMOUS-LEARNING.md) constrói, revisa, testa e ativa a melhoria automaticamente, registrando o agente real na decisão e avisando no painel. O owner desativa pelo hash. As propostas manuais continuam aceitando `origin:{interactionId,revision}` ou `{jobId,attempt,evaluationId?}` e preservam revisão, shadow e decisão explícita do owner na API manual. A conversa inteira não deve ser copiada para uma proposta.
 
-## Aplicação explícita de uma melhoria
+Para usar uma capacidade ativa, chame `run_learning_capability({hash,input})` com projeto, entrypoint e dados do objetivo autorizado. Acrescente `attribution:{threadId,turnId}` quando as identidades forem conhecidas. O receipt já comprova a execução observada; não é necessária uma declaração manual de aplicação para essa chamada. Efficiency apresenta runs, resultados, duração e timestamps, sem converter execução em economia estimada de tokens.
+
+## Aplicação explícita de uma release da API manual
 
 Se uma release promovida foi aplicada no trabalho, registre a declaração vinculada ao turno real. `LearningApplicationInputSchema` exige `candidateId`, `threadId` e `turnId` UUIDs, `author:{name,role}`, `source` e `evidence` não vazia. O agente se identifica como `model`; não atribui uma opinião sua ao owner.
 

@@ -1,6 +1,6 @@
 # CodexInfra
 
-Uma infraestrutura local de trabalho para o Codex: contexto de projetos, tarefas persistentes, execução com limites, workflows, evidências, aprendizado revisado e um painel de acompanhamento.
+Uma infraestrutura local de trabalho para o Codex: contexto de projetos, tarefas persistentes, execução com limites, workflows, evidências e aprendizado executável acompanhado no painel. A versão 0.6.0 transforma achados sustentados em capacidades revisadas, testadas e ativadas pela política permanente do owner; cada versão tem um hash para uso e desativação.
 
 O fluxo começa na conversa e no discovery. Ao formalizar ou executar engenharia, o coordenador carrega o vault de coding e seus contratos, aplica o G-IDEIA, mantém PRD/PREVC e as referências técnicas pertinentes, escolhe execução direta, tarefa isolada ou workflow, valida o resultado e faz o write-back. O painel é a camada de consulta desse processo.
 
@@ -13,7 +13,7 @@ O fluxo começa na conversa e no discovery. Ao formalizar ou executar engenharia
 | Contexto | Perfis explícitos, fontes com proveniência, seleção por tarefa e grafo de links locais. |
 | Execução | Estado em SQLite, checks nomeados, tentativas, cancelamento, recuperação e worktrees isoladas. |
 | Coordenação | Limites de workers e modelos, DAG de dependências, repasses de evidências e replanejamento limitado. |
-| Aprendizado | Achados explícitos da interação geram candidatos ligados à revisão/evidência, com replay sem duplicatas; revisão, shadow, promoção explícita e reversão. |
+| Aprendizado | Achados e retrabalho observado geram bundles com revisão independente, testes isolados, ativação por política e desativação por hash; invocações reais têm receipts. |
 | Avaliação | Checks finalizados geram avaliações compatíveis; Efficiency acompanha problemas, melhorias, inclusão no contexto e resultados posteriores com evidência. |
 | Histórico | Janelas de 7/14/30/90 dias, fontes separadas e tokens por turno completo com telemetria local opcional; sem transcrições nos recibos. |
 | Segurança | Leitura de relatórios, enriquecimento opcional OSV/KEV e publisher GitHub com autorização por destino/SHA. |
@@ -22,7 +22,7 @@ O fluxo começa na conversa e no discovery. Ao formalizar ou executar engenharia
 
 ## Instalação inicial no Windows
 
-Requer Windows 11, Node.js 22.16 ou mais recente, npm, Git e Codex Desktop com acesso ao Codex, além do vault de coding e dos contratos compatíveis descritos acima. PowerShell 7 e Python 3 são necessários somente para o instalador de plugin pessoal. Dependências ficam dentro desta cópia; Docker e banco externo não são necessários.
+Requer Windows 11, Node.js 22.16 ou mais recente, npm, Git e Codex Desktop com acesso ao Codex, além do vault de coding e dos contratos compatíveis descritos acima. PowerShell 7 e Python 3 são necessários somente para o instalador de plugin pessoal. O Codex roda nativamente no Windows, sem exigir WSL. A execução de capacidades geradas usa Docker já ativo e imagens locais Node/Python fixadas; o restante da infraestrutura não depende desse adaptador nem de banco externo.
 
 Na pasta deste repositório:
 
@@ -63,7 +63,7 @@ Peça: **“Carregue o contrato do meu vault de coding, localize o PRD/PREVC can
 
 Em projeto existente, reaproveite e atualize PRD/PREVC canônicos. Um bug pequeno não exige criar outro PRD a cada tarefa. Em ideia nova, conversa e discovery precedem a formalização proporcional exigida pelo G-IDEIA. Registrar a conversa não substitui esse contrato nem autoriza implementar.
 
-Selecionar um projeto sem objetivo apenas carrega contexto. A execução direta continua disponível para trabalho simples; persistência e workers entram quando ajudam a execução, a retomada ou o isolamento. Publicação, merge, deploy e promoção de conhecimento respeitam suas autorizações.
+Selecionar um projeto sem objetivo apenas carrega contexto. A execução direta continua disponível para trabalho simples; persistência e workers entram quando ajudam a execução, a retomada ou o isolamento. Publicação, merge e deploy mantêm suas autorizações próprias. Para aprendizado automático, o owner configura sua autorização permanente uma vez conforme [Aprendizado executável](docs/AUTONOMOUS-LEARNING.md); cada melhoria passa por revisão e testes sem nova aprovação individual.
 
 Para abrir o painel temporário:
 
@@ -75,7 +75,7 @@ Acesse o endereço loopback exibido no terminal. O painel consulta estado; seus 
 
 Após uma atualização, Refresh não troca o código carregado pelo backend. Se o painel indicar diferença de versão/fingerprint, reinicie somente o processo `observe` dessa instalação após a validação local. [Instalação e operação](docs/USO.md) explica o reinício e distingue campos não aplicáveis de métricas ausentes.
 
-O agente registra resultados materiais pela entrada operacional. Quando houver achado reutilizável com evidência, inclui `findings`: o candidato aparece na Learning Queue, sem promoção automática. O campo opcional `impact` declara o problema, a mudança esperada e as baselines/checks pertinentes. Efficiency relaciona a melhoria aos contextos posteriores e às avaliações compatíveis; inclusão no contexto não atesta aplicação correta.
+O agente registra resultados materiais e `findings` pela entrada operacional. Sob a política habilitada, achados e retrabalho observado seguem síntese, revisão independente, teste isolado e ativação automática. Efficiency apresenta o caso, a versão, o hash, as execuções reais e seus resultados. Para impedir usos futuros, informe ao agente o hash a desativar. Consultar o painel não inicia esses jobs; a manutenção começa a partir de atividade autorizada e usa os limites compartilhados da fila.
 
 Para acompanhar tokens ao longo das semanas, declare `performanceScope` na interação e opte pela telemetria local de contadores. O histórico separa projeto/classe/linguagem, apresenta média por turno completo ou total diário e preserva campos ausentes. Aplicação explícita de uma release pode ser ligada ao turno para comparar antes/depois dentro de escopo compatível. Os recibos não guardam transcrições nem convertem tokens em cota da assinatura. [Interações e continuidade](docs/INTERACTIONS.md) explica o registro; [Instalação e operação](docs/USO.md) explica a configuração opcional e as consultas.
 
@@ -88,6 +88,7 @@ O mecanismo e o novo fluxo estão detalhados em [Proposta e hipóteses](docs/PRO
 ## Documentação
 
 - [Instalação, cadastro, comandos e recuperação](docs/USO.md)
+- [Aprendizado executável, política e desativação por hash](docs/AUTONOMOUS-LEARNING.md)
 - [Vault, G-IDEIA e fontes obrigatórias](docs/CONTEXT-CONTRACT.md)
 - [Como o workflow pessoal muda](docs/PROPOSTA.md)
 - [Adoção no contrato do agente](docs/ADOPTION.md)

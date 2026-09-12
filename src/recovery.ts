@@ -301,7 +301,11 @@ export class RecoveryManager {
 
   private allowed(path: string): boolean {
     const parts = path.split('/');
-    if (parts.some((part) => excludedNames.has(part.toLowerCase()) || /^\.env(?:\.|$)|^auth\.json$|^credentials(?:\.|$)|\.(?:pem|key)$|^id_(?:rsa|ed25519)(?:\.|$)/i.test(part))) return false;
+    // Learned capabilities and their receipts are portable evidence. This one canonical
+    // component is not the installed host runtime/cache excluded elsewhere in a snapshot.
+    const learningRuntime = parts[0] === 'artifacts' && parts[1] === 'learning' && parts[2] === 'runtime';
+    if (parts.some((part, index) => (excludedNames.has(part.toLowerCase()) && !(learningRuntime && index === 2))
+      || /^\.env(?:\.|$)|^auth\.json$|^credentials(?:\.|$)|\.(?:pem|key)$|^id_(?:rsa|ed25519)(?:\.|$)/i.test(part))) return false;
     return path === databasePath || sourceFiles.some((file) => file === path) || sourceDirectories.some((directory) => parts[0] === directory);
   }
 

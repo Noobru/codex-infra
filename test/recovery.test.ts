@@ -7,6 +7,11 @@ import { test, type TestContext } from 'node:test';
 import { RecoveryManager, RESTORE_METADATA_PATH, SNAPSHOT_MANIFEST, type SnapshotManifest } from '../src/recovery.js';
 import { StateStore } from '../src/state.js';
 import { ProjectRegistry } from '../src/registry.js';
+import { KnowledgeLearningStore } from '../src/knowledge-learning.js';
+import { InteractionStore } from '../src/interactions.js';
+import { LearningActivationPolicySchema, LearningRuntimeStore, type LearningSandboxExecutor } from '../src/learning-runtime.js';
+import { ProcessRunner } from '../src/process.js';
+import { TaskEngine } from '../src/engine.js';
 
 function fixture(t: TestContext): { root: string; source: string; manager: RecoveryManager } {
   const root = mkdtempSync(join(tmpdir(), 'codexinfra-recovery-'));
@@ -83,6 +88,77 @@ test('snapshot excludes dependencies, credentials, logs and older backups', (t) 
   assert.deepEqual(new Set(first.files.map((file) => file.path)), new Set(['src/entry.ts', 'plugins/example/.codex-plugin/plugin.json', 'docs/usage.md', 'schemas/project.json']));
   assert.equal(first.database, null);
   assert.throws(() => manager.snapshot(join(source, 'src/backup')), /copied source directory/);
+});
+
+test('snapshot and restore preserve learned capability hashes, files, states and receipts without enabling dispatch', async t => {
+  const { root, source, manager } = fixture(t);
+  const owner = { name: 'Recovery fixture owner', role: 'owner' as const };
+  const decision = { author: { name: 'Recovery fixture agent', role: 'model' as const }, source: 'Owned recovery fixture', evidence: ['fixed fixture behavior'] };
+  put(source, 'profiles/registry.json', JSON.stringify({ version: 1, projects: [] }));
+  put(source, 'profiles/learning-policy.json', JSON.stringify(LearningActivationPolicySchema.parse({ version: 1, enabled: true, automaticActivation: true,
+    authorizedBy: owner, source: 'Owned fixture standing policy', evidence: ['fixture policy'], allowedProjectIds: ['fixture'] })));
+  const interaction = await new InteractionStore(source).begin({ idempotencyKey: 'recovery-learning-fixture', projectId: 'fixture', title: 'Owned recovery fixture', source: 'test' });
+  const learning = new KnowledgeLearningStore(source);
+  const candidate = await learning.propose({ projectId: 'fixture', origin: { interactionId: interaction.id, revision: interaction.revision },
+    title: 'Preserve reusable text normalization', kind: 'script', content: 'Trim and uppercase the owned text fixture.', ...decision });
+  await learning.review(candidate.id, { ...decision, decision: 'approved' });
+  let fixtureExecutions = 0;
+  // Only these fixed repository-owned files execute; this fixture substitutes the OS boundary.
+  const adapter: LearningSandboxExecutor = { async run(request) {
+    fixtureExecutions++;
+    return { result: await new ProcessRunner().run(process.execPath, [request.entrypoint, ...request.args], request.workspace, request.timeoutMs),
+      isolation: { kind: 'test-only substituted boundary', network: 'denied', filesystem: 'workspace-write', verified: true,
+        evidence: ['fixed repository fixture; no production sandbox isolation claim'] } };
+  } };
+  const runtime = new LearningRuntimeStore(source, adapter);
+  const published = await runtime.publish(candidate.id, { version: 1, capabilityVersion: '1.0.0', files: [
+    { path: 'normalize.mjs', content: 'export const normalize = value => value.trim().toUpperCase();\n' },
+    { path: 'main.mjs', content: "import { normalize } from './normalize.mjs'; console.log(normalize(process.argv[2]));\n" },
+    { path: 'test.mjs', content: "import assert from 'node:assert/strict';import { normalize } from './normalize.mjs';assert.equal(normalize(' abc '),'ABC');\n" },
+  ], entrypoints: [{ id: 'normalize', runtime: 'node', path: 'main.mjs' }], tests: [{ id: 'normalize', runtime: 'node', path: 'test.mjs' }] });
+  const hash = published.manifest.hash;
+  await runtime.review(hash, { ...decision, decision: 'approved' });
+  const validation = await runtime.validate(hash, decision);
+  assert.equal(validation.status, 'passed');
+  const active = await runtime.activate(hash, decision);
+  const run = await runtime.run(hash, { projectId: 'fixture', entrypoint: 'normalize', args: [' abc '], decision });
+  assert.equal(run.result.stdout, 'ABC\n'); assert.equal(run.status, 'passed'); assert.equal(fixtureExecutions, 2);
+  const store = new StateStore(join(source, 'state/jobs.sqlite'));
+  const pending = store.create({ idempotencyKey: 'must-not-replay', projectId: 'fixture', objective: 'Remain paused after restore', mode: 'read-only', profileHash: 'v1' });
+  store.close();
+  const excluded = ['runtime/node/cache.txt', 'artifacts/runtime/host.txt', 'artifacts/other/runtime/cache.txt',
+    'artifacts/learning/runtime/secrets/token.txt', 'artifacts/learning/runtime/credentials.json',
+    'artifacts/learning/runtime/node_modules/package/index.js', 'artifacts/learning/runtime/logs/raw.log'];
+  for (const file of excluded) put(source, file, 'excluded fixture sentinel');
+  const snapshotPath = join(source, 'recovery/backups/learned-runtime'), manifest = manager.snapshot(snapshotPath);
+  const learnedFiles = manifest.files.filter(file => file.path.startsWith('artifacts/learning/runtime/'));
+  for (const required of [published.manifest.artifactPath, active.state.artifactPath, validation.artifactPath, run.artifactPath,
+    ...published.manifest.files.map(file => `artifacts/learning/runtime/bundles/${hash}/files/${file.path}`)]) {
+    assert.ok(learnedFiles.some(file => file.path === required), `Snapshot lost learned artifact ${required}`);
+  }
+  assert.ok(excluded.every(file => !manifest.files.some(item => item.path === file)));
+  const target = join(root, 'restored-learning'), restored = manager.restore(snapshotPath, target);
+  assert.equal(restored.dispatchEnabled, false); assert.equal(restored.automaticReplay, false); assert.equal(restored.requiresReconciliation, true);
+  for (const file of learnedFiles) {
+    const copied = readFileSync(join(target, file.path));
+    assert.deepEqual(copied, readFileSync(join(source, file.path)));
+    assert.equal(createHash('sha256').update(copied).digest('hex'), file.sha256);
+  }
+  assert.ok(excluded.every(file => !existsSync(join(target, file))));
+  const restoredRuntime = new LearningRuntimeStore(target);
+  assert.deepEqual(await restoredRuntime.read(hash), await runtime.read(hash));
+  assert.equal((await restoredRuntime.read(hash)).state.status, 'active', 'Restore preserves evidence; it does not rewrite capability history');
+  assert.deepEqual(JSON.parse(readFileSync(join(target, validation.artifactPath), 'utf8')), validation);
+  assert.deepEqual(JSON.parse(readFileSync(join(target, run.artifactPath), 'utf8')), run);
+  assert.deepEqual((await manager.observations()).warnings, []);
+  let dispatched = 0;
+  const engine = new TaskEngine(target, { async run() { dispatched++; return { status: 'completed', summary: 'Unexpected fixture dispatch' }; } });
+  try {
+    await assert.rejects(engine.run(pending.id), /Restored copy is for inspection/);
+    assert.equal(engine.state.get(pending.id).attempts, 0);
+  } finally { engine.close(); }
+  assert.equal(dispatched, 0); assert.equal(fixtureExecutions, 2);
+  assert.equal(JSON.parse(readFileSync(join(target, RESTORE_METADATA_PATH), 'utf8')).dispatchEnabled, false);
 });
 
 test('recovery observations and restore accept the G-IDEIA templates included in R9 snapshots', async t => {

@@ -25,13 +25,19 @@ import { EfficiencyHistory,EfficiencyHistoryInputSchema } from './efficiency-his
 import { ImprovementImpactReader } from './improvement-impact.js';
 import { InteractionTelemetry } from './interaction-telemetry.js';
 import { LearningApplications,LearningApplicationInputSchema } from './learning-applications.js';
+import { AutonomousLearning } from './autonomous-learning.js';
+import { LearningRuntimeStore, LearningRunInputSchema } from './learning-runtime.js';
+import { LearningSandbox } from './learning-sandbox.js';
 
 const root = path.resolve(process.env.CODEX_INFRA_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'));
 const engine = new TaskEngine(root);
 const workflows=new WorkflowManager(engine),learning=new KnowledgeLearningStore(root),security=new SecurityIntegrationFacade(root,engine.registry);
-const server = new McpServer({name:'codex-infra',version:'0.5.0'});
+const server = new McpServer({name:'codex-infra',version:'0.6.0'});
 const runtime = new RuntimeObservation(root);
 const result = (value: unknown) => ({content:[{type:'text' as const,text:JSON.stringify(value)}]});
+server.registerTool('learning_cycle_status',{description:'Read autonomous rework cases and exact versioned callable capabilities. Includes queued, active and attention states; never dispatches work.',annotations:{readOnlyHint:true},inputSchema:{projectId:z.string().optional()}},async({projectId})=>result({cases:await new AutonomousLearning(root).list(projectId),capabilities:await new LearningRuntimeStore(root).list(projectId)}));
+server.registerTool('run_learning_capability',{description:'Invoke an active reviewed and tested skill/script by exact hash. Uses an offline isolated workspace, returns outputs and records actual execution. Input data and application to the project must remain within the current authorized task.',inputSchema:{hash:z.string().regex(/^[a-f0-9]{64}$/),input:LearningRunInputSchema}},async({hash,input})=>result(await new LearningRuntimeStore(root,new LearningSandbox(root)).run(hash,input)));
+server.registerTool('disable_learning_capability',{description:'Disable one exact capability hash on the owner request. Preserves immutable history and immediately prevents future invocation and context inclusion.',inputSchema:{hash:z.string().regex(/^[a-f0-9]{64}$/),decision:KnowledgeOwnerDecisionSchema}},async({hash,decision})=>result(await new LearningRuntimeStore(root).disable(hash,decision)));
 server.registerTool('runtime_status',{description:'Read the loaded MCP build and compare it with the installed build. Refreshing the dashboard does not reload an MCP process.',annotations:{readOnlyHint:true}},async()=>result(runtime.read()));
 server.registerTool('record_learning_application',{description:'Record declared use of an existing promoted candidate in an exact observed conversation turn, with evidence. Does not promote, install or certify correct application.',inputSchema:{input:LearningApplicationInputSchema}},async({input})=>result(await new LearningApplications(root).record(input)));
 server.registerTool('read_learning_effects',{description:'Compare complete observed turn token deltas before promotion and after explicit recorded application in compatible declared scopes.',annotations:{readOnlyHint:true},inputSchema:{candidateId:z.uuid()}},async({candidateId})=>result(await new LearningApplications(root).getEffects(candidateId)));

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "packageVersion": "0.5.0",
-  "createdAt": "2026-09-12T21:16:20.316Z",
+  "packageVersion": "0.6.0",
+  "createdAt": "2026-09-12T22:59:49.393Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -74,13 +74,18 @@
     },
     {
       "path": "docs/ADOPTION.md",
-      "bytes": 3078,
-      "sha256": "4ad337581eb1a352e98d316ff9f6d4a9d64f5ca105f4f6d305f90c44a526e820"
+      "bytes": 3804,
+      "sha256": "1fb4edff54961d4954ddc80af383217e5338534179721e62da377c8fee6b157e"
     },
     {
       "path": "docs/ARQUITETURA.md",
       "bytes": 2182,
       "sha256": "0d744f2b61ff5b6c79925460bdb8cb40c0c7cff24d4e6e03b9a04dbc92efb286"
+    },
+    {
+      "path": "docs/AUTONOMOUS-LEARNING.md",
+      "bytes": 10327,
+      "sha256": "b127626f781df213f889b6f0352a9070bb401dd8e1c8861df3fb5cdc05e5915d"
     },
     {
       "path": "docs/CONTEXT-CONTRACT.md",
@@ -94,18 +99,18 @@
     },
     {
       "path": "docs/INTERACTIONS.md",
-      "bytes": 10031,
-      "sha256": "c8af94934d5ce6452d10d296787bfc65df2d472f2b64ab7cc2cb7f5b17a1a7e6"
+      "bytes": 10658,
+      "sha256": "7483222656d1ccc06bd17ef58e69a365d792e39ba9b07f2401d44f6af7b2fb60"
     },
     {
       "path": "docs/PROPOSTA.md",
-      "bytes": 3895,
-      "sha256": "1309c2652c2c482d74298495ac52d5db50df0668c26a0f2d745ff71f7e69b71f"
+      "bytes": 4207,
+      "sha256": "01c7a2820d7714749313913f592467b38a89ab34e569d78ea20cf01c09cf42c9"
     },
     {
       "path": "docs/USO.md",
-      "bytes": 19057,
-      "sha256": "95e44b0828149d8824081e8eff68bb33c9b468941b037a769be34d216a6da3dc"
+      "bytes": 19905,
+      "sha256": "31112de2bd94835e69228d9844b89f2af32e5c757bd5d8a3732df4d732b50147"
     },
     {
       "path": "fixtures/security-local/gate-ci.json",
@@ -215,17 +220,17 @@
     {
       "path": "package-lock.json",
       "bytes": 59475,
-      "sha256": "0ecb9895c2110088fe992da67c690d1da083479a8cab349810b0f6cf2da22046"
+      "sha256": "36fdcdf3f3b220029d44e7053e2c56e94824841f66718ba7c33a52c6cbf667fb"
     },
     {
       "path": "package.json",
       "bytes": 680,
-      "sha256": "b92b824259475b6d3d6b622e2aa1bfd3545413717f8a86a6668c3cae5ed787ae"
+      "sha256": "ea2ac40377b3db222db2db3e3a3445e210eabba51c09af4a76aaa14f4da208d8"
     },
     {
       "path": "plugins/codex-infra/.codex-plugin/plugin.json",
       "bytes": 735,
-      "sha256": "8e4b8c9874c41025b313478cc4e587b28fdeccf5ae8a3fc9787bbee8ce5b125a"
+      "sha256": "965be46072ca139fa126cf06a762a60b8c298d98efd8fbb6fafc0077fb839a9f"
     },
     {
       "path": "plugins/codex-infra/skills/start-project/agents/openai.yaml",
@@ -234,13 +239,13 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 14502,
-      "sha256": "dffbc6b4c254bdca220b247644fb8a622751943125eacbb06752963608c72d88"
+      "bytes": 15940,
+      "sha256": "c7ddc63219798da596bddd9cd2b5b6cd1ad27e56b23119b8aa2cefae4fd86bb6"
     },
     {
       "path": "README.md",
-      "bytes": 8971,
-      "sha256": "068c20914f713d15b79a2ad3f62eaa45b9f31d03f50118eabb3a6b62b4e27acb"
+      "bytes": 9656,
+      "sha256": "e4d3d9e390b8c751c15708a036508fd5f4e1578a92efd417c5c93adafba81e77"
     },
     {
       "path": "scripts/Bootstrap-GIdeia.mjs",
@@ -264,8 +269,13 @@
     },
     {
       "path": "src/app-server.ts",
-      "bytes": 13727,
-      "sha256": "d6747d113c604f25897845aee034b0a78336c0bf158b0561a4bb51283cf8f469"
+      "bytes": 13734,
+      "sha256": "0fe2accd57b93793c3f02d349b0df4286fca0343ce83dcba3bc2f5b1ac0814e9"
+    },
+    {
+      "path": "src/autonomous-learning.ts",
+      "bytes": 23494,
+      "sha256": "64edfc0a3956474134012453a865d4efcde2785eafed1742172e5b025988525c"
     },
     {
       "path": "src/capability-planner.ts",
@@ -274,13 +284,13 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 17733,
-      "sha256": "38d11b9241472c66688dd04173cc5009004a7e8d78a1bead88eec7f60b5dfff0"
+      "bytes": 19318,
+      "sha256": "add13f2940ebdec00601f9391d19bbdd42f8e5d18d4af8fb6c0eee2676256ed5"
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 19105,
-      "sha256": "610984127e288b9913fd8466fb993905c9b8a294f48ebe2bd406ea7e3e29833b"
+      "bytes": 19980,
+      "sha256": "bbbabe74ba2c411501526cf465767f079a77dfc406c136d0099e8cb76d87001f"
     },
     {
       "path": "src/context-pack.ts",
@@ -289,8 +299,8 @@
     },
     {
       "path": "src/dashboard.ts",
-      "bytes": 8383,
-      "sha256": "f8e5bf8ae97c61710dd1ed91b6a0c513d225d7bb0ebfe8d4dd1fc301064a1471"
+      "bytes": 12001,
+      "sha256": "ab3270f46ec4c01e948ee426e9a6930cb80187f6b691c9e616857a5dc519e4eb"
     },
     {
       "path": "src/efficiency-history.ts",
@@ -299,8 +309,8 @@
     },
     {
       "path": "src/engine.ts",
-      "bytes": 23749,
-      "sha256": "6885734448bdcf3fa5573c105565dfc0f2e14d9a41e01a4582389797488aa2af"
+      "bytes": 23962,
+      "sha256": "e4cfb8f69fccf5fe61a76655d3dcc46f7d3dfc2929cf8d5e7feed93b262711aa"
     },
     {
       "path": "src/evaluation.ts",
@@ -339,8 +349,8 @@
     },
     {
       "path": "src/interaction-entry.ts",
-      "bytes": 7519,
-      "sha256": "00a794a06462aa5bae149dcbcde652ec812639755dd8b20d6826a560b4a00a90"
+      "bytes": 8166,
+      "sha256": "a87240d1c2552a79113b5fd399777343d53d2cc51c58a25e7552913a3f386e7f"
     },
     {
       "path": "src/interaction-telemetry.ts",
@@ -359,18 +369,38 @@
     },
     {
       "path": "src/knowledge-learning.ts",
-      "bytes": 17082,
-      "sha256": "b243ca6c1b32e21a065519b17db800298ce24e0164bdb42db954da0d3994ae5f"
+      "bytes": 17329,
+      "sha256": "93538be5a03c9e69c9725aecdda36430bc188058dba0ef205f3a8d1dc2a5478f"
     },
     {
       "path": "src/knowledge-store.ts",
-      "bytes": 4242,
-      "sha256": "4158a60f0ccbbfeec5d33c1395c2a37dc453b66da65bdb0670402c51d3840797"
+      "bytes": 4779,
+      "sha256": "afaf37856ccb5f3346bb9270b5ef1d36a031de23b973a8197d46241c1b558433"
     },
     {
       "path": "src/learning-applications.ts",
       "bytes": 16429,
       "sha256": "876c73e60baf6a5b6e22deb456fde46d49845855f7beff71a6a8bb787dce1dea"
+    },
+    {
+      "path": "src/learning-builder.ts",
+      "bytes": 16519,
+      "sha256": "19952cc69a679c4ed1527e68501a49ed804de0b5b02713904d96b90c9cc457dd"
+    },
+    {
+      "path": "src/learning-runtime-effects.ts",
+      "bytes": 8453,
+      "sha256": "1b2313521c7bab13c5a5b4e53f500a812f7da267598d511a7438c65080339cdf"
+    },
+    {
+      "path": "src/learning-runtime.ts",
+      "bytes": 28089,
+      "sha256": "5acf223e1f4dcd2767b29dcf4df69f19d5c3930c12a99adcdc2382aa878e4b2b"
+    },
+    {
+      "path": "src/learning-sandbox.ts",
+      "bytes": 14267,
+      "sha256": "f3e0ce78cf91a9c8bfad255fdd25af1e3d878f0bca51f707778b4d597990735a"
     },
     {
       "path": "src/legacy/command-os-utils.js",
@@ -379,8 +409,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 21838,
-      "sha256": "23fadbfd0b8c3f9040a0964a113b9657a634762983a5262ba60ad6df75d8eb72"
+      "bytes": 23372,
+      "sha256": "4574f949de73531b322657d6b56d6129e4c85d5ae16f6344f380c70643ff72f6"
     },
     {
       "path": "src/model-catalog.ts",
@@ -414,8 +444,8 @@
     },
     {
       "path": "src/process.ts",
-      "bytes": 8266,
-      "sha256": "9f610f60ada2528414f4e439883f71ffb80da406c2c210258a334ffa0b7f874d"
+      "bytes": 8395,
+      "sha256": "a570a0059b3d78bf833584c0f5efd4509234400b1eeed27ae9566c49db7a4d96"
     },
     {
       "path": "src/profile-manager.ts",
@@ -424,8 +454,8 @@
     },
     {
       "path": "src/queue-worker.ts",
-      "bytes": 3477,
-      "sha256": "6de4326183c2ea7b59b1b97021fdd6a21a76653645049cd9ad177b6bcc4dbc13"
+      "bytes": 3703,
+      "sha256": "ed657875b7e916ebb881f9d3ea77054ebbd47a42b7ad46ed05bff6053c4bff30"
     },
     {
       "path": "src/queue.ts",
@@ -434,13 +464,18 @@
     },
     {
       "path": "src/recovery.ts",
-      "bytes": 21965,
-      "sha256": "af8e81a8457b0ecfe00b2953c1b68d162306e4434d11bc22ccc69010c42dffb4"
+      "bytes": 22304,
+      "sha256": "fbb4c95317220956fb4c79aff4d7dae752d94a9e97e212a50170d091edaae6e3"
     },
     {
       "path": "src/registry.ts",
       "bytes": 7506,
       "sha256": "973f948235253def695992ab820d86b56bfed8d1e27b360ea662e38e4dfc9f57"
+    },
+    {
+      "path": "src/rework-discovery.ts",
+      "bytes": 14798,
+      "sha256": "10bab9b252d491d818f66124d481b158985f56d32d994734ae398006eaf11a86"
     },
     {
       "path": "src/routing.ts",
@@ -489,8 +524,8 @@
     },
     {
       "path": "src/supervisor.ts",
-      "bytes": 8120,
-      "sha256": "1601bf7873e6d946a6bc0ab262f65340857fc598b32317c2281eecd7275a7bff"
+      "bytes": 8474,
+      "sha256": "a12720cfb02f23dea47e3c35b9bab8757936ab3c2938b83172cae16c3f55d194"
     },
     {
       "path": "src/task-contract.ts",
@@ -543,14 +578,19 @@
       "sha256": "ada8dd62123fdde7ab49aefc101ee96dd73989f8d57ccc8704fe959dea5a53ae"
     },
     {
+      "path": "test/autonomous-learning.test.ts",
+      "bytes": 19419,
+      "sha256": "482ddeeff945d34dbdb3923e9565087b05d7afffa4df7cdfce8b98495bd74bad"
+    },
+    {
       "path": "test/capability-planner.test.ts",
       "bytes": 3177,
       "sha256": "b8dc5c0d48d461de20014849eaf495d8538a0d51d7cea26418595d7a6f25ea06"
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 11995,
-      "sha256": "766e74630902bd51927116b89cb96cdf7d410501971056f3b09d8d1c6ed2f836"
+      "bytes": 12965,
+      "sha256": "0d26b3c18025eb14fb7feeed3f6d751db83568bd876891e9660f1f4a147718af"
     },
     {
       "path": "test/context-pack.test.ts",
@@ -623,6 +663,26 @@
       "sha256": "d2f6ef86a7917e4b7885f1ead0e7a0bf4a3b8ce0fd35f8bb3aeb1f8e00f07cd6"
     },
     {
+      "path": "test/learning-builder.test.ts",
+      "bytes": 8548,
+      "sha256": "8c4076a589184c3aa8094efca13c0621177eadfcc692ea50dbe9dbc63155b3fc"
+    },
+    {
+      "path": "test/learning-runtime-effects.test.ts",
+      "bytes": 6049,
+      "sha256": "d1a836d33275d1f15f1021899cfd139fee901ce0a74acffafe5e3a61b012ad44"
+    },
+    {
+      "path": "test/learning-runtime.test.ts",
+      "bytes": 13515,
+      "sha256": "4a89e5b9471ab8bfa07d50ed372b12b1a30c5cee8af770af576e61d25030833f"
+    },
+    {
+      "path": "test/learning-sandbox.test.ts",
+      "bytes": 2082,
+      "sha256": "670d803f7cc78a2c3064ecc76866a256e7018272ed8db446c533e9ae5983b8b3"
+    },
+    {
       "path": "test/mcp.test.ts",
       "bytes": 3379,
       "sha256": "1bdcc5fffb1e23039176b177b4f98f7d8d78c806572461bc2b79b91490365216"
@@ -664,13 +724,18 @@
     },
     {
       "path": "test/recovery.test.ts",
-      "bytes": 17522,
-      "sha256": "213093060cea25d4aad75c629bb25f2649f9b4919a0c0b0fbaa3f10a0ac9f499"
+      "bytes": 24045,
+      "sha256": "f4acb4a47d6b14ea5fcd7a0970a0fcd56aa5ca6186182c480b2d5b3f95561279"
     },
     {
       "path": "test/registry.test.ts",
       "bytes": 4306,
       "sha256": "ad025c700c20eb5691159f27a742c32422d0f0d8a1ddb950fb0a56c39c04c58b"
+    },
+    {
+      "path": "test/rework-discovery.test.ts",
+      "bytes": 8873,
+      "sha256": "e5ed97a909bf4946835b37689fd8c13fc1451da36753b8fdb41b8c029f012403"
     },
     {
       "path": "test/routing.test.ts",
@@ -749,13 +814,13 @@
     },
     {
       "path": "ui/package-lock.json",
-      "bytes": 17220,
-      "sha256": "bc347d34848d94801e5a9b63e4fee3b52fd6a93b0a8ee0a5025e044538099ebb"
+      "bytes": 17268,
+      "sha256": "ea7b1d1e772e868fa999916d754d3f4a431306746f0e733c3c89ba95e5ab485f"
     },
     {
       "path": "ui/package.json",
-      "bytes": 443,
-      "sha256": "f285102ce360ee79a505431a5b05890d061d2bfed4b05f5079e331fcacf7a9dc"
+      "bytes": 465,
+      "sha256": "310f62cf9dd09b0134743d715c6229b767fb7cb0f89d60857310539cd07849e0"
     },
     {
       "path": "ui/src/api.ts",
@@ -798,14 +863,24 @@
       "sha256": "b03a924cb9f1da96ded0b34919c39570c48f8c24719cf8b611c54cb4bd550efa"
     },
     {
+      "path": "ui/src/LearningCapabilities.tsx",
+      "bytes": 7514,
+      "sha256": "99cca70b90664af9a3c13211758e5cea935f618cfefcc3920aafc54fa7cc2a1f"
+    },
+    {
+      "path": "ui/src/LearningRuntimeEffects.tsx",
+      "bytes": 4161,
+      "sha256": "381e04aca5ddc695e7bca66fa6e6ae7ec337d72c249f402f6edc4877875038b0"
+    },
+    {
       "path": "ui/src/main.tsx",
       "bytes": 157,
       "sha256": "9fb0dc5d1057a7982b9f7ca7e161ec389624fd379c34caec930c0ca4ce54aa92"
     },
     {
       "path": "ui/src/panels.tsx",
-      "bytes": 29282,
-      "sha256": "cbdf2e7914614cd91e01817176d733f10dbfd1237488d0bac3ab0772d7e5178c"
+      "bytes": 30073,
+      "sha256": "0f8525de19c4b5103db3b5caee58ba4fe1f344a05f3d33ac90c06d62634aea35"
     },
     {
       "path": "ui/src/styles.css",

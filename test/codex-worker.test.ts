@@ -31,6 +31,7 @@ class FakeTransport implements WorkerTransport {
   }
   async request<T>(method: string, params?: any): Promise<T> {
     this.calls.push({ method, params });
+    if(method==='config/read')return {config:{mcp_servers:{'external-service':{enabled:true}},plugins:{'external@fixture':{enabled:true}}}} as T;
     if(method==='model/list')return {data:this.models,nextCursor:null} as T;
     if (method === 'thread/start' || method === 'thread/resume') return {
       thread: { id: this.resumeId, cwd, status: { type: this.active ? 'active' : 'idle' } }, cwd,
@@ -79,6 +80,19 @@ test('one job starts one turn and waits for confirmed terminal completion', asyn
   assert.ok((result.receipt as any).trajectory.some((event:any)=>event.event==='turn/started'&&event.threadId==='thread-1'));
   assert.ok((result.receipt as any).trajectory.some((event:any)=>event.event==='turn/completed'&&event.turnId==='turn-1'));
   assert.equal(JSON.stringify((result.receipt as any).trajectory).includes('Manifest inspected.'),false);
+});
+
+test('learning file-only workers remove inherited integrations without relaxing sandbox or approval', async () => {
+  const transport=new FakeTransport();
+  const result=await new CodexWorker({clientFactory:()=>transport,localFilesOnly:true}).run(base);
+  assert.equal(result.status,'completed');
+  const options=transport.calls.find(call=>call.method==='thread/start')!.params;
+  assert.deepEqual(options.config.mcp_servers,{'external-service':{enabled:false}});
+  assert.deepEqual(options.config.plugins,{'external@fixture':{enabled:false}});
+  assert.equal(options.config['features.apps'],false);
+  assert.equal(options.config.web_search,'disabled');
+  assert.equal(options.approvalPolicy,'on-request');assert.equal(options.sandbox,'read-only');
+  assert.equal((result.receipt as any).toolScope.kind,'local-files');
 });
 
 test('captures completion delivered before turn/start response', async () => {

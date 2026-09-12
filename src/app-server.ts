@@ -36,7 +36,7 @@ const MAX_LINE_BYTES = 16 * 1024 * 1024;
 const require = createRequire(import.meta.url);
 
 /** Resolve the locally installed native binary, never a global shim or shell. */
-function localCodexBinary(): string {
+export function localCodexBinary(): string {
   const cpu = { x64: 'x86_64', arm64: 'aarch64' }[process.arch as 'x64' | 'arm64'];
   const system = { win32: 'pc-windows-msvc', linux: 'unknown-linux-musl', darwin: 'apple-darwin' }[
     process.platform as 'win32' | 'linux' | 'darwin'

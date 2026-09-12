@@ -3,6 +3,8 @@ import {Activity,ArrowUpRight,Clipboard,Database,FileCheck2,Layers3,LockKeyhole,
 import type {DashboardObservation,DashboardOptions} from './api';
 import {EfficiencyHistory,type HistoryDays,type HistorySelection} from './EfficiencyHistory';
 import {ImprovementEffects} from './ImprovementEffects';
+import {LearningCapabilities,LearningCycle} from './LearningCapabilities';
+import {LearningRuntimeEffectsView} from './LearningRuntimeEffects';
 import type {EvaluationComparison,EvaluationReceipt} from '../../src/evaluation';
 import {CopyId,EmptyState,InfoCard,MetricCard,ScopeNote,SectionHeading,timestamp,type CopyProps} from './components';
 
@@ -70,7 +72,11 @@ export function EfficiencyView({data,onOpenRun,onCompare,onPage,selection,histor
       {!!item.evidence.length&&<details className="receipt-details"><summary>Comparison evidence ({item.evidence.length})</summary>{item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</details>}
     </InfoCard>);
   return <>
-    <ImprovementEffects source={data.improvements} tokenEffects={data.learningEffects} onOpenRun={onOpenRun} {...copy}/>
+    <LearningRuntimeEffectsView source={data.runtimeEffects} {...copy}/>
+    <details className="receipt-details"><summary>Context learning from the earlier workflow</summary>
+      <ScopeNote>This history tracks manual context promotions. Automatic executable skills and their actual calls are shown above; they do not require another manual promotion.</ScopeNote>
+      <ImprovementEffects source={data.improvements} tokenEffects={data.learningEffects} onOpenRun={onOpenRun} {...copy}/>
+    </details>
     <EfficiencyHistory history={data.history?.data} days={historyDays} onDaysChange={onDaysChange} selection={historySelection} onSelectionChange={onHistorySelectionChange} pending={pending} error={data.history?.state==='unavailable'?'History could not be read. Refresh to retry.':undefined} onOpenRun={onOpenRun} {...copy}/>
     <details className="receipt-details"><summary>Detailed check comparisons and evaluations</summary>
     <SectionHeading label="Evaluation receipts" title="Automatic comparisons" count={data.insights?.data?String(automatic.length):data.insights?.state??'unavailable'}/>
@@ -132,9 +138,11 @@ export function EvidenceRecoveryView({data,...copy}:Omit<PanelProps,'onOpenRun'>
 
 export function LearningQueueView({data,onOpenRun,...copy}:PanelProps){
   const learning=data.learning,ledger=data.operations.data?.learning,signals=data.insights?.data?.signals??[];
-  const hasSignals=signals.length>0||Boolean(learning?.signals.length);
+  const signalCount=signals.length+(learning?.signals.length??0),hasSignals=signalCount>0;
   const signalsUnavailable=!data.insights?.data||!learning||['partial','unavailable'].includes(learning.signalsState);
-  return <><section className="learning-hero"><div><div className="section-kicker">Reusable knowledge · {data.operations.state}</div><h2>From a result to a reusable practice.</h2><p>Declared findings create traceable candidates. Review and shadow validation still precede explicit promotion.</p></div><div className="learning-loop"><Clipboard size={24}/><strong>Review → validate → promote</strong></div></section>
+  return <><section className="learning-hero"><div><div className="section-kicker">Reusable knowledge · {data.operations.state}</div><h2>From recurring work to a tested improvement.</h2><p>Validated skills and scripts can activate under the authorized policy. Inspect the version and evidence, or ask the agent to disable its hash.</p></div><div className="learning-loop"><Clipboard size={24}/><strong>Build → validate → activate → apply</strong></div></section>
+    <LearningCycle source={data.learningCycle} onOpenRun={onOpenRun} {...copy}/>
+    <LearningCapabilities source={data.learningRuntime} {...copy}/>
     <section className="learning-metrics"><MetricCard label="Recorded candidates" value={ledger?String(ledger.length):'unknown'} note="selected project scope" tone="cyan" icon={Sparkles}/><MetricCard label="Shadow passed" value={ledger?String(ledger.filter(c=>c.shadow==='passed').length):'unknown'} note="bound to candidate content" tone="green" icon={FileCheck2}/><MetricCard label="Active promotions" value={ledger?String(ledger.filter(c=>c.status==='promoted').length):'unknown'} note="available to future context" tone="cyan" icon={Zap}/><MetricCard label="Reverted" value={ledger?String(ledger.filter(c=>c.status==='reverted').length):'unknown'} note="history preserved" tone="neutral" icon={LockKeyhole}/></section>
     <SectionHeading label="Learning ledger" title="Candidates and decisions"/>
     <div className="evaluation-list">{ledger?.map(item=><InfoCard key={item.id} icon={Clipboard} title={item.title} meta={item.projectId+' · '+item.kind+' · '+item.status}>
@@ -144,9 +152,9 @@ export function LearningQueueView({data,onOpenRun,...copy}:PanelProps){
       {item.promotionPath&&<div className="hash-line"><span>Release</span><CopyId value={item.promotionPath} {...copy}/></div>}
       <details className="receipt-details"><summary>Candidate evidence ({item.evidence.length})</summary>{item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</details>
     </InfoCard>)}</div>
-    {!ledger?.length&&<EmptyState title={ledger?'No learning candidates in this scope':'Learning ledger unavailable'} detail={ledger?'A declared finding must include its project, content and evidence. Recording it creates a candidate; promotion is a separate decision.':'Refresh to retry reading candidate records.'}/>}
+    {!ledger?.length&&<EmptyState title={ledger?'No learning candidates in this scope':'Learning ledger unavailable'} detail={ledger?'Recorded findings and supported recurring failures supply candidate evidence. Executable bundles have their own review and activation records above.':'Refresh to retry reading candidate records.'}/>}
     {!!learning?.candidates?.length&&<details className="receipt-details"><summary>Candidate references in project registry ({learning.candidates.length})</summary>{learning.candidates.map((item,i)=><InfoCard key={i} icon={Clipboard} title={item.label} meta={item.projectId+' · '+item.status}><CopyId value={item.evidence} {...copy}/></InfoCard>)}</details>}
-    <SectionHeading label="Observed signals" title="Evidence to review" count={data.insights?.state??'unavailable'}/>
+    <SectionHeading label="Observed signals" title="Evidence to review" count={hasSignals?String(signalCount):signalsUnavailable?'unavailable':'0'}/>
     <div className="evaluation-list">{signals.map(item=><InfoCard key={item.id} icon={TerminalSquare} title={item.reason} meta={item.kind+' · '+item.projectId}>
       <div className="card-list"><span>Attempts: {item.attempts.join(' → ')}</span></div>
       <button className="subtle-link" type="button" onClick={()=>onOpenRun(item.jobId)}>Inspect source run {item.jobId.slice(0,8)}<ArrowUpRight size={15}/></button>

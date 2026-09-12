@@ -2,7 +2,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, openSync, writeSync } from 'node:fs';
 import path from 'node:path';
 
-export interface CommandOptions { signal?: AbortSignal; outputFiles?: {stdout:string;stderr:string}; pathPrepend?: string[] }
+export interface CommandOptions { signal?: AbortSignal; outputFiles?: {stdout:string;stderr:string}; pathPrepend?: string[]; /** Complete environment override; omitted preserves the existing host environment. */ env?: NodeJS.ProcessEnv }
 
 export interface CommandResult {
   executable: string; args: string[]; cwd: string; exitCode: number | null;
@@ -97,7 +97,7 @@ export class ProcessRunner {
       };
       let child: ReturnType<typeof spawn>;
       try {
-        const childEnv: NodeJS.ProcessEnv = {...process.env, GIT_OPTIONAL_LOCKS: '0'};
+        const childEnv: NodeJS.ProcessEnv = {...(options.env ?? process.env), GIT_OPTIONAL_LOCKS: '0'};
         if (options.pathPrepend?.length) {
           const keys = Object.keys(childEnv).filter(key => process.platform === 'win32' ? key.toLowerCase() === 'path' : key === 'PATH');
           const key = keys[0] ?? 'PATH';

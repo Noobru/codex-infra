@@ -74,7 +74,11 @@ Consulte status, tentativas e artefatos antes de retry. `cancel JOB_ID` solicita
 
 Contexto atual, conhecimento promovido e grafo entram no caminho canônico de preview/prepare/run. Não é necessário indexar manualmente antes de cada tarefa. Fontes obrigatórias, validade, precedência, conflito, orçamento e truncamento permanecem explícitos. Referência não ganha autoridade por entrar no contexto.
 
-O ciclo de aprendizado usa `propose_learning`, `review_learning`, `learning_shadow_source`, `validate_learning`, `promote_learning` e `revert_learning`. A proposta deve estar ligada a uma tentativa real ou a uma revisão imutável de interação, a validação deve incluir os bytes exatos da proposta e a promoção exige decisão documentada do owner. Uma prática promovida alimenta contexto futuro; não instala scripts globais nem os executa automaticamente. Esse aprendizado complementa o write-back obrigatório do projeto e das notas pertinentes no vault, conforme seu contrato; não substitui a confirmação do PREVC.
+O [ciclo de aprendizado executável](AUTONOMOUS-LEARNING.md) recebe achados e retrabalho observado, gera o bundle em um job, revisa a cópia exata em outro, executa testes isolados e ativa a melhoria pela política permanente do owner. O painel informa o hash para uso e desativação. `run_learning_capability` recebe inputs num workspace próprio e devolve outputs com receipt; não instala scripts globais. As APIs manuais de shadow, `promote_learning` e `revert_learning` preservam seus gates anteriores. O aprendizado complementa o write-back do projeto e a confirmação do PREVC.
+
+Na sua instalação, registre a decisão permanente real do owner em `learning-policy.local.json` e use `node dist/src/cli.js learning-policy --file learning-policy.local.json`. Consulte sem `--file` para apenas ler. O guia canônico contém o schema, os limites e a seleção de projetos; o pacote não traz uma autorização de outra pessoa. A manutenção compartilha os limites do `TaskEngine` e pode começar em novas entradas de trabalho e resultados materiais. A entrada não despacha jobs do produto.
+
+O Codex continua nativo no Windows, sem exigir WSL. Para testar e chamar capacidades geradas, disponibilize um Docker já ativo e as imagens locais aceitas pelo adaptador. Ele fixa o ID da imagem, bloqueia a rede e monta somente o workspace próprio; não inicia Docker/WSL, não faz pull e não instala dependências.
 
 Resultados materiais registrados por `record_interaction` podem incluir `findings` explícitos. Cada achado sustentado gera um candidato com ID estável, evidência e revisão de origem; updates/replays repetidos não criam duplicatas. O retorno `findingProcessing` mostra candidatos e warnings. Se a gravação da interação passar e o processamento falhar, corrija a causa e use `reconcile_interaction_findings({id})` ou `node dist/src/cli.js interaction-findings INTERACTION_ID`. O replay conserva a revisão. [Interações e continuidade](INTERACTIONS.md) contém o JSON exato e os limites; ausência de achado não deve ser preenchida com uma prática inventada.
 
@@ -94,7 +98,7 @@ A comparação usa o receipt anterior compatível de checks aprovados, ordenado 
 
 ## Efeito das melhorias ao longo das semanas
 
-Efficiency começa pelo problema e pela melhoria proposta: por exemplo, um erro de sintaxe confirmado → prática de prevenção → promoção explícita → tarefas posteriores com aquele conteúdo → resultados comparáveis. O agente declara o problema/linguagem e a mudança esperada em `findings[].impact`, ligando `baselineEvaluationIds` e `affectedCheckIds` reais. O campo `performanceScope` da interação mantém projeto/classe de trabalho/linguagem separados para o histórico de tokens. Veja os formatos em [Interações](INTERACTIONS.md).
+Efficiency começa pelo problema e pela melhoria: erro de sintaxe confirmado → capacidade de prevenção → revisão e testes → ativação → execução e resultados comparáveis. O agente declara o problema/linguagem e a mudança esperada em `findings[].impact`, ligando baselines/checks reais quando disponíveis. Invocações preservam hash, resultado, duração e timestamps; `attribution` liga o turno conhecido. O histórico de tokens mantém projeto/classe/linguagem e contadores completos; a execução não vira economia estimada. Veja os formatos em [Interações](INTERACTIONS.md).
 
 O painel relaciona candidatos, promoção/reversão, inclusão por caminho/hash no Context Pack e avaliações compatíveis. Falhas e novas tentativas são contagens observadas; não equivalem automaticamente a erro de sintaxe ou retrabalho humano. Inclusão de conteúdo não prova aplicação correta nem causa da diferença. Ausência de baseline, uso avaliado ou medidas pertinentes aparece como próxima evidência necessária.
 
@@ -124,7 +128,7 @@ Os recibos ficam em `artifacts/telemetry/<interactionId>/turn-<turnId>.json`; um
 
 O gráfico usa somente turnos completos com projeto e `performanceScope` registrados na revisão vigente ao iniciar o turno. N é específico de cada contador: total, input, cache-read, output, reasoning e cache-write só aparecem quando observados; input sem cache é derivado de input/cache válidos. Campos ausentes continuam sem amostra. A média por turno divide pela amostra correspondente; o total diário também varia com volume. Contadores cumulativos de workers ficam separados e não entram nessa soma. Esses números não medem preço, cota da assinatura ou consumo causado por uma skill/erro particular.
 
-Para vincular a aplicação declarada de uma melhoria promovida ao turno observado, prepare `application.local.json` com `candidateId`, `threadId`, `turnId`, `author`, `source` e `evidence`, conforme [Interações](INTERACTIONS.md#aplicação-explícita-de-uma-melhoria):
+Para vincular a aplicação declarada de uma melhoria promovida ao turno observado, prepare `application.local.json` com `candidateId`, `threadId`, `turnId`, `author`, `source` e `evidence`, conforme [Interações](INTERACTIONS.md#aplicação-explícita-de-uma-release-da-api-manual):
 
 ```powershell
 node dist/src/cli.js learning-application --file application.local.json

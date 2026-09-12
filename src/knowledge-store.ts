@@ -60,6 +60,15 @@ export class KnowledgeFiles {
   async writeJsonNew(relative: string, value: unknown): Promise<void> {
     await this.writeNew(relative, JSON.stringify(value, null, 2) + '\n');
   }
+  /** Retry immutable materialization without silently replacing content already at the destination. */
+  async writeVerified(relative: string, content: string): Promise<void> {
+    try { await this.writeNew(relative, content); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (KnowledgeFiles.hash(await fs.readFile(await this.file(relative))) !== KnowledgeFiles.hash(content))
+        throw new Error('Immutable knowledge content differs from the existing artifact.');
+    }
+  }
   async names(relative: string): Promise<string[]> {
     try { await fs.stat(path.join(this.root, relative)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }

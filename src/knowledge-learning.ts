@@ -35,7 +35,7 @@ export const KnowledgeCandidateSchema = KnowledgeProposalSchema.extend({
 export type KnowledgeCandidate = z.output<typeof KnowledgeCandidateSchema>;
 export type KnowledgeProposal = z.input<typeof KnowledgeProposalSchema>;
 
-/** Candidates and releases are inert local artifacts; state changes require explicit calls. */
+/** Manual candidate/release API remains compatible; executable capabilities use LearningRuntimeStore. */
 export class KnowledgeLearningStore {
   private readonly files: KnowledgeFiles;
   private readonly evaluations: EvaluationStore;
@@ -174,12 +174,14 @@ export class KnowledgeLearningStore {
       if (KnowledgeFiles.hash(await fs.readFile(file)) !== candidate.contentHash) throw new Error('Promoted content has changed; review a new candidate.');
       sources.push(this.source(candidate, promoted.path, `Learned ${candidate.title} [${candidate.id}]`, 'pattern'));
     }
-    return sources;
+    const { LearningRuntimeStore } = await import('./learning-runtime.js');
+    return [...sources, ...await new LearningRuntimeStore(this.root).activeSources(projectId)];
   }
 
   async augmentContext(context: ProjectContext): Promise<ProjectContext> {
     const sources = await this.promotedSources(context.projectId);
-    const original = context.sources.filter(source => !isSubPath(source.path, path.join(this.root, 'artifacts/learning/releases')));
+    const original = context.sources.filter(source => !isSubPath(source.path, path.join(this.root, 'artifacts/learning/releases'))
+      && !isSubPath(source.path, path.join(this.root, 'artifacts/learning/runtime')));
     return { ...context, sources: [...original, ...sources.filter(source => !original.some(existing => KnowledgeFiles.samePath(existing.path, source.path)))] };
   }
 

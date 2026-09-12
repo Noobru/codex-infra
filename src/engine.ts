@@ -235,6 +235,10 @@ export class TaskEngine {
     } finally {
       clearInterval(poll);dispatch.signal?.removeEventListener('abort',abort);
       await this.recordInsights(id,attempt,job.attempts);
+      if (!job.projectId.startsWith('learning-')) {
+        const { AutonomousLearning } = await import('./autonomous-learning.js');
+        await new AutonomousLearning(this.root).onEvent(job.projectId);
+      }
     }
   }
   private async recordInsights(jobId:string,attemptDirectory:string,attemptNumber:number):Promise<void> {

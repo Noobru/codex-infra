@@ -20,7 +20,7 @@ export interface InteractionFindingProcessing {
 }
 export type InteractionRecordedResult = InteractionRecord & { findingProcessing: InteractionFindingProcessing; telemetry?:Awaited<ReturnType<InteractionEntry['captureTelemetry']>> };
 
-/** One entry for conversations, direct work and persistent execution; entering never dispatches. */
+/** One entry for work. Entering never dispatches product jobs; authorized learning maintenance is separate. */
 export class InteractionEntry {
   readonly interactions: InteractionStore;
   readonly registry: ProjectRegistry;
@@ -44,7 +44,8 @@ export class InteractionEntry {
     const interaction = input.persist ? await this.interactions.begin(input.interaction) : prior ?? null;
     const linked = interaction ? await this.links(interaction) : { jobs: [], workflows: [] };
     const telemetry=input.persist?await this.captureTelemetry():null;
-    return { persisted: input.persist, interaction, projectContext, executionPolicy: policy, linked,telemetry,
+    const learningMaintenance = input.persist && interaction?.intent === 'work' ? await this.learningMaintenance(interaction.projectId ?? undefined) : null;
+    return { persisted: input.persist, interaction, projectContext, executionPolicy: policy, linked,telemetry,learningMaintenance,
       routes: ['direct', 'job', 'workflow'], dispatchStarted: false,
       guidance: ['Reuse this thread identity; record material outcomes with the current revision.',
         'Select direct work, job or workflow according to the concrete objective and existing authority.',
@@ -60,7 +61,9 @@ export class InteractionEntry {
       jobIds: [...new Set([...prior.jobIds, ...input.jobIds])],
       workflowIds: [...new Set([...prior.workflowIds, ...input.workflowIds])] });
     const recorded = await this.interactions.update(id, input);
-    return {...await this.processFindings(recorded),telemetry:await this.captureTelemetry()};
+    const result = {...await this.processFindings(recorded),telemetry:await this.captureTelemetry()};
+    if(recorded.intent === 'work')await this.learningMaintenance(recorded.projectId ?? undefined);
+    return result;
   }
 
   async captureTelemetry() {
@@ -73,7 +76,14 @@ export class InteractionEntry {
 
   /** Retry persisted findings without creating another interaction revision or overwriting candidates. */
   async reconcileFindings(id: string): Promise<InteractionRecordedResult> {
-    return this.processFindings(await this.interactions.read(id));
+    const result = await this.processFindings(await this.interactions.read(id));
+    if(result.intent === 'work')await this.learningMaintenance(result.projectId ?? undefined);
+    return result;
+  }
+
+  private async learningMaintenance(projectId?: string) {
+    const { AutonomousLearning } = await import('./autonomous-learning.js');
+    return new AutonomousLearning(this.root).onEvent(projectId);
   }
 
   private async processFindings(record: InteractionRecord): Promise<InteractionRecordedResult> {

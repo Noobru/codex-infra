@@ -21,7 +21,9 @@ registro/worker recursivo. O restante se aplica à conversa coordenadora.
    intent,route,objective}}})`. `projectId:null` para conversa geral. Intents:
    `conversation`, `project-context`, `work`; routes: `direct`, `job`, `workflow`.
    Projeto registrado é resolvido somente por escolha explícita. A chamada retorna
-   continuidade, política e contexto agregado, sem iniciar execução.
+   continuidade, política e contexto agregado. `productDispatch:false` preserva a
+   seleção sem objetivo; entrada persistente de trabalho pode iniciar manutenção
+   de aprendizado pela política permanente já autorizada, com limites próprios.
    Confira `runtime.restartRequired` quando presente: processo desatualizado exige
    recarregar o MCP ou usar a CLI compilada atual antes de gravar novos campos.
    A versão do plugin instalada sozinha não prova que um MCP já aberto recarregou.
@@ -43,9 +45,12 @@ e `evidence` (referências reais). O fluxo cria o candidato automaticamente e re
 processamento pendente sem duplicar propostas nem mudar a revisão de origem.
 Sem achado sustentado, não fabrique conteúdo para preencher a fila. Uma falha
 isolada é sinal para investigar, não prova de uma prática. Propostas manuais por
-`propose_learning` continuam disponíveis. Revisão, shadow e promoção mantêm seus
-gates. Instruções locais governam o agente; isto não instala interceptador de
-mensagens no aplicativo. Detalhes: `docs/INTERACTIONS.md`.
+`propose_learning` continuam disponíveis. Sob a política permanente do owner,
+achados e padrões sustentados de retrabalho seguem construção, revisão independente,
+teste isolado e ativação automática; confira o caso e o hash em `learning_cycle_status`.
+Informe a melhoria e seu hash para o owner desativar quando desejar; não peça nova
+aprovação por promoção. Isto não instala interceptador de mensagens no aplicativo.
+Detalhes: `docs/AUTONOMOUS-LEARNING.md` e `INTERACTIONS.md`.
 
 ## Vault, G-IDEIA e contrato do projeto
 
@@ -116,7 +121,7 @@ Leia `execution_policy`: configuração inicial 2 workers/1 modelo, até quatro 
 
 O workflow executa apenas seus jobs e entrega checks/hash das dependências concluídas ao próximo nó. Em falha, leia evidência e use `replan_workflow` com motivo, evidência e substituições. Preserve concluídos, projeto/modo e maxRevisions; executar a nova revisão é ação explícita. Não replanejar em loop para contornar uma restrição.
 
-Para fila preparada fora de DAG, limitar `drain_queue`/`start_queue` por jobIds, quantidade e duração. Guardar ID de supervisor e acompanhar `queue_status`; `stop_queue` solicita parada. Não há autostart ou novos objetivos automáticos.
+Para fila preparada fora de DAG, limitar `drain_queue`/`start_queue` por jobIds, quantidade e duração. Guardar ID de supervisor e acompanhar `queue_status`; `stop_queue` solicita parada. Não despachar novos objetivos de produtos por iniciativa própria. A manutenção de aprendizado autorizada usa o mesmo supervisor e os limites compartilhados, acionada por atividade e resultados materiais; consultas não iniciam esse ciclo.
 
 ## Aprendizado e segurança
 
@@ -135,13 +140,18 @@ Os recibos preservam contadores e proveniência, sem transcrições. Não somar
 snapshots cumulativos nem convertê-los em cota ou dinheiro.
 
 Ao registrar finding reutilizável, inclua `impact` com problema, linguagem,
-mudança esperada e baselines/checks afetados quando houver evidência. Depois de
-aplicar um candidato promovido no trabalho direto, use `record_learning_application`
-com candidateId, threadId, turnId e evidência concreta. Obtenha a identidade do turno
-de `capture_interaction_telemetry`; nunca invente um ID ou registre uso só porque
-o conteúdo estava disponível. Isso liga a versão aplicada às comparações futuras
-de tokens em `read_learning_effects`. Inclusão no Context Pack e aplicação declarada
-são evidências distintas. Promoção continua exigindo a decisão correspondente.
+mudança esperada e baselines/checks afetados quando houver evidência. Uma capacidade
+ativa pertinente ao objetivo deve ser usada por `run_learning_capability({hash,input})`,
+com hash completo, projectId exato, entrypoint e dados conforme o descriptor. Acrescente
+`input.attribution:{threadId,turnId}` quando as identidades reais forem conhecidas.
+O runtime já registra a execução e os outputs; não invente aplicação nem economia de
+tokens. Use os outputs apenas dentro do trabalho autorizado. Se o owner fornecer um
+hash para desativar, chame `disable_learning_capability` com a decisão real dele.
+
+Para releases da API manual aplicadas no trabalho direto, `record_learning_application`
+continua disponível com candidateId, threadId, turnId e evidência concreta. Obtenha
+a identidade do turno por telemetria quando necessário. Inclusão no Context Pack,
+aplicação declarada e execução real de capacidade permanecem evidências distintas.
 
 A conclusão de uma tentativa com checks produz automaticamente uma avaliação e
 o recibo `attempt-N/insights.json`. Confira esse processamento junto dos checks;
@@ -153,7 +163,18 @@ avaliações adicionais observadas. Métrica desconhecida permanece desconhecida
 aceite do owner exige declaração dele. Não atribuir consumo da conversa coordenadora
 a um job de checks sem worker de modelo.
 
-Quando houver conteúdo reutilizável, `propose_learning` vincula a proposta à tentativa; `review_learning` registra revisão. Obtenha `learning_shadow_source`, use seu descriptor exato numa tarefa pequena autorizada, execute e registre avaliação; `validate_learning` liga conteúdo/tentativa/avaliação. Só `promote_learning` com decisão explícita documentada do owner ativa contexto futuro; `revert_learning` desfaz seleção preservando histórico. Não instala skill global nem executa script automaticamente.
+O ciclo automático gera bundles versionados com entrypoints Node/Python, testes e
+SKILL.md quando aplicável. Dois jobs separados fazem síntese e revisão do hash exato;
+os checks dessas etapas validam JSON, sem executar o código gerado. O runtime testa
+em workspace próprio usando Docker já ativo, imagens locais fixadas e rede desabilitada.
+Não iniciar Docker/WSL, baixar imagens ou instalar dependências para contornar ausência
+do ambiente. O Codex continua nativo no Windows. A ativação usa author.role:model e
+referencia a política permanente do owner; nunca se apresente como owner.
+
+Na API manual preservada, `learning_shadow_source` e `validate_learning` ligam
+proposta, tentativa e avaliação; `promote_learning` exige a decisão explícita do
+owner e `revert_learning` preserva o histórico. Esse caminho não é um requisito
+extra para cada ativação do ciclo automático. Nenhum caminho instala skills globais.
 
 `security_report` consome relatório existente do projeto explícito e persiste gate. Feeds OSV/KEV são opcionais por solicitação `feeds.mode: enrich`, com findings concretos. Publisher GitHub incluído usa dry-run por padrão; envio real exige configuração e autoridade exata/fresca por projeto, destino, SHA e estágio. Não inferir aplicabilidade por parecer de modelo, nem executar scan/patch/deploy por essa tool.
 
@@ -163,7 +184,7 @@ Quando houver conteúdo reutilizável, `propose_learning` vincula a proposta à 
 
 Conclua com resultado, verificação, estado e checkpoint. Aceite da infraestrutura usa fixtures próprias pequenas; produtos citados como exemplo não são alvos. Cadastro restaurado não autoriza execução antes da ativação seletiva. Preserve autorizações próprias de publicação, push, merge, deploy e políticas globais.
 
-Consulte `docs/USO.md`, `docs/USO.md`, `docs/USO.md` e `docs/USO.md` para schemas/sequências. Se o MCP estiver ausente, use a mesma CLI:
+Consulte `docs/USO.md`, `docs/USO.md`, `docs/USO.md`, `AUTONOMOUS-LEARNING.md` e `docs/USO.md` para schemas/sequências. Se o MCP estiver ausente, use a mesma CLI:
 
 ~~~powershell
 node dist/src/cli.js context --project codex-infra

@@ -8,7 +8,7 @@ import { RecoveryManager } from './recovery.js';
 import { HealthInspector } from './health.js';
 import { QueueCoordinator } from './queue.js';
 import { SupervisorManager } from './supervisor.js';
-import { readJson } from './legacy/command-os-utils.js';
+import { readJson, atomicWriteJson } from './legacy/command-os-utils.js';
 import { ModelCatalog } from './model-catalog.js';
 import { RoutingPolicy } from './routing.js';
 import { ObservationServer } from './observation-server.js';
@@ -25,6 +25,9 @@ import { EfficiencyHistory,EfficiencyHistoryInputSchema } from './efficiency-his
 import { InteractionTelemetry } from './interaction-telemetry.js';
 import { ImprovementImpactReader } from './improvement-impact.js';
 import { LearningApplications } from './learning-applications.js';
+import { AutonomousLearning } from './autonomous-learning.js';
+import { LearningRuntimeStore, LearningActivationPolicySchema } from './learning-runtime.js';
+import { LearningSandbox } from './learning-sandbox.js';
 
 export const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const {values, positionals} = parseArgs({allowPositionals: true, options: {
@@ -48,6 +51,22 @@ try {
     if (!values.file) throw new Error('--file bootstrap.local.json is required');
     const bootstrap = new GIdeiaBootstrap(root), input = await readJson(values.file, null);
     print(values.apply ? await bootstrap.apply(input) : await bootstrap.plan(input));
+  }
+  else if (command === 'learning-policy') {
+    if(values.file) {
+      const policy=LearningActivationPolicySchema.parse(await readJson(values.file,null));
+      await atomicWriteJson(path.join(root,'profiles/learning-policy.json'),policy);
+      print({configured:true,enabled:policy.enabled,automaticActivation:policy.automaticActivation,allowedProjectIds:policy.allowedProjectIds});
+    } else print(await LearningRuntimeStore.readPolicy(root));
+  }
+  else if (command === 'learning-cycle') print(await new AutonomousLearning(root).list(values.project));
+  else if (command === 'learning-reconcile') print(await new AutonomousLearning(root).onEvent(values.project));
+  else if (command === 'learning-drain') print(await new AutonomousLearning(root).drain({maxJobs:Number(values['max-jobs']??1),totalTimeoutMs:Number(values.timeout)}));
+  else if (command === 'capabilities') print(await new LearningRuntimeStore(root).list(values.project));
+  else if (command === 'capability-run' || command === 'capability-disable') {
+    if(!values.file)throw new Error('--file input.json is required');
+    const runtime = new LearningRuntimeStore(root,new LearningSandbox(root)), input = await readJson(values.file,null), hash = positionals[1]??'';
+    print(command === 'capability-run' ? await runtime.run(hash,input) : await runtime.disable(hash,input));
   }
   else if (command === 'insights-reconcile') {
     print(await new OperationalInsights(root).reconcile({projectId:values.project,limit:values['max-jobs']===undefined?undefined:Number(values['max-jobs'])}));

@@ -34,8 +34,10 @@ try {
   };
   await observeCancellation();
   poll = setInterval(() => { void observeCancellation().catch(() => controller.abort()); }, 250);
-  const result = await new QueueCoordinator(engine).drain({ maxJobs: request.maxJobs,
-    totalTimeoutMs: request.totalTimeoutMs, signal: controller.signal, concurrency:request.concurrency,jobIds:request.jobIds });
+  const result = request.mode === 'learning'
+    ? await new (await import('./autonomous-learning.js')).AutonomousLearning(request.root).drain({ maxJobs:request.maxJobs,totalTimeoutMs:request.totalTimeoutMs,signal:controller.signal })
+    : await new QueueCoordinator(engine).drain({ maxJobs: request.maxJobs,
+      totalTimeoutMs: request.totalTimeoutMs, signal: controller.signal, concurrency:request.concurrency,jobIds:request.jobIds });
   clearInterval(poll);
   if(request.workflowId)await new WorkflowManager(engine).consolidate(request.workflowId,result);
   engine.close(); engine = undefined;

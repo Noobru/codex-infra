@@ -30,6 +30,8 @@ export type WorkerTransport = Pick<AppServerClient, 'connect' | 'request' | 'onN
 export interface CodexWorkerOptions {
   clientFactory?: (options: AppServerOptions) => WorkerTransport;
   interruptGraceMs?: number;
+  /** Learning workbenches need local file tools only, never inherited external integrations. */
+  localFilesOnly?: boolean;
 }
 
 type Json = Record<string, any>;
@@ -191,10 +193,21 @@ export class CodexWorker {
         }
       });
 
+      let toolConfig: Record<string,unknown> = {};
+      if(this.options.localFilesOnly) {
+        const configured = await guarded(client.request<Json>('config/read',{cwd,includeLayers:false}));
+        const servers = Object.keys(record(configured.config?.mcp_servers) ?? {});
+        const plugins = Object.keys(record(configured.config?.plugins) ?? {});
+        toolConfig = { 'features.apps':false, web_search:'disabled',
+          mcp_servers:Object.fromEntries(servers.map(name=>[name,{enabled:false}])),
+          plugins:Object.fromEntries(plugins.map(name=>[name,{enabled:false}])) };
+        receipt.toolScope = {kind:'local-files',disabledMcpServers:servers,disabledPlugins:plugins,webSearch:'disabled'};
+      }
       const threadOptions = {
         cwd, sandbox: input.mode, approvalPolicy: 'on-request', modelProvider: 'openai',
         ...(selection?{model:selection.model}:{}),
         config: {
+          ...toolConfig,
           ...(selection?{model_reasoning_effort:selection.reasoningEffort}:{}),
           'sandbox_workspace_write.writable_roots': [cwd],
           'sandbox_workspace_write.network_access': false,
