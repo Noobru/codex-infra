@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "packageVersion": "0.3.0",
-  "createdAt": "2026-09-12T19:25:34.629Z",
+  "packageVersion": "0.4.0",
+  "createdAt": "2026-09-12T19:55:02.711Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -74,33 +74,38 @@
     },
     {
       "path": "docs/ADOPTION.md",
-      "bytes": 1987,
-      "sha256": "7b9b6753994ec21e905d8644f4e4f3f34108ce41b352a029d8144d978f849df9"
+      "bytes": 3078,
+      "sha256": "4ad337581eb1a352e98d316ff9f6d4a9d64f5ca105f4f6d305f90c44a526e820"
     },
     {
       "path": "docs/ARQUITETURA.md",
-      "bytes": 1782,
-      "sha256": "83fc9ef2bddeb8d13f5f3276c4d0aaa046ecd369a11b3e6827f3f7ef44f5d99b"
+      "bytes": 2182,
+      "sha256": "0d744f2b61ff5b6c79925460bdb8cb40c0c7cff24d4e6e03b9a04dbc92efb286"
+    },
+    {
+      "path": "docs/CONTEXT-CONTRACT.md",
+      "bytes": 8604,
+      "sha256": "fcbc86fa18ffce285dc964498d412415a8f7c2cce75195c57f74f275b4619071"
     },
     {
       "path": "docs/DISTRIBUICAO.md",
-      "bytes": 2438,
-      "sha256": "60644e756ac9cc0beba8f14a3f409fe7fcf9ce53f4441fed533876e8172bc1e9"
+      "bytes": 2894,
+      "sha256": "511f9b71792f9a2f658632a86b471083f06d0827fa39c32ad1f179e060333dab"
     },
     {
       "path": "docs/INTERACTIONS.md",
-      "bytes": 2427,
-      "sha256": "9762a72134db4555fe188c933b29dbed4981dececa944280b6be4bb590f6f8a0"
+      "bytes": 2747,
+      "sha256": "8ccaa4313ab5f4e258aacd60bfc3c10b2e0ddacca251cf3e2e86a00244c0e658"
     },
     {
       "path": "docs/PROPOSTA.md",
-      "bytes": 3466,
-      "sha256": "97aa59fce0a83818c1f0608cd34082f3b2698d690b4f5cb9bb839a730d0b1b6e"
+      "bytes": 3895,
+      "sha256": "1309c2652c2c482d74298495ac52d5db50df0668c26a0f2d745ff71f7e69b71f"
     },
     {
       "path": "docs/USO.md",
-      "bytes": 6102,
-      "sha256": "9d9f2920653d9db872bb0ef93d8e735eb6f59fbf0d53b7a5a5d111a5d2bd6e50"
+      "bytes": 8549,
+      "sha256": "96df2e0cacd9d59ae9a1be811508bd0097f69a9e93136b501192d2bd6bfc7af7"
     },
     {
       "path": "fixtures/security-local/gate-ci.json",
@@ -210,17 +215,17 @@
     {
       "path": "package-lock.json",
       "bytes": 59475,
-      "sha256": "02a166e7724d3f4ea5474f399b4e500890574fc981ace96794a07511077e04a4"
+      "sha256": "4eece659c6feee5444f1d8dafcc706c695f3ab3f3af92326e410a91414910f02"
     },
     {
       "path": "package.json",
       "bytes": 680,
-      "sha256": "c8f4cf9d517474ddb75bffd022d0de371a2950273b2d4722de353673058c5c9c"
+      "sha256": "2d634ce30d7b71edadcae699dde9fe8e3e2f7160deeabeae2efc96d3d318c297"
     },
     {
       "path": "plugins/codex-infra/.codex-plugin/plugin.json",
       "bytes": 735,
-      "sha256": "2c0b5777a746a0d9223e0bf43cb9f2ade8f3e1b7bd373247072a434a7d6edde8"
+      "sha256": "54028a12bcbd2a93621080988ecc1852a722626e542cc713864f8a4a0e3f0872"
     },
     {
       "path": "plugins/codex-infra/skills/start-project/agents/openai.yaml",
@@ -229,13 +234,18 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 8650,
-      "sha256": "8b3bd5ccdbaf02ceabd1963c0c1a4dc9cb57b27650a7c90909af7f046334e3f4"
+      "bytes": 11564,
+      "sha256": "5f8bb1fc4f19d788f7ea5116f5cfa7b39e8ba49e9fd32aaadb8225c5dd7526ab"
     },
     {
       "path": "README.md",
-      "bytes": 5038,
-      "sha256": "25bf27cfd23cb80dd0438cf409a32ca11f6b3e9fab3b34f578de03810792689f"
+      "bytes": 7042,
+      "sha256": "ccf09905a657aa5ba45f35573e5e993fd5f5df8d9e98a191854883e443549009"
+    },
+    {
+      "path": "scripts/Bootstrap-GIdeia.mjs",
+      "bytes": 1443,
+      "sha256": "f42e5212622b22fa911a9111ece88f71bb9212b5b7e8e1903bd07f63435dee40"
     },
     {
       "path": "scripts/Configure-Local.mjs",
@@ -264,8 +274,8 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 15067,
-      "sha256": "81588fc30172b872b65205c5e9a4df6496f53ed2d0b8f4d4afb0b154a9fa07fc"
+      "bytes": 15521,
+      "sha256": "629926b47b3412d25fab8232bb6794e907c8f6c29da477081640c209440b9006"
     },
     {
       "path": "src/codex-worker.ts",
@@ -308,6 +318,11 @@
       "sha256": "54e0c4a93406f5c0e5ecb23168d70677f88a9fba493290cb3388be4f94523c69"
     },
     {
+      "path": "src/g-ideia-bootstrap.ts",
+      "bytes": 16549,
+      "sha256": "16101088d788fe6bd3c55583bb67bd597e0b549215a837c9365a59d98f10a83e"
+    },
+    {
       "path": "src/health.ts",
       "bytes": 3443,
       "sha256": "48f946142f3de511cf436e75331b2d697e1885630646484779bf541d2c35c4de"
@@ -345,7 +360,7 @@
     {
       "path": "src/mcp.ts",
       "bytes": 17558,
-      "sha256": "96b2e32101f9a3c69f15c3c1fce53cb910c92ed302022fff413c8b542600d2f8"
+      "sha256": "f9dd25b6b34a3860d507599fa8fe5ffd4e0b0d9b4c2afd2e07562188ff5fc9ca"
     },
     {
       "path": "src/model-catalog.ts",
@@ -389,8 +404,8 @@
     },
     {
       "path": "src/recovery.ts",
-      "bytes": 21952,
-      "sha256": "6044c999bf54712ea10098c12ad6e447ea2aa918fa9ac526c4f0d64e491d830f"
+      "bytes": 21965,
+      "sha256": "af8e81a8457b0ecfe00b2953c1b68d162306e4434d11bc22ccc69010c42dffb4"
     },
     {
       "path": "src/registry.ts",
@@ -458,6 +473,36 @@
       "sha256": "6550348d483a9dc70cdde8e1636b1b6e7020a4f34ce8449524d07febdafd6ec8"
     },
     {
+      "path": "templates/g-ideia/contract.md",
+      "bytes": 5331,
+      "sha256": "beba256a9e33c3b4e6e57edac82d64e555bb41c0cad4be7fb824bb8a584db242"
+    },
+    {
+      "path": "templates/g-ideia/evidence.md",
+      "bytes": 914,
+      "sha256": "192fff5ffc955cdb0100a8ba4498de233005b79b42bb71094f426eaa960682b0"
+    },
+    {
+      "path": "templates/g-ideia/index.md",
+      "bytes": 1370,
+      "sha256": "04c50284e8eb917b7edf7b29c411fd85c7efa4f18128d0c8981ec962d3de5c5b"
+    },
+    {
+      "path": "templates/g-ideia/prd.md",
+      "bytes": 1948,
+      "sha256": "e9ed8b8a9c81da91fc36d0574a8e895afc733023e47071c7a38c50d1dd253041"
+    },
+    {
+      "path": "templates/g-ideia/prevc.md",
+      "bytes": 2192,
+      "sha256": "53a35e01981849318ecdcb1a94e83cadbf33824efb082cf7b5368bc0d93155cc"
+    },
+    {
+      "path": "templates/g-ideia/spec.md",
+      "bytes": 1104,
+      "sha256": "f359be74ce66d64bc165bd325a5ac05f01054caef4bae88b367a5ca88fb31f17"
+    },
+    {
       "path": "test/app-server.test.ts",
       "bytes": 7493,
       "sha256": "ada8dd62123fdde7ab49aefc101ee96dd73989f8d57ccc8704fe959dea5a53ae"
@@ -501,6 +546,11 @@
       "path": "test/fleet.test.ts",
       "bytes": 19016,
       "sha256": "8cb54fac6f45f7dd59ae5f10c8603d0bb347f58c7f500c81c32f273d44dc10ed"
+    },
+    {
+      "path": "test/g-ideia-bootstrap.test.ts",
+      "bytes": 10185,
+      "sha256": "fad5a9e2550191606cb453f9d2b7d96ca660218b976592f3ed6feba59bee8221"
     },
     {
       "path": "test/health.test.ts",
@@ -692,6 +742,5 @@
     "sanitization": "passed",
     "localCi": "required-before-commit",
     "remoteWorkflows": "absent"
-  },
-  "updatedAt": "2026-09-12T19:36:55.970319+00:00"
+  }
 }

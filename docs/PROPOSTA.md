@@ -6,17 +6,18 @@ CodexInfra organiza o trabalho de um agente local em torno de objetivos explíci
 
 | Momento | Fluxo adotado |
 |---|---|
-| Início | O usuário define o objetivo. O agente resolve o projeto e consulta fontes e estado antes de agir. |
-| Planejamento | Resultado esperado, checks, limites e decisões relevantes acompanham a tarefa. |
+| Início | Conversa/discovery esclarece o objetivo; o agente carrega o vault de coding, seus contratos e o estado do projeto. |
+| Formalização | G-IDEIA rege PRD/PREVC e SPEC/ADRs proporcionais. Projeto existente reaproveita seus artefatos canônicos. |
+| Planejamento | Requisitos, fontes obrigatórias, resultado esperado, checks, limites e decisões relevantes acompanham a tarefa. |
 | Execução simples | O coordenador trabalha diretamente e preserva o resultado pertinente. |
 | Execução demorada | Uma tarefa persistente conserva contrato, tentativas, owner e evidências. |
 | Trabalho com dependências | Um workflow divide nós úteis, repassa resultados e consolida o plano. |
 | Falha | O agente lê a evidência e decide uma retomada ou revisão limitada; não repete efeitos cegamente. |
-| Conclusão | Resultado, checks e estado real ficam rastreáveis. |
+| Conclusão | Resultado, checks e estado real ficam rastreáveis; confirmação PREVC e write-back seguem o contrato do vault. |
 | Aprendizado | Conteúdo reutilizável vira candidato; revisão e validação precedem promoção explicitamente autorizada. |
 | Próxima conversa | O agente recupera as fontes e os registros pertinentes ao objetivo atual. |
 
-O usuário não precisa pedir cada mecanismo individualmente. Depois da adoção no contrato global, o coordenador escolhe os mecanismos proporcionais à tarefa. Múltiplos workers e DAGs continuam escolhas de execução, não etapas obrigatórias para toda pergunta.
+O usuário não precisa pedir cada mecanismo individualmente. Depois da adoção no contrato global, o coordenador escolhe os mecanismos proporcionais à tarefa. Múltiplos workers e DAGs continuam escolhas de execução, não etapas obrigatórias para toda pergunta. O registro de interação guarda continuidade; a fonte básica de verdade de engenharia é o vault de coding com seus contratos, e o escopo do projeto permanece ligado ao PRD/PREVC vigente.
 
 ## O que esperamos melhorar
 

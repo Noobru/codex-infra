@@ -2,6 +2,8 @@
 
 Uma interação registra a identidade da tarefa local, intenção, objetivo e estado de continuidade. Ela pode apontar para jobs e workflows reais e também representar trabalho executado diretamente na conversa. Não é um job fictício e não consome uma geração de modelo para existir.
 
+O registro não define sozinho o escopo autorizado. Engenharia segue o vault de coding e seu G-IDEIA: carregar contratos, localizar ou formalizar proporcionalmente PRD/PREVC, executar dentro do requisito, validar e fazer write-back. Projeto existente reaproveita os artefatos canônicos. Consulte [Contrato de contexto](CONTEXT-CONTRACT.md).
+
 ## Entrada e atualização
 
 A skill usa `enter_interaction` com a identidade da conversa (`CODEX_THREAD_ID`, quando disponível), título real, fonte do pedido e projeto explicitamente escolhido. A resposta agrega registro anterior, política e contexto pertinente. `persist:false` atende pedidos explícitos de nenhuma gravação. Projetos inferidos de títulos, exemplos ou CWD não são ativados automaticamente.

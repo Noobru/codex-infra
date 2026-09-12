@@ -2,9 +2,12 @@
 
 CLI, MCP e workers utilizam o mesmo núcleo TypeScript. SQLite guarda tarefas, dependências e eventos. Arquivos de artefatos preservam contratos, fontes, checks e decisões; a UI lê projeções agregadas desse estado.
 
+O vault de coding do usuário fornece a base canônica de conhecimento e contratos. PRD/PREVC e SPEC/ADRs governam o projeto conforme o G-IDEIA vigente. O registry aponta para essas fontes; contexto e evidências do runtime não as substituem. A ligação é descrita em [Contrato de contexto](CONTEXT-CONTRACT.md).
+
 | Responsabilidade | Implementação canônica |
 |---|---|
 | Perfis e cadastro | `src/registry.ts`, `src/profile-manager.ts` |
+| Bootstrap G-IDEIA | `src/g-ideia-bootstrap.ts`, `scripts/Bootstrap-GIdeia.mjs` |
 | Contexto e grafo | `src/context-pack.ts`, `src/knowledge-index.ts` |
 | Execução e isolamento | `src/engine.ts`, `src/process.ts`, `src/workspace.ts` |
 | Estado e limites | `src/state.ts`, `src/execution-policy.ts` |

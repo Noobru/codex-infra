@@ -38,6 +38,48 @@ na proposta, sem inferir aplicabilidade. Revisão, shadow e promoção continuam
 obrigatórios. Instruções locais governam o agente; isto não instala interceptador
 de mensagens no aplicativo. Detalhes: `docs/INTERACTIONS.md`.
 
+## Vault, G-IDEIA e contrato do projeto
+
+A infraestrutura opera sobre o vault de coding curado do usuário e seus contratos.
+Ela não fornece nem substitui esse vault. Para engenharia, G-IDEIA continua sendo
+o fluxo de formalização: conversa/descoberta → PRD e PREVC → contexto da tarefa →
+execução/validação → confirmação e write-back. PRD define o que/por quê e os limites;
+PREVC acompanha Planning, Review, Execution, Validation e Confirmation; SPEC/ADRs
+definem o como quando aplicáveis. Notion e demais domínios seguem o contrato local.
+
+Para adoção inicial autorizada, use `node scripts/Bootstrap-GIdeia.mjs --input
+bootstrap.local.json` na instalação para inspecionar o plano sem escrever. O input
+identifica `vaultPath` e opcionalmente `project` com id, name, code e root. `--apply`
+aplica esse bootstrap: preserva contrato existente, complementa G-IDEIA quando
+ausente e cria/vincula documentos locais. Inspecione conflitos antes de aplicar.
+O módulo não cria um vault, aprova o PRD, configura checks reais ou publica no Notion.
+Fontes existentes precisam ser lidas e reconciliadas; não substituir por templates.
+
+Antes de implementar engenharia:
+
+1. Leia os contratos do vault e do workspace. Localize os PRD/PREVC canônicos e o
+   item/requisito pertinente; confira decisões vigentes e evidências do estado atual.
+   Um pedido de conversa registrado por `enter_interaction` não é um PRD aprovado.
+2. No perfil, registre as fontes reais do contrato de coding, PRD e PREVC com labels
+   únicos, `sources` e `sourceRoots` permitidos. Não copie outro vault nem invente
+   documentos a partir do título da tarefa. Não carregue o corpus inteiro.
+3. Em `task_context`/`prepare_task`, inclua esses labels exatos em
+   `taskDetails.requiredSourceLabels`; use `requirementIds`, `decisionRefs`, aceite,
+   restrições e não objetivos correspondentes. O Context Pack bloqueia fonte
+   obrigatória ausente/ambígua, inativa/expirada ou sem orçamento suficiente.
+   Leia integralmente os trechos decisivos quando o pack indicar truncamento.
+4. Em execução direta, confira as mesmas fontes e limites antes de editar; preserve
+   referências no registro da interação. O registro não substitui esse trabalho.
+5. Documento material ausente ou conflito de escopo bloqueia a implementação afetada.
+   A conversa e o planejamento autorizado podem continuar para formalizar/atualizar
+   pelo G-IDEIA antes da implementação. Não criar um PRD inteiro a cada bug: tarefas
+   pequenas usam os artefatos existentes com profundidade proporcional.
+6. Ao terminar, confronte aceite e evidências, atualize PREVC e faça o write-back
+   exigido pelo vault. Um job concluído não fecha sozinho o PREVC do projeto.
+
+As fixtures técnicas de validação da própria infraestrutura têm contrato de teste
+delimitado; elas não autorizam dispensar o G-IDEIA em um projeto de engenharia.
+
 ## Resolver contexto e objetivo
 
 1. Use o contexto de `enter_interaction` para o projeto explícito; `projects` ajuda a localizar o ID e `project_context` permite atualização deliberada. Leia contratos/checkpoints indicados e confira a fonte quando trechos não sustentarem a decisão.

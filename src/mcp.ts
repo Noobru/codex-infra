@@ -23,7 +23,7 @@ import {InteractionStore,InteractionIdSchema,InteractionListSchema,InteractionUp
 const root = path.resolve(process.env.CODEX_INFRA_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'));
 const engine = new TaskEngine(root);
 const workflows=new WorkflowManager(engine),learning=new KnowledgeLearningStore(root),security=new SecurityIntegrationFacade(root,engine.registry);
-const server = new McpServer({name:'codex-infra',version:'0.3.0'});
+const server = new McpServer({name:'codex-infra',version:'0.4.0'});
 const result = (value: unknown) => ({content:[{type:'text' as const,text:JSON.stringify(value)}]});
 server.registerTool('enter_interaction',{description:'Default entry for a local Codex conversation or resumed task. Uses the explicit thread identity, returns persisted continuity, execution policy and optional bound project context together; never dispatches a worker. Set persist false for an explicit no-write request. Do not infer a project from examples or CWD.',inputSchema:{input:InteractionEntrySchema}},async({input})=>result(await new InteractionEntry(root).enter(input)));
 server.registerTool('interaction_status',{description:'Read durable conversation/direct-work records by thread or filters. Imported state does not mean the task was resumed or its work validated.',annotations:{readOnlyHint:true},inputSchema:{id:InteractionIdSchema.optional(),revision:z.number().int().positive().optional(),filters:InteractionListSchema.optional()}},async({id,revision,filters})=>result(id?await new InteractionStore(root).read(id,revision):await new InteractionStore(root).list(filters)));

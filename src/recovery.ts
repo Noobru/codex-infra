@@ -40,7 +40,7 @@ export interface ActivationResult {
   profileMappings: { projectId: string; previousRoot: string; root: string; overridden: boolean }[];
 }
 
-const sourceDirectories = ['profiles', 'schemas', 'src', 'test', 'plugins', 'scripts', 'docs', 'artifacts', 'ui', 'imports', 'fixtures'] as const;
+const sourceDirectories = ['profiles', 'schemas', 'src', 'test', 'plugins', 'scripts', 'docs', 'artifacts', 'ui', 'imports', 'fixtures', 'templates'] as const;
 const sourceFiles = ['package.json', 'package-lock.json', 'README.md', 'AGENTS.md', 'CHECKPOINT.md', 'tsconfig.json', '.gitignore'] as const;
 const databasePath = 'state/jobs.sqlite';
 const excludedNames = new Set(['node_modules', 'dist', '.git', '.codex', 'codex-home', 'codex_home', '.ssh', '.aws', '.azure', 'secrets', 'logs', 'runtime']);

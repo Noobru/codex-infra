@@ -8,6 +8,8 @@ Perfis e caminhos configurados, banco SQLite, histórico de interações, logs, 
 
 O código usa os caminhos configurados localmente. O bootstrap descobre a pasta de instalação e o executável Node no computador receptor, sem transportar diretórios do autor. O pacote inicia sem projetos pessoais cadastrados e sem importar conversas.
 
+A distribuição pressupõe que o destinatário já tenha um vault de coding equivalente, conforme [Contrato de contexto](CONTEXT-CONTRACT.md). O módulo G-IDEIA oferece método e templates para adoção complementar quando o contrato ainda faltar. O vault pessoal do autor não é distribuído. Cada usuário conecta seus próprios contratos, PRD/PREVC e práticas; o setup não cria um vault sintético nem declara essa compatibilidade automaticamente.
+
 As fixtures de teste são artificiais. Strings de segredo, endereços de exemplo e caminhos usados nos testes de redação não representam credenciais ou projetos reais. Licenças de dependências conservam as atribuições originais.
 
 ## Dados durante o uso
