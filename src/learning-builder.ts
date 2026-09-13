@@ -79,7 +79,8 @@ export class LearningBuilder {
         idempotencyKey: `learning:${key}:build`, mode: 'workspace-write', kind: 'codex', checkIds: ['learning-artifact-schema'],
         requirementIds: ['IG-16', 'IG-21', 'IG-25'], taskDetails: this.details(),
         routing: { taskClass: 'implementation', bounded: true, independentlyVerifiable: true, contextCoupling: 'low',
-          complexity: input.attempt === 1 ? 'low' : 'high', uncertainty: input.attempt === 1 ? 'low' : 'high', risk: 'low', delegationBenefit: 'expected' },
+            complexity: input.attempt === 1 ? 'low' : 'high', uncertainty: input.attempt === 1 ? 'low' : 'high', risk: 'low', delegationBenefit: 'expected',
+            rationale: input.attempt === 1 ? 'Bounded capability construction with explicit schema and independent review/tests.' : 'Repair after a rejected construction needs the coordinator to resolve the observed uncertainty.' },
       }, policy.workerTimeoutMs, options, jobIds, stage);
       const rawBundlePath = `${base}/build/bundle.json`;
       const bundle = await this.files.read(rawBundlePath, LearningBundleInputSchema);
@@ -99,7 +100,8 @@ export class LearningBuilder {
         idempotencyKey: `learning:${key}:review`, mode: 'workspace-write', kind: 'codex', checkIds: ['learning-artifact-schema'],
         requirementIds: ['IG-16', 'IG-21', 'IG-25'], taskDetails: this.details(),
         routing: { taskClass: 'review', bounded: true, independentlyVerifiable: true, contextCoupling: 'low',
-          complexity: 'moderate', uncertainty: 'moderate', risk: 'moderate', delegationBenefit: 'expected' },
+            complexity: 'moderate', uncertainty: 'moderate', risk: 'moderate', delegationBenefit: 'expected',
+            rationale: 'Independent review of an exact executable bundle against a fixed contract, without executing its code.' },
       }, policy.workerTimeoutMs, options, jobIds, stage);
       if (KnowledgeFiles.hash(await fs.readFile(await this.files.file(rawBundlePath))) !== rawHash
         || KnowledgeFiles.hash(await fs.readFile(await this.files.file(`${base}/review/bundle.json`))) !== bundleHash)

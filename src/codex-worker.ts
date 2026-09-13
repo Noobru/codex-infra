@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { AppServerClient, AppServerError, type AppServerOptions } from './app-server.js';
 import { ModelCatalog } from './model-catalog.js';
-import { RoutingPolicy, type TaskRoutingInput, type ModelSelection } from './routing.js';
+import { RoutingPolicy, TaskQualificationSchema, type TaskRoutingInput, type ModelSelection, type RoutingConfiguration } from './routing.js';
 import { EvidenceSanitizer } from './evidence.js';
 
 export interface WorkerResult {
@@ -24,6 +24,7 @@ export interface WorkerInput {
   onProgress?: (update: { threadId?: string; turnId?: string }) => void;
   signal?: AbortSignal;
   routing?: TaskRoutingInput;
+  routingPolicy?: RoutingConfiguration;
 }
 
 export type WorkerTransport = Pick<AppServerClient, 'connect' | 'request' | 'onNotification' | 'probeAccount' | 'close'>;
@@ -129,6 +130,9 @@ export class CodexWorker {
     const acceptTerminal = (turn: Json) => { terminal = turn; complete(turn); };
 
     try {
+      const qualification = TaskQualificationSchema.safeParse(input.routing);
+      if (!qualification.success || !input.routingPolicy) throw new WorkerStop('blocked', 'A complete orchestrator qualification and pinned routing policy are required before starting a worker.');
+      const routingPolicy = new RoutingPolicy({ configuration: input.routingPolicy });
       if (!path.isAbsolute(input.cwd) || !input.objective.trim()) throw new WorkerStop('blocked', 'An absolute project directory and explicit objective are required.');
       if (!['read-only', 'workspace-write'].includes(input.mode)) throw new WorkerStop('blocked', 'Unsupported worker sandbox mode.');
       const timeoutMs = input.timeoutMs ?? 15 * 60_000;
@@ -151,7 +155,7 @@ export class CodexWorker {
       let selection:ModelSelection|undefined;
       if(input.routing) {
         const catalog=await guarded(new ModelCatalog().read(client));
-        const decision=new RoutingPolicy().decide(input.routing,catalog);
+        const decision=routingPolicy.decide(qualification.data,catalog);
         receipt.routingDecision=decision;
         if(decision.status!=='candidate'||!decision.candidate)throw new WorkerStop('blocked',decision.reason);
         selection=decision.candidate;

@@ -10,6 +10,8 @@ import {OperationalInsights} from '../src/operational-insights.js';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
+import {fixtureQualification} from './qualification-fixture.js';
+import {DEFAULT_ROUTING_CONFIGURATION, TaskQualificationSchema} from '../src/routing.js';
 
 async function fixture(t: TestContext, worker?: Pick<CodexWorker,'run'>) {
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'infra-engine-'));
@@ -25,6 +27,53 @@ async function fixture(t: TestContext, worker?: Pick<CodexWorker,'run'>) {
   t.after(async()=>{engine.close();await fs.rm(root,{recursive:true,force:true});});
   return {root,engine};
 }
+
+test('model preparation requires the orchestrator qualification before creating a job', async t => {
+  const {engine} = await fixture(t);
+  const task = {project:'test', objective:'Extract one fixture value', idempotencyKey:'unqualified', mode:'read-only' as const, kind:'codex' as const, checkIds:['pass']};
+  await assert.rejects(engine.prepare(task));
+  for (const field of ['taskClass','complexity','uncertainty','risk','bounded','independentlyVerifiable','contextCoupling','delegationBenefit','rationale']) {
+    const partial: Record<string, unknown> = {...fixtureQualification}; delete partial[field];
+    assert.equal(TaskQualificationSchema.safeParse(partial).success, false, field);
+    await assert.rejects(engine.prepare({...task, routing:partial as any}));
+  }
+  assert.equal(engine.state.list().length, 0);
+});
+
+test('a prepared model task retains its policy when configuration changes before dispatch', async t => {
+  let received: any;
+  const {root,engine} = await fixture(t, {run:async input => {received = input; return {status:'completed',summary:'Fixture inspected'};}});
+  const task = {project:'test', objective:'Extract one fixture value', idempotencyKey:'pinned-policy', mode:'read-only' as const, kind:'codex' as const, checkIds:['pass'],routing:fixtureQualification};
+  const job = await engine.prepare(task);
+  const changed = structuredClone(DEFAULT_ROUTING_CONFIGURATION);
+  changed.specialists.retrieval = {model:'gpt-5.6-sol',reasoningEffort:'medium'};
+  await fs.writeFile(path.join(root,'profiles/model-routing.json'),JSON.stringify(changed));
+  assert.equal((await engine.run(job.id)).status,'completed');
+  assert.deepEqual(received.routingPolicy.specialists.retrieval,DEFAULT_ROUTING_CONFIGURATION.specialists.retrieval);
+  await assert.rejects(engine.prepare(task),/different routing policy/);
+  const next = await engine.prepare({...task,idempotencyKey:'new-policy'});
+  const manifest=JSON.parse(await fs.readFile(path.join(engine.artifactDir(next.id),'manifest.json'),'utf8'));
+  assert.deepEqual(manifest.routingDecision.candidate,changed.specialists.retrieval);
+});
+
+test('immediate delegation keeps coordinator tasks local without creating a job or calling a worker', async t => {
+  let calls=0;
+  const {engine}=await fixture(t,{run:async()=>{calls++;throw new Error('Must not dispatch');}});
+  for (const change of [{complexity:'high' as const},{contextCoupling:'high' as const},{delegationBenefit:'unknown' as const}]) {
+    await assert.rejects(engine.delegate({project:'test',objective:'Keep the integrated task with its coordinator',
+      idempotencyKey:'coordinator-'+JSON.stringify(change),mode:'read-only',checkIds:['pass'],
+      qualification:{...fixtureQualification,...change}}),/current coordinator/);
+  }
+  assert.equal(engine.state.list().length,0);assert.equal(calls,0);
+});
+
+test('deterministic checks remain available when model configuration is invalid', async t => {
+  const {root,engine}=await fixture(t);
+  await fs.writeFile(path.join(root,'profiles/model-routing.json'),'invalid JSON');
+  const job=await engine.prepare({project:'test',objective:'Check Node',idempotencyKey:'invalid-model-config',mode:'read-only',kind:'checks',checkIds:['pass']});
+  assert.equal((await engine.run(job.id)).status,'completed');
+  await assert.rejects(engine.prepare({project:'test',objective:'Extract source',idempotencyKey:'invalid-config-model',mode:'read-only',kind:'codex',checkIds:['pass'],routing:fixtureQualification}));
+});
 test('job preserves its original contract, validates real checks and is idempotent after completion',async t=>{
   const {root,engine}=await fixture(t);
   const input={project:'alias',objective:'Verify Node runtime',idempotencyKey:'same',mode:'read-only' as const,kind:'checks' as const,checkIds:['pass']};
@@ -62,7 +111,7 @@ test('CLI insight backfill reuses automatic receipts and observational reads do 
   let checkCalls=0;
   const check=engine.registry.check.bind(engine.registry);
   engine.registry.check=async(...args)=>{checkCalls++;return check(...args);};
-  const job=await engine.prepare({project:'test',objective:'Capture evidence from one fixture turn',idempotencyKey:'cli-insights',mode:'read-only',kind:'codex',checkIds:['pass']});
+  const job=await engine.prepare({project:'test',objective:'Capture evidence from one fixture turn',idempotencyKey:'cli-insights',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['pass']});
   assert.equal((await engine.run(job.id)).status,'completed');
   const listing=await new EvaluationStore(root).list(),before=await fs.readFile(path.join(root,listing.items[0]!.artifactPath));
   const cli=fileURLToPath(new URL('../src/cli.js',import.meta.url));
@@ -76,7 +125,7 @@ test('CLI insight backfill reuses automatic receipts and observational reads do 
 });
 test('a successful model answer cannot override a failed acceptance check',async t=>{
   const {engine}=await fixture(t,{run:async()=>({status:'completed',summary:'Model claims success'})});
-  const job=await engine.prepare({project:'test',objective:'Read diagnostics',idempotencyKey:'failure',mode:'read-only',kind:'codex',checkIds:['fail']});
+  const job=await engine.prepare({project:'test',objective:'Read diagnostics',idempotencyKey:'failure',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['fail']});
   assert.equal((await engine.run(job.id)).status,'failed');
   const evidence=JSON.parse(await fs.readFile(path.join(engine.artifactDir(job.id),'attempt-1/checks.json'),'utf8'));
   assert.equal(evidence[0].exitCode,3);
@@ -86,7 +135,7 @@ test('a successful model answer cannot override a failed acceptance check',async
 test('a task pins explicit criteria and regenerates current context for the worker',async t=>{
  let received:any;
  const {root,engine}=await fixture(t,{run:async input=>{received=JSON.parse(input.context);return {status:'completed',summary:'Inspected source'};}});
- const input={project:'test',objective:'Inspect reference',idempotencyKey:'pack',mode:'read-only' as const,kind:'codex' as const,checkIds:['pass'],taskDetails:{acceptanceCriteria:['Read current context'],requiredSourceLabels:['test']}};
+ const input={project:'test',objective:'Inspect reference',idempotencyKey:'pack',mode:'read-only' as const,kind:'codex' as const,routing:fixtureQualification,checkIds:['pass'],taskDetails:{acceptanceCriteria:['Read current context'],requiredSourceLabels:['test']}};
  const job=await engine.prepare(input);
  await assert.rejects(engine.prepare({...input,taskDetails:{acceptanceCriteria:['Changed acceptance']}}),/different execution contract/);
  await fs.writeFile(path.join(root,'context.md'),'fresh current source');
@@ -100,7 +149,7 @@ test('a task pins explicit criteria and regenerates current context for the work
 test('a corrective retry includes prior failed checks and retains its attempt provenance',async t=>{
  let received:any;
  const {engine}=await fixture(t,{run:async input=>{received=JSON.parse(input.context);return {status:'completed',summary:'Inspected the controlled fixture'};}});
- const job=await engine.prepare({project:'test',objective:'Diagnose the fixture failure',idempotencyKey:'feedback',mode:'read-only',kind:'codex',checkIds:['fail']});
+ const job=await engine.prepare({project:'test',objective:'Diagnose the fixture failure',idempotencyKey:'feedback',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['fail']});
  assert.equal((await engine.run(job.id)).status,'failed');
  engine.retry(job.id);
  assert.equal((await engine.run(job.id)).status,'failed');
@@ -116,7 +165,7 @@ test('a corrective retry includes prior failed checks and retains its attempt pr
 test('open validation decision permits independent model work but parks the affected validation',async t=>{
  let called=0;
  const {engine}=await fixture(t,{run:async()=>{called++;return {status:'completed',summary:'Independent inspection complete'};}});
- const job=await engine.prepare({project:'test',objective:'Inspect before a material validation choice',idempotencyKey:'decision',mode:'read-only',kind:'codex',checkIds:['pass'],taskDetails:{openDecisions:[{id:'validation-choice',question:'Choose acceptance evidence',stage:'validation'}]}});
+ const job=await engine.prepare({project:'test',objective:'Inspect before a material validation choice',idempotencyKey:'decision',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['pass'],taskDetails:{openDecisions:[{id:'validation-choice',question:'Choose acceptance evidence',stage:'validation'}]}});
  assert.equal((await engine.run(job.id)).status,'waiting_user');assert.equal(called,1);
  const policy=JSON.parse(await fs.readFile(path.join(engine.artifactDir(job.id),'attempt-1/policy.json'),'utf8'));
  assert.ok(policy.effects.some((effect:any)=>effect.action==='validation'&&effect.decision==='deny'));
@@ -126,7 +175,7 @@ test('open validation decision permits independent model work but parks the affe
 test('legacy model tasks and unactivated restored projects never silently dispatch',async t=>{
  let called=0;
  const {root,engine}=await fixture(t,{run:async()=>{called++;return {status:'completed',summary:'Unexpected execution'};}});
- const input={project:'test',objective:'Controlled task',idempotencyKey:'legacy',mode:'read-only' as const,kind:'codex' as const,checkIds:['pass']};
+ const input={project:'test',objective:'Controlled task',idempotencyKey:'legacy',mode:'read-only' as const,kind:'codex' as const,routing:fixtureQualification,checkIds:['pass']};
  const job=await engine.prepare(input);
  const manifestPath=path.join(engine.artifactDir(job.id),'manifest.json');
  const manifest=JSON.parse(await fs.readFile(manifestPath,'utf8'));delete manifest.routing;
@@ -147,7 +196,7 @@ test('cancellation keeps the active lock until the worker confirms shutdown',asy
     await release;
     return {status:'cancelled',summary:'Worker stopped'};
   }});
-  const job=await engine.prepare({project:'test',objective:'Read diagnostics',idempotencyKey:'cancel',mode:'read-only',kind:'codex',checkIds:['pass']});
+  const job=await engine.prepare({project:'test',objective:'Read diagnostics',idempotencyKey:'cancel',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['pass']});
   const running=engine.run(job.id); await ready;
   assert.equal((await engine.cancel(job.id)).status,'running');
   assert.equal(engine.state.get(job.id).ownerPid,process.pid);
@@ -157,7 +206,7 @@ test('cancellation keeps the active lock until the worker confirms shutdown',asy
 
 test('unconfirmed worker shutdown retains the lock until an explicit evidenced confirmation',async t=>{
   const {engine}=await fixture(t,{run:async()=>({status:'failed',summary:'Transport did not confirm shutdown',cleanupFailed:true})});
-  const job=await engine.prepare({project:'test',objective:'Read diagnostics',idempotencyKey:'cleanup',mode:'read-only',kind:'codex',checkIds:['pass']});
+  const job=await engine.prepare({project:'test',objective:'Read diagnostics',idempotencyKey:'cleanup',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['pass']});
   assert.equal((await engine.run(job.id)).status,'running');
   assert.deepEqual(engine.state.reconcile(()=>false),[]);
   assert.throws(()=>engine.retry(job.id),/Illegal/);
@@ -180,7 +229,7 @@ test('explicit fresh-thread retry ignores cancellation of an older attempt',asyn
     assert.equal(input.signal?.aborted,false);
     return {status:'completed',summary:'New thread inspected current files'};
   }});
-  const job=await engine.prepare({project:'test',objective:'Read diagnostics',idempotencyKey:'retry',mode:'read-only',kind:'codex',checkIds:['pass']});
+  const job=await engine.prepare({project:'test',objective:'Read diagnostics',idempotencyKey:'retry',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['pass']});
   engine.state.claim(job.id,process.pid);
   engine.state.transition(job.id,'running',{threadId:'lost-session'});
   await engine.cancel(job.id);
@@ -198,7 +247,7 @@ test('validation targets the context after the worker and supplies a recoverable
    const context=await originalContext(profile);
    return {...context,git:{...context.git,head: (++contexts<3?'a':'b').repeat(40)}};
  };
- const job=await engine.prepare({project:'test',objective:'Validate the resulting commit',idempotencyKey:'target',mode:'read-only',kind:'codex',checkIds:['pass']});
+ const job=await engine.prepare({project:'test',objective:'Validate the resulting commit',idempotencyKey:'target',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['pass']});
  engine.registry.check=async (_profile,checkId,_mode,options)=>{
    assert.equal(options?.execution?.targetSha,'b'.repeat(40));
    assert.equal(options?.execution?.jobId,job.id);

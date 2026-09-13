@@ -101,7 +101,45 @@ delimitado; elas não autorizam dispensar o G-IDEIA em um projeto de engenharia.
 3. Com objetivo concreto, registre aceite, checks e restrições em `taskDetails`; inclua referências de decisão, capacidades e `openDecisions` materiais. Perfil não amplia autoridade nem troca o CWD do Desktop.
 4. Escolha execução direta, tarefa persistente ou DAG conforme dependências, independência e necessidade de retomada. Não abra workers para duplicar trabalho já realizável nesta conversa.
 
-O coordenador inicial escolhido é Astra Ultra ou o modelo forte selecionado futuramente pelo owner. Use a matriz de `route_task` para delegação delimitada; não há cadeia fixa. Daybreak Blue segue o contrato global de segurança defensiva. A disponibilidade real de modelo/esforço é conferida antes de gerar.
+## Qualificar e delegar pelo Infra
+
+O próprio orquestrador qualifica cada tarefa antes de criar um worker. Não peça ao
+owner para escolher categoria, modelo ou esforço; não use regex do título nem outro
+LLM apenas para classificar. Considere o objetivo, fontes, limites, incerteza e aceite
+observados. Use ferramentas diretamente para buscas ou checks determinísticos.
+
+Quando houver benefício concreto em delegar, use `delegate_task({input:{project,
+objective,idempotencyKey,mode,checkIds,taskDetails,qualification}})`. A qualificação
+deve conter `taskClass` (`retrieval`, `implementation`, `research`, `review` ou
+`defensive-security`), `complexity`, `uncertainty`, `risk` e `contextCoupling`
+(`low`, `moderate`, `high`), `bounded`, `independentlyVerifiable`,
+`delegationBenefit` (`unknown`, `expected`, `observed`) e uma `rationale` curta
+com a evidência da avaliação. Categoria sozinha não basta. Retrieval significa
+seleção/extração delimitada de fontes; síntese com incerteza exige análise.
+
+A configuração retornada por `enter_interaction.modelRouting` vem de
+`profiles/model-routing.json`: retrieval simples Luna/low; implementação simples
+Luna/medium; análise simples Sol/medium e moderada Sol/high; tarefa complexa,
+arriscada, acoplada ou sem benefício de delegação permanece com o coordenador
+configurado (inicialmente Astra/ultra). Nesse caso, continue no coordenador atual;
+não crie outro Ultra apenas para duplicá-lo. Daybreak Blue segue o contrato global.
+Os campos `explicitRequestedModel` e `explicitRequestedReasoningEffort` representam
+somente uma escolha expressa do owner, nunca herança implícita do modelo desta sessão.
+
+`delegate_task` seleciona a rota, fixa a política e executa pelo TaskEngine canônico.
+Não exige um `route_task` anterior: esse comando é apenas preview. Antes do turno,
+o worker confere o catálogo e os valores efetivos; indisponibilidade bloqueia sem
+escalada automática para Ultra. Confira `execution`, `routingDecision` e artefatos
+retornados, valide o resultado e integre a evidência à tarefa principal.
+
+Para fila/DAG, `prepare_task` e cada task de `prepare_workflow` recebem essa mesma
+qualificação em `routing`; `run_task`/workflow executam o contrato salvo. Novos jobs
+de modelo sem qualificação completa são rejeitados. Jobs antigos sem política
+fixada preservam o histórico e exigem nova preparação antes de executar.
+
+Este é o caminho governado de criação de agentes do Infra. Não substitua a delegação
+por `collaboration.spawn_agent` nativo: o Infra não intercepta essa chamada nem pode
+provar seus parâmetros. Detalhes e limites: `docs/MODEL-ROUTING.md`.
 
 ## Contexto e execução
 

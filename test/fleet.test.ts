@@ -9,6 +9,7 @@ import { setImmediate } from 'node:timers/promises';
 import { test, type TestContext } from 'node:test';
 import { TaskEngine } from '../src/engine.js';
 import type { WorkerInput, WorkerResult } from '../src/codex-worker.js';
+import {fixtureQualification} from './qualification-fixture.js';
 import { QueueCoordinator } from '../src/queue.js';
 import { StateStore, type CreateJobInput, type Job } from '../src/state.js';
 
@@ -208,7 +209,7 @@ test('abort cancels every parallel worker through TaskEngine and retains owners 
   await engine.execution.configure({ maxWorkers: 2, maxModelWorkers: 2 });
   const jobs = [];
   for (const project of ['left', 'right', 'foreign']) jobs.push(await engine.prepare({ project,
-    objective: 'Inspect controlled fixture', idempotencyKey: project, mode: 'read-only', kind: 'codex', checkIds: ['accept'] }));
+    objective: 'Inspect controlled fixture', idempotencyKey: project, mode: 'read-only', kind: 'codex', routing: fixtureQualification, checkIds: ['accept'] }));
   const scope = jobs.slice(0, 2).map(job => job.id);
   const cancel = engine.cancel.bind(engine), cancelCalls: string[] = [];
   t.mock.method(engine, 'cancel', async (id: string) => { cancelCalls.push(id); return cancel(id); });
@@ -251,7 +252,7 @@ test('a losing queue coordinator cannot cancel the attempt claimed by a competin
   fixture.track(winner.state); fixture.track(loser.state);
   await winner.execution.configure({ maxWorkers: 2, maxModelWorkers: 1 });
   const job = await winner.prepare({ project: 'fixture', objective: 'Race for the same owned attempt',
-    idempotencyKey: 'same-attempt', mode: 'read-only', kind: 'codex', checkIds: ['accept'] });
+    idempotencyKey: 'same-attempt', mode: 'read-only', kind: 'codex', routing: fixtureQualification, checkIds: ['accept'] });
   const loserRun = loser.run.bind(loser), loserCancel = loser.cancel.bind(loser);
   let losingCancelCalls = 0;
   // Both coordinators select the ready job; hold the loser before its actual claim.

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "packageVersion": "0.6.0",
-  "createdAt": "2026-09-12T22:59:49.393Z",
+  "packageVersion": "0.6.1",
+  "createdAt": "2026-09-13T01:00:29.861Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -69,8 +69,8 @@
   "files": [
     {
       "path": ".gitignore",
-      "bytes": 209,
-      "sha256": "ff5a36d1bb29868d6083d90e0830965c7b6ea85dd209ea494f363c0207831c46"
+      "bytes": 239,
+      "sha256": "fa31a7b215d96bf5549cc743fdb38b08c000da10828b616bed09df013aca481d"
     },
     {
       "path": "docs/ADOPTION.md",
@@ -103,6 +103,11 @@
       "sha256": "7483222656d1ccc06bd17ef58e69a365d792e39ba9b07f2401d44f6af7b2fb60"
     },
     {
+      "path": "docs/MODEL-ROUTING.md",
+      "bytes": 3474,
+      "sha256": "c41a2d810764c7e6a3d4072038ef9a4a12b6e20cd010382bba434c84631bc438"
+    },
+    {
       "path": "docs/PROPOSTA.md",
       "bytes": 4207,
       "sha256": "01c7a2820d7714749313913f592467b38a89ab34e569d78ea20cf01c09cf42c9"
@@ -111,6 +116,21 @@
       "path": "docs/USO.md",
       "bytes": 19905,
       "sha256": "31112de2bd94835e69228d9844b89f2af32e5c757bd5d8a3732df4d732b50147"
+    },
+    {
+      "path": "fixtures/model-routing/AGENTS.md",
+      "bytes": 286,
+      "sha256": "ef5bc0c8f6c1163c43d397584063c392bd207026156266f58667ef775062cbb2"
+    },
+    {
+      "path": "fixtures/model-routing/check.mjs",
+      "bytes": 495,
+      "sha256": "0285630bf7a390ad655ce83e0f46b1739adea2fd2c2baa3225eb8c900fdb3267"
+    },
+    {
+      "path": "fixtures/model-routing/sources.md",
+      "bytes": 509,
+      "sha256": "39e807452822b990eba19fd6f0e7f6b320486aea7964542191bbf13bd6c8c121"
     },
     {
       "path": "fixtures/security-local/gate-ci.json",
@@ -220,17 +240,17 @@
     {
       "path": "package-lock.json",
       "bytes": 59475,
-      "sha256": "36fdcdf3f3b220029d44e7053e2c56e94824841f66718ba7c33a52c6cbf667fb"
+      "sha256": "5bcca15ce600ac8178e22e0041951a788673c943a6be8060674abbe7151b5c34"
     },
     {
       "path": "package.json",
       "bytes": 680,
-      "sha256": "ea2ac40377b3db222db2db3e3a3445e210eabba51c09af4a76aaa14f4da208d8"
+      "sha256": "2d06ce3116e15b47567c1910979f98ba1a0aec77e78cf050d2a7acf675b16879"
     },
     {
       "path": "plugins/codex-infra/.codex-plugin/plugin.json",
       "bytes": 735,
-      "sha256": "965be46072ca139fa126cf06a762a60b8c298d98efd8fbb6fafc0077fb839a9f"
+      "sha256": "93c656fa715ca96a9285ecd108352eebe24b3bc1fefff6fe39a634c011745764"
     },
     {
       "path": "plugins/codex-infra/skills/start-project/agents/openai.yaml",
@@ -239,8 +259,13 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 15940,
-      "sha256": "c7ddc63219798da596bddd9cd2b5b6cd1ad27e56b23119b8aa2cefae4fd86bb6"
+      "bytes": 18293,
+      "sha256": "fa3f76e7e93c645ae511136195d9fd4d2ea39c891e39c66943c964eef161c2e0"
+    },
+    {
+      "path": "profiles/model-routing.json",
+      "bytes": 499,
+      "sha256": "0f490eaf4982da2a4d902a178a6e91dc3a120d0f96df16649043e6a79b9eb7e7"
     },
     {
       "path": "README.md",
@@ -284,13 +309,13 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 19318,
-      "sha256": "add13f2940ebdec00601f9391d19bbdd42f8e5d18d4af8fb6c0eee2676256ed5"
+      "bytes": 19728,
+      "sha256": "bd2233921d636a5a95363207146a2059f718b1fc8c873673aa5a77bc1411af86"
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 19980,
-      "sha256": "bbbabe74ba2c411501526cf465767f079a77dfc406c136d0099e8cb76d87001f"
+      "bytes": 20433,
+      "sha256": "d011447616de176b7c8ef932c818b4a4739b750bad28df48f53e29b05322eb5a"
     },
     {
       "path": "src/context-pack.ts",
@@ -309,8 +334,8 @@
     },
     {
       "path": "src/engine.ts",
-      "bytes": 23962,
-      "sha256": "e4cfb8f69fccf5fe61a76655d3dcc46f7d3dfc2929cf8d5e7feed93b262711aa"
+      "bytes": 26932,
+      "sha256": "6e0f02ea16061a0c39e4e1cf0b27219901eca01a46fd5e65ac1d99d75e0c2b0a"
     },
     {
       "path": "src/evaluation.ts",
@@ -349,8 +374,8 @@
     },
     {
       "path": "src/interaction-entry.ts",
-      "bytes": 8166,
-      "sha256": "a87240d1c2552a79113b5fd399777343d53d2cc51c58a25e7552913a3f386e7f"
+      "bytes": 9114,
+      "sha256": "d4fccf2b77b64e3b0e3da9bbf046be3aaaf6a222f1d6b7661f3a1d1306945c5a"
     },
     {
       "path": "src/interaction-telemetry.ts",
@@ -384,8 +409,8 @@
     },
     {
       "path": "src/learning-builder.ts",
-      "bytes": 16519,
-      "sha256": "19952cc69a679c4ed1527e68501a49ed804de0b5b02713904d96b90c9cc457dd"
+      "bytes": 16883,
+      "sha256": "523f4092bb1db835ae8665a541732440d2de01cb7808ac6876f482941a29ac42"
     },
     {
       "path": "src/learning-runtime-effects.ts",
@@ -409,8 +434,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 23372,
-      "sha256": "4574f949de73531b322657d6b56d6129e4c85d5ae16f6344f380c70643ff72f6"
+      "bytes": 24314,
+      "sha256": "9c37247d29750853c86c991f8c6b6ae6d17dfa0270470562bf589f6f08e78ee1"
     },
     {
       "path": "src/model-catalog.ts",
@@ -478,9 +503,14 @@
       "sha256": "10bab9b252d491d818f66124d481b158985f56d32d994734ae398006eaf11a86"
     },
     {
+      "path": "src/routing-configuration.ts",
+      "bytes": 890,
+      "sha256": "b93070b67687259de7e8ad0d62e7df17ab1322018822d30119c7dd926da5d9a1"
+    },
+    {
       "path": "src/routing.ts",
-      "bytes": 10195,
-      "sha256": "e2d30d85af202dde4ea7f57336df4a89669fb7fd075b63e03bf4c1020e0127bd"
+      "bytes": 12533,
+      "sha256": "06eff2bbe181fccb73c898b22446ec6a2ed2ff1bcc6c5f88ddc8ef8dae1f6f4e"
     },
     {
       "path": "src/runtime-observation.ts",
@@ -534,8 +564,8 @@
     },
     {
       "path": "src/workflow.ts",
-      "bytes": 12675,
-      "sha256": "6c0247e67b55a6a69b5c862f079328a446515a4a074acf2d6fc92470c4696505"
+      "bytes": 12677,
+      "sha256": "0c85ba6d102e724d8627b14ed3d567b6d587f7b529d83a220ecd01fbb7cda73c"
     },
     {
       "path": "src/workspace.ts",
@@ -589,8 +619,8 @@
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 12965,
-      "sha256": "0d26b3c18025eb14fb7feeed3f6d751db83568bd876891e9660f1f4a147718af"
+      "bytes": 17674,
+      "sha256": "5414c68e934c177a6ba72b5a9429badb1bb4529cb8cbfe8aad991c4bc68b2f49"
     },
     {
       "path": "test/context-pack.test.ts",
@@ -609,8 +639,8 @@
     },
     {
       "path": "test/engine.test.ts",
-      "bytes": 14845,
-      "sha256": "4fe11017c7142f6b8672c86c709a72a6d7bff0b0c6055b2061f4c08d759f248c"
+      "bytes": 18777,
+      "sha256": "4ee69279af0ea39b6ba27cb1a12be466494ef65e9cd813ca56203d01b331ee8a"
     },
     {
       "path": "test/evaluation.test.ts",
@@ -624,8 +654,8 @@
     },
     {
       "path": "test/fleet.test.ts",
-      "bytes": 19016,
-      "sha256": "8cb54fac6f45f7dd59ae5f10c8603d0bb347f58c7f500c81c32f273d44dc10ed"
+      "bytes": 19143,
+      "sha256": "445c4ddfc1fdd23264bffc458e920806c2af573ee0113dd23cd6d2af059558de"
     },
     {
       "path": "test/g-ideia-bootstrap.test.ts",
@@ -684,8 +714,8 @@
     },
     {
       "path": "test/mcp.test.ts",
-      "bytes": 3379,
-      "sha256": "1bdcc5fffb1e23039176b177b4f98f7d8d78c806572461bc2b79b91490365216"
+      "bytes": 4150,
+      "sha256": "9a579325ab737c36850e05b28a2d28b9386b483b15ce23a584cdbe9662265699"
     },
     {
       "path": "test/observability.test.ts",
@@ -718,6 +748,11 @@
       "sha256": "b3b3c3097dd2b858847f1f0d2c714f4bbe006384a25fc218bbb2d8e1c29f67e2"
     },
     {
+      "path": "test/qualification-fixture.ts",
+      "bytes": 410,
+      "sha256": "ebbc63b1c884c55693930d1b0529d87b0292f35e2f05a2abd626708b112efefc"
+    },
+    {
       "path": "test/queue.test.ts",
       "bytes": 5188,
       "sha256": "2a8851d9c5d51254d81cc73db00e7ad3fdcf278e82ef31188863792cc170f3b2"
@@ -739,8 +774,8 @@
     },
     {
       "path": "test/routing.test.ts",
-      "bytes": 6811,
-      "sha256": "c07c1a548f2f72020830259b7e85a330c9411bcc753bde57bf8297af959de352"
+      "bytes": 8954,
+      "sha256": "e0c194bf9286b6e395c937dc3b8f46693d8a0f1d047c501ed2a210f8e55db59c"
     },
     {
       "path": "test/runtime-observation.test.ts",

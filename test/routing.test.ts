@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { RoutingDecisionSchema, RoutingPolicy, TaskRoutingInputSchema, type RuntimeModelCapability, type TaskRoutingInput } from '../src/routing.js';
+import { DEFAULT_ROUTING_CONFIGURATION, RoutingConfigurationSchema, RoutingDecisionSchema, RoutingPolicy, TaskRoutingInputSchema, type RuntimeModelCapability, type TaskRoutingInput } from '../src/routing.js';
 
 const policy = new RoutingPolicy();
 const small: TaskRoutingInput = {
@@ -9,8 +9,8 @@ const small: TaskRoutingInput = {
 };
 const catalog: RuntimeModelCapability[] = [
   { id: 'gpt-6-astra', supportedReasoningEfforts: ['high', 'ultra'] },
-  { id: 'gpt-5.6-luna', supportedReasoningEfforts: ['medium'] },
-  { id: 'gpt-5.6-sol', supportedReasoningEfforts: ['high'] },
+  { id: 'gpt-5.6-luna', supportedReasoningEfforts: ['low', 'medium'] },
+  { id: 'gpt-5.6-sol', supportedReasoningEfforts: ['medium', 'high'] },
   { id: 'gpt-daybreak-blue-latest', supportedReasoningEfforts: ['high'] },
 ];
 
@@ -49,6 +49,22 @@ test('small independently verifiable implementation is a Luna hypothesis until c
   assert.equal(validated.requiresCapabilityValidation, false);
 });
 
+test('bounded low retrieval uses Luna low effort', () => {
+  const input: TaskRoutingInput = { ...small, taskClass: 'retrieval' };
+  const decision = policy.decide(input, catalog);
+  assert.deepEqual(decision.candidate, { model: 'gpt-5.6-luna', reasoningEffort: 'low' });
+  assert.equal(decision.rule, 'bounded-retrieval');
+  assert.equal(decision.capabilityValidation, 'matched');
+});
+
+test('bounded low review and research use Sol medium analysis', () => {
+  for (const taskClass of ['review', 'research'] as const) {
+    const decision = policy.decide({ ...small, taskClass }, catalog);
+    assert.deepEqual(decision.candidate, { model: 'gpt-5.6-sol', reasoningEffort: 'medium' });
+    assert.equal(decision.rule, 'separable-analysis');
+  }
+});
+
 test('separable review and research route directly to Sol without a mandatory model chain', () => {
   for (const taskClass of ['review', 'research'] as const) {
     const decision = policy.decide({ ...small, taskClass, complexity: 'moderate', uncertainty: 'moderate', risk: 'moderate' }, catalog);
@@ -58,17 +74,17 @@ test('separable review and research route directly to Sol without a mandatory mo
   }
 });
 
-test('missing delegate or effort falls back explicitly to the validated strong coordinator', () => {
+test('missing delegate or effort blocks without silently escalating to the coordinator', () => {
   for (const available of [
     catalog.filter(model => model.id !== 'gpt-5.6-luna'),
     catalog.map(model => model.id === 'gpt-5.6-luna' ? { ...model, supportedReasoningEfforts: ['low'] } : model),
   ]) {
     const decision = policy.decide(small, available);
-    assert.equal(decision.status, 'candidate');
-    assert.equal(decision.assignment, 'coordinator');
-    assert.equal(decision.candidate?.model, 'gpt-6-astra');
-    assert.equal(decision.fallback?.from.model, 'gpt-5.6-luna');
-    assert.match(decision.reason, /supplied runtime catalog/);
+    assert.equal(decision.status, 'blocked');
+    assert.equal(decision.assignment, 'none');
+    assert.equal(decision.candidate, null);
+    assert.equal(decision.fallback, null);
+    assert.match(decision.reason, /No permitted fallback is available/);
     assert.equal(decision.limits.automaticRetries, 0);
   }
 });
@@ -108,6 +124,31 @@ test('new catalog models do not change the coordinator without explicit configur
   assert.equal(policy.decide({ taskClass: 'research' }, available).candidate?.model, 'gpt-6-astra');
   const changed = new RoutingPolicy({ coordinator: { model: 'future-strong-model', reasoningEffort: 'ultra' } });
   assert.equal(changed.decide({ taskClass: 'research' }, available).candidate?.model, 'future-strong-model');
+  assert.notEqual(changed.hash, policy.hash);
+});
+
+test('an explicit model without effort keeps the effort qualified for the task', () => {
+  assert.deepEqual(policy.decide({ ...small, taskClass: 'retrieval', explicitRequestedModel: 'gpt-5.6-sol' }).candidate,
+    { model: 'gpt-5.6-sol', reasoningEffort: 'low' });
+  assert.deepEqual(policy.decide({ ...small, taskClass: 'research', complexity: 'moderate', explicitRequestedModel: 'gpt-5.6-sol' }).candidate,
+    { model: 'gpt-5.6-sol', reasoningEffort: 'high' });
+  assert.equal(policy.decide({ ...small, explicitRequestedModel: 'future-model' }).candidate?.reasoningEffort, 'medium');
+});
+
+test('a validated custom configuration changes specialists and is represented by its schema', () => {
+  const configuration = {
+    ...DEFAULT_ROUTING_CONFIGURATION,
+    specialists: {
+      ...DEFAULT_ROUTING_CONFIGURATION.specialists,
+      retrieval: { model: 'custom-retriever', reasoningEffort: 'low' },
+    },
+  };
+  assert.deepEqual(RoutingConfigurationSchema.parse(configuration), configuration);
+  const changed = new RoutingPolicy({ configuration });
+  const decision = changed.decide({ ...small, taskClass: 'retrieval' }, [
+    ...catalog, { id: 'custom-retriever', supportedReasoningEfforts: ['low'] },
+  ]);
+  assert.deepEqual(decision.candidate, { model: 'custom-retriever', reasoningEffort: 'low' });
   assert.notEqual(changed.hash, policy.hash);
 });
 

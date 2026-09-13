@@ -8,10 +8,12 @@ import { CodexWorker } from './codex-worker.js';
 import { WorkspaceManager } from './workspace.js';
 import { ProfileManager } from './profile-manager.js';
 import { ProcessCleanupError } from './process.js';
-import { TaskContractBuilder, type TaskContract, type TaskDetailsInput } from './task-contract.js';
+import { TaskContractBuilder, TaskDetailsSchema, type TaskContract, type TaskDetailsInput } from './task-contract.js';
 import { KnowledgeIndex } from './knowledge-index.js';
 import { KnowledgeLearningStore } from './knowledge-learning.js';
-import { RoutingPolicy, TaskRoutingInputSchema, type TaskRoutingInput } from './routing.js';
+import { RoutingPolicy, TaskRoutingInputSchema, TaskQualificationSchema, type TaskRoutingInput, type RoutingConfiguration, type RoutingDecision } from './routing.js';
+import { RoutingConfigurationStore } from './routing-configuration.js';
+import { z } from 'zod';
 import { CapabilityPlanner } from './capability-planner.js';
 import { ExecutionEvidence } from './execution-evidence.js';
 import { ExecutionPolicyManager } from './execution-policy.js';
@@ -28,19 +30,30 @@ export interface PrepareInput {
   workflow?:{id:string;revision:number};
 }
 interface WorkspaceSelection { kind: 'in-place' | 'worktree'; baseRef?: string; baseSha?: string }
-interface Manifest { version: 1; kind: PrepareInput['kind']; checkIds: string[]; requirementIds?: string[]; workspace?: WorkspaceSelection; context: ProjectContext; taskContract?: TaskContract; routing?: TaskRoutingInput;workflow?:PrepareInput['workflow'] }
+interface Manifest { version: 1; kind: PrepareInput['kind']; checkIds: string[]; requirementIds?: string[]; workspace?: WorkspaceSelection; context: ProjectContext; taskContract?: TaskContract; routing?: TaskRoutingInput; routingPolicy?: RoutingConfiguration; routingDecision?: RoutingDecision; workflow?:PrepareInput['workflow'] }
+
+export const DelegationInputSchema = z.object({
+  project: z.string().min(1), objective: z.string().trim().min(1).max(20000), idempotencyKey: z.string().min(1),
+  mode: z.enum(['read-only', 'workspace-write']), checkIds: z.array(z.string().min(1)).min(1),
+  requirementIds: z.array(z.string()).default([]), workspace: z.enum(['in-place', 'worktree']).default('in-place'),
+  baseRef: z.string().min(1).optional(), taskDetails: TaskDetailsSchema.optional(),
+  qualification: TaskQualificationSchema, timeoutMs: z.number().int().min(1000).max(300000).default(180000),
+}).strict();
+export type DelegationInput = z.input<typeof DelegationInputSchema>;
 export class TaskEngine {
   readonly registry: ProjectRegistry;
   readonly state: StateStore;
   readonly profiles: ProfileManager;
   readonly execution: ExecutionPolicyManager;
   readonly insights: OperationalInsights;
+  readonly routing: RoutingConfigurationStore;
   constructor(readonly root: string, private worker: Pick<CodexWorker, 'run'> = new CodexWorker()) {
     this.registry = new ProjectRegistry(path.join(root, 'profiles/registry.json'));
     this.state = new StateStore(path.join(root, 'state/jobs.sqlite'));
     this.profiles = new ProfileManager(this.registry, this.state, root);
     this.execution = new ExecutionPolicyManager(root,this.profiles,this.state);
     this.insights = new OperationalInsights(root);
+    this.routing = new RoutingConfigurationStore(root);
   }
   artifactDir(id: string): string { this.state.get(id); return path.join(this.root, 'artifacts/jobs', id); }
   async projectContext(project:string) {return new KnowledgeLearningStore(this.root).augmentContext(await this.registry.context(await this.registry.resolve(project)));}
@@ -58,7 +71,16 @@ export class TaskEngine {
     const {contextPack,knowledge}=await this.contextPack(profile,context,taskContract);
     return {taskContract,contextPack,knowledge,capabilityPlan:new CapabilityPlanner().plan(profile,taskContract,contextPack)};
   }
-  async prepare(input: PrepareInput): Promise<Job> {
+  async prepare(input: PrepareInput, admission: { delegateOnly?: boolean } = {}): Promise<Job> {
+    // The orchestrator classifies the task before any job/context side effect, never the owner.
+    const routing = input.kind === 'checks'
+      ? TaskRoutingInputSchema.parse({ taskClass: 'deterministic' }) : TaskQualificationSchema.parse(input.routing);
+    const routingPolicy = input.kind === 'checks' ? new RoutingPolicy() : await this.routing.read();
+    const routingDecision = routingPolicy.decide(routing);
+    if (routingDecision.status === 'blocked') throw new Error(routingDecision.reason);
+    if (admission.delegateOnly && routingDecision.assignment === 'coordinator') {
+      throw new Error('This task belongs to the current coordinator. Continue there; no duplicate coordinator worker was created.');
+    }
     const profile = await this.registry.resolve(input.project);
     await this.assertActivated(profile.id);
     this.registry.assertMode(profile, input.mode);
@@ -83,16 +105,12 @@ export class TaskEngine {
     const {contextPack,knowledge}=await this.contextPack(profile,context,taskContract);
     const capabilityPlan=new CapabilityPlanner().plan(profile,taskContract,contextPack);
     new CapabilityPlanner().assertReady(capabilityPlan,'execution');
-    const routing=TaskRoutingInputSchema.parse(input.kind==='checks'?{taskClass:'deterministic'}:input.routing??{taskClass:'implementation'});
-    if(input.kind==='codex' && routing.taskClass==='deterministic')throw new Error('Deterministic work requires kind checks');
-    const routingDecision=new RoutingPolicy().decide(routing);
-    if(routingDecision.status==='blocked')throw new Error(routingDecision.reason);
     const realRoot=(await fs.realpath(profile.root)).replaceAll('\\','/').replace(/\/$/,'');
     const job = this.state.create({ ...input, projectId: profile.id, profileHash: this.registry.hash(profile),
       resourceKey:'root:'+(process.platform==='win32'?realRoot.toLowerCase():realRoot),isolatedWorkspace:workspace.kind==='worktree',executionKind:input.kind,initialStatus:input.workflow?'waiting_user':'ready' });
     const directory = this.artifactDir(job.id);
     await fs.mkdir(directory, { recursive: true });
-    const manifest: Manifest = { version: 1, kind: input.kind, checkIds: input.checkIds, requirementIds, workspace, context, taskContract, routing,...(input.workflow?{workflow:input.workflow}:{}) };
+    const manifest: Manifest = { version: 1, kind: input.kind, checkIds: input.checkIds, requirementIds, workspace, context, taskContract, routing, routingPolicy: routingPolicy.configuration, routingDecision, ...(input.workflow?{workflow:input.workflow}:{}) };
     // Exclusive creation preserves the original context on an idempotent retry.
     try { await atomicWriteNew(path.join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2)); }
     catch (error) {
@@ -101,6 +119,7 @@ export class TaskEngine {
       if(JSON.stringify(existing.workflow)!==JSON.stringify(input.workflow))throw new Error('Idempotency key has a different workflow binding');
       if(existing.taskContract ? existing.taskContract.hash!==taskContract.hash : input.taskDetails!==undefined) throw new Error('Idempotency key has a different execution contract: task details');
       if(existing.routing ? JSON.stringify(existing.routing)!==JSON.stringify(routing) : input.routing!==undefined)throw new Error('Idempotency key has a different routing contract');
+      if (existing.routingPolicy && new RoutingPolicy({ configuration: existing.routingPolicy }).hash !== routingPolicy.hash) throw new Error('Idempotency key has a different routing policy');
       if (existing.kind !== input.kind || JSON.stringify(existing.checkIds) !== JSON.stringify(input.checkIds) || JSON.stringify(existing.requirementIds ?? []) !== JSON.stringify(requirementIds) || JSON.stringify(existing.workspace ?? {kind:'in-place'}) !== JSON.stringify(workspace)) throw new Error('Idempotency key has a different execution contract');
     }
     try {await atomicWriteNew(path.join(directory,'context-pack.json'),JSON.stringify(contextPack,null,2));}
@@ -110,6 +129,19 @@ export class TaskEngine {
     try {await atomicWriteNew(path.join(directory,'capability-plan.json'),JSON.stringify(capabilityPlan,null,2));}
     catch(error) {if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}
     return job;
+  }
+  /** One governed dispatch; shares preparation, admission, worker, checks and lifecycle with queued work. */
+  async delegate(raw: DelegationInput) {
+    const { qualification, timeoutMs, ...task } = DelegationInputSchema.parse(raw);
+    const job = await this.prepare({ ...task, kind: 'codex', routing: qualification }, { delegateOnly: true });
+    const completed = await this.run(job.id, timeoutMs);
+    const manifest = await this.manifest(job.id);
+    const worker = completed.attempts > 0
+      ? await readJson(path.join(this.artifactDir(job.id), `attempt-${completed.attempts}`, 'worker.json'), null) : null;
+    return { job: completed, qualification: manifest.routing, routingDecision: worker?.receipt?.routingDecision ?? manifest.routingDecision,
+      execution: worker ? { model: worker.receipt?.model ?? null, reasoningEffort: worker.receipt?.reasoningEffort ?? null,
+        threadId: worker.threadId ?? null, turnId: worker.turnId ?? null, status: worker.status } : null,
+      artifactDirectory: this.artifactDir(job.id) };
   }
   private async assertActivated(projectId:string):Promise<void>{
     const restore=await readJson(path.join(this.root,'recovery/RESTORE.json'),null) as {activatedProjectIds?:string[]}|null;
@@ -130,6 +162,7 @@ export class TaskEngine {
     if (job.status !== 'ready') throw new Error('An explicit retry is required for a waiting or failed task');
     const manifest = await this.manifest(id);
     if(manifest.kind==='codex'&&!manifest.routing)throw new Error('Legacy model task has no explicit routing contract. Prepare a new task with the approved model policy; the old contract is preserved.');
+    if(manifest.kind==='codex'&&!manifest.routingPolicy)throw new Error('Legacy model task has no pinned routing policy. Prepare a newly qualified task; history is preserved.');
     const profile = await this.profiles.withLock(async () => {
       if(dispatch.signal?.aborted)return null;
       if(manifest.workflow) {
@@ -189,12 +222,13 @@ export class TaskEngine {
       if(previousAttempt)await atomicWriteJson(path.join(attempt,'previous-attempt.json'),previousAttempt);
       await atomicWriteJson(path.join(attempt,'task-contract.json'),taskContract);
       await atomicWriteJson(path.join(attempt,'context-pack.json'),contextPack);
-      if(manifest.routing)await atomicWriteJson(path.join(attempt,'routing.json'),new RoutingPolicy().decide(manifest.routing));
+      if(manifest.routing)await atomicWriteJson(path.join(attempt,'routing.json'),new RoutingPolicy({ configuration: manifest.routingPolicy }).decide(manifest.routing));
       if (manifest.kind === 'codex') {
         await evidence.effect('worker-dispatch','allow','One model turn under the saved routing contract and runtime admission');
         const result = await this.worker.run({cwd: runtimeProfile.root, mode: job.mode, objective: job.objective,
           context: JSON.stringify({taskContract,contextPack,capabilityPlan,previousAttempt,dependencyHandoffs}), ...(job.threadId ? {threadId: job.threadId} : {}), timeoutMs,
           ...(manifest.routing?{routing:manifest.routing}:{}),
+          ...(manifest.routingPolicy?{routingPolicy:manifest.routingPolicy}:{}),
           signal: controller.signal, onProgress: update => { this.state.transition(id, 'running', update); }});
         await atomicWriteJson(path.join(attempt, 'worker.json'), result);
         await evidence.effect('worker-result',result.status==='blocked'?'deny':'allow','Runtime returned a terminal result',result.status);

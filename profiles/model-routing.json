@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "coordinator": { "model": "gpt-6-astra", "reasoningEffort": "ultra" },
+  "specialists": {
+    "retrieval": { "model": "gpt-5.6-luna", "reasoningEffort": "low" },
+    "implementation": { "model": "gpt-5.6-luna", "reasoningEffort": "medium" },
+    "analysisLow": { "model": "gpt-5.6-sol", "reasoningEffort": "medium" },
+    "analysis": { "model": "gpt-5.6-sol", "reasoningEffort": "high" },
+    "defensive": { "model": "gpt-daybreak-blue-latest", "reasoningEffort": "high" }
+  }
+}

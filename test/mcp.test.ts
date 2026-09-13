@@ -29,6 +29,14 @@ test('real MCP subprocess negotiates tools and resolves a project through the sh
   const source=JSON.parse(await fs.readFile(path.join(root,'profiles/registry.json'),'utf8'));
   assert.equal(source.projects.length,2);
   const tools=(await client.listTools()).tools;
+  assert.ok(tools.some(tool=>tool.name==='delegate_task'));
+  const missingQualification=await client.callTool({name:'delegate_task',arguments:{input:{
+    project:'fixture',objective:'Read source',idempotencyKey:'missing-qualification',mode:'read-only',checkIds:['fixture'],
+  }}});
+  assert.equal(missingQualification.isError,true);
+  const route=await client.callTool({name:'route_task',arguments:{routing:{taskClass:'retrieval',complexity:'low',uncertainty:'low',risk:'low',
+    contextCoupling:'low',bounded:true,independentlyVerifiable:true,delegationBenefit:'expected',rationale:'Extract one known fact from a bounded source.'}}});
+  assert.deepEqual(JSON.parse((route.content as {text:string}[])[0]!.text).candidate,{model:'gpt-5.6-luna',reasoningEffort:'low'});
   assert.notEqual(tools.find(tool=>tool.name==='security_report')?.annotations?.readOnlyHint,true);
   await fs.writeFile(path.join(root,'trivy-fixture.json'),JSON.stringify({Results:[{Target:'fixture',Vulnerabilities:[]}]}));
   const now=Date.now();

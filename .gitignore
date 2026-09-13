@@ -3,7 +3,8 @@ dist/
 runtime/
 state/
 artifacts/
-profiles/
+profiles/*
+!profiles/model-routing.json
 workspaces/
 recovery/
 imports/

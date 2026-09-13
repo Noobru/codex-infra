@@ -10,7 +10,7 @@ import { QueueCoordinator } from './queue.js';
 import { SupervisorManager } from './supervisor.js';
 import { readJson, atomicWriteJson } from './legacy/command-os-utils.js';
 import { ModelCatalog } from './model-catalog.js';
-import { RoutingPolicy } from './routing.js';
+import { RoutingConfigurationStore } from './routing-configuration.js';
 import { ObservationServer } from './observation-server.js';
 import { SecurityIntegrationFacade } from './security-integration.js';
 import {WorkflowManager} from './workflow.js';
@@ -46,7 +46,7 @@ const command = positionals[0] ?? 'help';
 const print = (value: unknown) => process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 let engine: TaskEngine | undefined;
 try {
-  if (command === 'help') print({commands: ['efficiency-history [--project ID] [--days 7|14|30|90]','telemetry-capture THREAD_UUID','telemetry-reconcile [--max-jobs 1..10]','telemetry-read [--project ID] [--days N]','learning-application --file INPUT.json','learning-effects CANDIDATE_ID','bootstrap-g-ideia --file INPUT.json [--apply]','enter-interaction --file INPUT.json','record-interaction ID --file UPDATE.json','interactions [ID] [--file FILTERS.json]','interactions-import --file INVENTORY.json','interaction-findings ID','insights-reconcile [--project ID] [--max-jobs N]','doctor [--project ID]','projects','register --file PROFILE.json [--replace]','context --project ID','models','route --file ROUTING.json','task-context --file TASK.json','prepare --file TASK.json','prepare --project ID --objective TEXT --key KEY --kind checks|codex --checks id,id [--depends ID,ID] [--requirements IG-01] [--workspace worktree --base-ref REF]','execution-policy [--file POLICY.json]','workflow-prepare --file WORKFLOW.json','workflow-status WORKFLOW_ID','workflow-run WORKFLOW_ID [--concurrency N] [--timeout MILLISECONDS]','workflow-start WORKFLOW_ID [--concurrency N] [--timeout MILLISECONDS]','workflow-cancel WORKFLOW_ID','workflow-replan WORKFLOW_ID --file REPLAN.json','knowledge-index --project ID','knowledge-search --file SEARCH.json','learning-list [--project ID]','learning-read CANDIDATE_ID','learning-propose --file PROPOSAL.json','learning-review CANDIDATE_ID --file REVIEW.json','learning-shadow-source CANDIDATE_ID','learning-shadow CANDIDATE_ID --file SHADOW.json','learning-promote CANDIDATE_ID --file DECISION.json','learning-revert CANDIDATE_ID --file DECISION.json','security-report --project ID --file GATE-INPUT.json','evaluation-record --file EVALUATION.json','evaluation EVALUATION_ID','evaluation-compare --file COMPARISON.json','observe [--port 4317] [--timeout MILLISECONDS (1000-7200000; default 300000)]','run JOB_ID','drain --max-jobs N --timeout MILLISECONDS [--concurrency N] [--jobs ID,ID]','start-queue --max-jobs N --timeout MILLISECONDS [--concurrency N] [--jobs ID,ID]','queue-status SUPERVISOR_ID','stop-queue SUPERVISOR_ID','status [JOB_ID]','events JOB_ID','cancel JOB_ID','retry JOB_ID [--fresh-thread]','confirm-stopped JOB_ID --evidence TEXT','reconcile','probe','snapshot --target DIR','restore --snapshot DIR --target NEW_DIR','activate-restore [--projects id,id] [--root-overrides FILE.json]'],root});
+  if (command === 'help') print({commands: ['efficiency-history [--project ID] [--days 7|14|30|90]','telemetry-capture THREAD_UUID','telemetry-reconcile [--max-jobs 1..10]','telemetry-read [--project ID] [--days N]','learning-application --file INPUT.json','learning-effects CANDIDATE_ID','bootstrap-g-ideia --file INPUT.json [--apply]','enter-interaction --file INPUT.json','record-interaction ID --file UPDATE.json','interactions [ID] [--file FILTERS.json]','interactions-import --file INVENTORY.json','interaction-findings ID','insights-reconcile [--project ID] [--max-jobs N]','doctor [--project ID]','projects','register --file PROFILE.json [--replace]','context --project ID','models','route --file ROUTING.json','delegate --file DELEGATION.json','task-context --file TASK.json','prepare --file TASK.json','prepare --project ID --objective TEXT --key KEY --kind checks --checks id,id [--depends ID,ID] [--requirements IG-01] [--workspace worktree --base-ref REF]','execution-policy [--file POLICY.json]','workflow-prepare --file WORKFLOW.json','workflow-status WORKFLOW_ID','workflow-run WORKFLOW_ID [--concurrency N] [--timeout MILLISECONDS]','workflow-start WORKFLOW_ID [--concurrency N] [--timeout MILLISECONDS]','workflow-cancel WORKFLOW_ID','workflow-replan WORKFLOW_ID --file REPLAN.json','knowledge-index --project ID','knowledge-search --file SEARCH.json','learning-list [--project ID]','learning-read CANDIDATE_ID','learning-propose --file PROPOSAL.json','learning-review CANDIDATE_ID --file REVIEW.json','learning-shadow-source CANDIDATE_ID','learning-shadow CANDIDATE_ID --file SHADOW.json','learning-promote CANDIDATE_ID --file DECISION.json','learning-revert CANDIDATE_ID --file DECISION.json','security-report --project ID --file GATE-INPUT.json','evaluation-record --file EVALUATION.json','evaluation EVALUATION_ID','evaluation-compare --file COMPARISON.json','observe [--port 4317] [--timeout MILLISECONDS (1000-7200000; default 300000)]','run JOB_ID','drain --max-jobs N --timeout MILLISECONDS [--concurrency N] [--jobs ID,ID]','start-queue --max-jobs N --timeout MILLISECONDS [--concurrency N] [--jobs ID,ID]','queue-status SUPERVISOR_ID','stop-queue SUPERVISOR_ID','status [JOB_ID]','events JOB_ID','cancel JOB_ID','retry JOB_ID [--fresh-thread]','confirm-stopped JOB_ID --evidence TEXT','reconcile','probe','snapshot --target DIR','restore --snapshot DIR --target NEW_DIR','activate-restore [--projects id,id] [--root-overrides FILE.json]'],root});
   else if (command === 'bootstrap-g-ideia') {
     if (!values.file) throw new Error('--file bootstrap.local.json is required');
     const bootstrap = new GIdeiaBootstrap(root), input = await readJson(values.file, null);
@@ -113,7 +113,7 @@ try {
   }
   else if (command === 'route') {
     if(!values.file)throw new Error('--file routing.json is required');
-    print(new RoutingPolicy().decide(await readJson(values.file,null)));
+    print((await new RoutingConfigurationStore(root).read()).decide(await readJson(values.file,null)));
   }
   else if(command==='evaluation-record'||command==='evaluation-compare'){
     if(!values.file)throw new Error('--file input.json is required');
@@ -134,6 +134,10 @@ try {
     const id = positionals[1] ?? '';
     switch (command) {
       case 'execution-policy': print(values.file?await engine.execution.configure(await readJson(values.file,null)):await engine.execution.read());break;
+      case 'delegate':
+        if (!values.file) throw new Error('--file qualified-task.json is required; the orchestrator supplies qualification');
+        { const result = await engine.delegate(await readJson(values.file, null)); print(result); if (result.job.status !== 'completed') process.exitCode = 2; }
+        break;
       case 'workflow-prepare': {
         if(!values.file)throw new Error('--file workflow.json is required');
         print(await new WorkflowManager(engine).prepare(await readJson(values.file,null)));break;

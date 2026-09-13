@@ -1,10 +1,22 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { CodexWorker, type WorkerInput, type WorkerTransport } from '../src/codex-worker.js';
+import { TaskEngine } from '../src/engine.js';
+import { DEFAULT_ROUTING_CONFIGURATION, type TaskQualification } from '../src/routing.js';
 
 const cwd = process.cwd();
-const base: WorkerInput = { cwd, mode: 'read-only', objective: 'Inspect the project manifest.', context: '', timeoutMs: 2_000 };
+const qualifiedRouting: TaskQualification = {
+  taskClass: 'implementation', complexity: 'low', uncertainty: 'low', risk: 'low',
+  bounded: true, independentlyVerifiable: true, contextCoupling: 'low', delegationBenefit: 'expected',
+  rationale: 'Inspect the manifest as a bounded, independently verifiable task.',
+};
+const base: WorkerInput = {
+  cwd, mode: 'read-only', objective: 'Inspect the project manifest.', context: '', timeoutMs: 2_000,
+  routing: qualifiedRouting, routingPolicy: DEFAULT_ROUTING_CONFIGURATION,
+};
 
 class FakeTransport implements WorkerTransport {
   calls: { method: string; params: any }[] = [];
@@ -15,7 +27,7 @@ class FakeTransport implements WorkerTransport {
   effectiveMode = 'readOnly';
   active = false;
   resumeId = 'thread-1';
-  models=[{id:'gpt-6-astra',model:'gpt-6-astra',supportedReasoningEfforts:[{reasoningEffort:'ultra'}]},{id:'gpt-5.6-luna',model:'gpt-5.6-luna',supportedReasoningEfforts:[{reasoningEffort:'medium'}]}];
+  models=[{id:'gpt-6-astra',model:'gpt-6-astra',supportedReasoningEfforts:[{reasoningEffort:'ultra'}]},{id:'gpt-5.6-luna',model:'gpt-5.6-luna',supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'medium'}]}];
   wrongModel=false;
   finalMessage: string | undefined = JSON.stringify({ status: 'completed', summary: 'Manifest inspected.' });
   behavior: 'completed' | 'early' | 'blocked' | 'hang' | 'quota' | 'failed' = 'completed';
@@ -56,6 +68,19 @@ class FakeTransport implements WorkerTransport {
 
 function worker(transport: FakeTransport) { return new CodexWorker({ clientFactory: () => transport, interruptGraceMs: 30 }); }
 
+async function engineFixture(t: TestContext, transport: FakeTransport) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'infra-routing-engine-'));
+  await fs.mkdir(path.join(root, 'profiles'));
+  await fs.writeFile(path.join(root, 'profiles', 'registry.json'), JSON.stringify({ version: 1, projects: [{
+    id: 'routing-fixture', name: 'Routing fixture', aliases: [], root: process.cwd(), status: 'active',
+    stack: ['node'], modes: ['read-only'], sourceRoots: [], sources: [],
+    checks: [{ id: 'node-version', executable: process.execPath, args: ['--version'], readOnly: true }],
+  }] }));
+  const engine = new TaskEngine(root, worker(transport));
+  t.after(async () => { engine.close(); await fs.rm(root, { recursive: true, force: true }); });
+  return { engine, root };
+}
+
 test('one job starts one turn and waits for confirmed terminal completion', async () => {
   const transport = new FakeTransport();
   const progress: unknown[] = [];
@@ -71,7 +96,8 @@ test('one job starts one turn and waits for confirmed terminal completion', asyn
   assert.deepEqual(turn.sandboxPolicy, { type: 'readOnly', networkAccess: false });
   assert.equal(turn.cwd, cwd);
   assert.equal(turn.approvalPolicy, 'on-request');
-  assert.equal(turn.model, undefined);
+  assert.equal(turn.model, 'gpt-5.6-luna');
+  assert.equal(turn.effort, 'medium');
   assert.deepEqual(turn.outputSchema.required, ['status', 'summary']);
   assert.deepEqual(turn.outputSchema.properties.status.enum, ['completed', 'blocked']);
   assert.equal(turn.outputSchema.additionalProperties, false);
@@ -102,7 +128,7 @@ test('captures completion delivered before turn/start response', async () => {
 
 test('routing validates actual model and effort before dispatch and records one selected model',async()=>{
  const transport=new FakeTransport();
- const result=await worker(transport).run({...base,routing:{taskClass:'implementation',bounded:true,independentlyVerifiable:true,contextCoupling:'low',complexity:'low',uncertainty:'low',risk:'low',delegationBenefit:'expected'}});
+ const result=await worker(transport).run(base);
  assert.equal(result.status,'completed');
  const turn=transport.calls.find(call=>call.method==='turn/start')!;
  assert.equal(turn.params.model,'gpt-5.6-luna');assert.equal(turn.params.effort,'medium');
@@ -114,10 +140,67 @@ test('unavailable coordinator effort, missing defensive specialist and effective
   const transport=new FakeTransport();
   if(condition==='effort')transport.models[0]!.supportedReasoningEfforts=[{reasoningEffort:'high'}];
   if(condition==='mismatch')transport.wrongModel=true;
-  const result=await worker(transport).run({...base,routing:{taskClass:condition==='defensive'?'defensive-security':'implementation'}});
+  const routing = condition === 'defensive'
+    ? { ...qualifiedRouting, taskClass: 'defensive-security' as const }
+    : condition === 'effort'
+      ? { ...qualifiedRouting, complexity: 'high' as const }
+      : qualifiedRouting;
+  const result=await worker(transport).run({...base,routing});
   assert.equal(result.status,'blocked');
   assert.equal(transport.calls.some(call=>call.method==='turn/start'),false);
  }
+});
+
+test('missing qualification or pinned policy is rejected before connecting', async () => {
+  const transport = new FakeTransport();
+  const unqualified: WorkerInput = { ...base, routing: undefined, routingPolicy: undefined };
+  const result = await worker(transport).run(unqualified);
+  assert.equal(result.status, 'blocked');
+  assert.match(result.summary, /qualification and pinned routing policy/);
+  assert.equal(transport.calls.length, 0);
+  assert.equal(transport.closed, false);
+});
+
+test('TaskEngine.delegate routes moderate research through Sol high and records runtime execution', async t => {
+  const transport = new FakeTransport();
+  transport.models.push({ id: 'gpt-5.6-sol', model: 'gpt-5.6-sol', supportedReasoningEfforts: [{ reasoningEffort: 'high' }] });
+  const { engine } = await engineFixture(t, transport);
+  const delegated = await engine.delegate({
+    project: 'routing-fixture', objective: 'Inspect the local runtime contract', idempotencyKey: 'delegate-research',
+    mode: 'read-only', checkIds: ['node-version'], qualification: {
+      taskClass: 'research', complexity: 'moderate', uncertainty: 'moderate', risk: 'moderate',
+      bounded: true, independentlyVerifiable: true, contextCoupling: 'low', delegationBenefit: 'expected',
+      rationale: 'Research is bounded and independently verifiable against the local fixture.',
+    },
+  });
+  assert.equal(delegated.job.status, 'completed');
+  assert.equal(delegated.execution?.status, 'completed');
+  assert.equal(delegated.execution?.model, 'gpt-5.6-sol');
+  assert.equal(delegated.execution?.reasoningEffort, 'high');
+  assert.equal(delegated.routingDecision.evidenceLevel, 'runtime-validated');
+  assert.equal(delegated.routingDecision.capabilityValidation, 'matched');
+  assert.equal(transport.calls.filter(call => call.method === 'thread/start').length, 1);
+  assert.equal(transport.calls.filter(call => call.method === 'turn/start').length, 1);
+  const turn = transport.calls.find(call => call.method === 'turn/start')!;
+  assert.equal(turn.params.model, 'gpt-5.6-sol');
+  assert.equal(turn.params.effort, 'high');
+});
+
+test('TaskEngine.delegate records waiting_user when the selected catalog capability is absent', async t => {
+  const transport = new FakeTransport();
+  const { engine } = await engineFixture(t, transport);
+  const delegated = await engine.delegate({
+    project: 'routing-fixture', objective: 'Inspect the unavailable analysis route', idempotencyKey: 'delegate-missing-catalog',
+    mode: 'read-only', checkIds: ['node-version'], qualification: {
+      taskClass: 'research', complexity: 'moderate', uncertainty: 'moderate', risk: 'moderate',
+      bounded: true, independentlyVerifiable: true, contextCoupling: 'low', delegationBenefit: 'expected',
+      rationale: 'The fixture intentionally omits the selected specialist capability.',
+    },
+  });
+  assert.equal(delegated.job.status, 'waiting_user');
+  assert.equal(delegated.execution?.status, 'blocked');
+  assert.equal(transport.calls.filter(call => call.method === 'thread/start').length, 0);
+  assert.equal(transport.calls.filter(call => call.method === 'turn/start').length, 0);
 });
 
 test('exhausted quota and non-ChatGPT auth never start a thread or turn', async () => {
@@ -190,11 +273,12 @@ test('terminal errors remain failed or quota without retrying or retaining raw e
 test('resume targets the existing idle thread and refuses one already active', async () => {
   const idle = new FakeTransport();
   assert.equal((await worker(idle).run({ ...base, threadId: 'thread-1' })).status, 'completed');
-  assert.equal(idle.calls[0]?.method, 'thread/resume');
-  assert.equal(idle.calls[0]?.params.threadId, 'thread-1');
+  const resume = idle.calls.find(call => call.method === 'thread/resume');
+  assert.equal(resume?.method, 'thread/resume');
+  assert.equal(resume?.params.threadId, 'thread-1');
   const active = new FakeTransport(); active.active = true;
   assert.equal((await worker(active).run({ ...base, threadId: 'thread-1' })).status, 'blocked');
-  assert.equal(active.calls.length, 1);
+  assert.equal(active.calls.filter(call => call.method === 'thread/resume').length, 1);
 });
 
 test('cleanup failure is explicit so the engine can retain its ownership lock', async () => {

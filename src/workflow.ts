@@ -4,12 +4,12 @@ import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import type {TaskEngine} from './engine.js';
 import {TaskDetailsSchema} from './task-contract.js';
-import {TaskRoutingInputSchema} from './routing.js';
+import {TaskQualificationSchema} from './routing.js';
 import {QueueCoordinator,type DrainOptions,type DrainResult} from './queue.js';
 import {SupervisorManager} from './supervisor.js';
 import {atomicWriteJson,readJson,resolveRealSubPath} from './legacy/command-os-utils.js';
 
-export const WorkflowTaskSchema=z.object({project:z.string().min(1),objective:z.string().trim().min(1).max(20000),mode:z.enum(['read-only','workspace-write']),kind:z.enum(['checks','codex']),checkIds:z.array(z.string().min(1)).min(1).max(40),requirementIds:z.array(z.string()).max(40).default([]),workspace:z.enum(['in-place','worktree']).default('in-place'),baseRef:z.string().optional(),taskDetails:TaskDetailsSchema.optional(),routing:TaskRoutingInputSchema.optional()});
+export const WorkflowTaskSchema=z.object({project:z.string().min(1),objective:z.string().trim().min(1).max(20000),mode:z.enum(['read-only','workspace-write']),kind:z.enum(['checks','codex']),checkIds:z.array(z.string().min(1)).min(1).max(40),requirementIds:z.array(z.string()).max(40).default([]),workspace:z.enum(['in-place','worktree']).default('in-place'),baseRef:z.string().optional(),taskDetails:TaskDetailsSchema.optional(),routing:TaskQualificationSchema.optional()});
 const nodeId=z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/);
 export const WorkflowNodeSchema=z.object({id:nodeId,dependsOn:z.array(nodeId).max(40).default([]),task:WorkflowTaskSchema});
 export const WorkflowInputSchema=z.object({idempotencyKey:z.string().min(1).max(200),objective:z.string().trim().min(1).max(20000),nodes:z.array(WorkflowNodeSchema).min(1).max(40),maxRevisions:z.number().int().min(1).max(5).default(3)});

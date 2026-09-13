@@ -18,7 +18,7 @@ export type RuntimeModelCapability = z.infer<typeof RuntimeModelCapabilitySchema
 
 /** Omitted traits are conservative; a task needs positive evidence before delegation. */
 export const TaskRoutingInputSchema = z.object({
-  taskClass: z.enum(['deterministic', 'implementation', 'review', 'research', 'defensive-security']),
+  taskClass: z.enum(['deterministic', 'retrieval', 'implementation', 'review', 'research', 'defensive-security']),
   complexity: LevelSchema.default('high'),
   uncertainty: LevelSchema.default('high'),
   bounded: z.boolean().default(false),
@@ -26,6 +26,7 @@ export const TaskRoutingInputSchema = z.object({
   contextCoupling: LevelSchema.default('high'),
   risk: LevelSchema.default('high'),
   delegationBenefit: z.enum(['unknown', 'expected', 'observed']).default('unknown'),
+  rationale: z.string().trim().min(1).max(2000).optional(),
   explicitRequestedModel: NameSchema.optional(),
   explicitRequestedReasoningEffort: NameSchema.optional(),
 }).strict().refine(input => !input.explicitRequestedReasoningEffort || !!input.explicitRequestedModel, {
@@ -34,12 +35,44 @@ export const TaskRoutingInputSchema = z.object({
 });
 export type TaskRoutingInput = z.input<typeof TaskRoutingInputSchema>;
 
+/** The orchestrator supplies these judgments; the owner never has to classify subtasks. */
+export const TaskQualificationSchema = z.object({
+  taskClass: z.enum(['retrieval', 'implementation', 'review', 'research', 'defensive-security']),
+  complexity: LevelSchema, uncertainty: LevelSchema, risk: LevelSchema,
+  bounded: z.boolean(), independentlyVerifiable: z.boolean(), contextCoupling: LevelSchema,
+  delegationBenefit: z.enum(['unknown', 'expected', 'observed']),
+  rationale: z.string().trim().min(1).max(2000),
+  explicitRequestedModel: NameSchema.optional(), explicitRequestedReasoningEffort: NameSchema.optional(),
+}).strict().refine(input => !input.explicitRequestedReasoningEffort || !!input.explicitRequestedModel, {
+  message: 'An explicit reasoning effort requires an explicit model.', path: ['explicitRequestedModel'],
+});
+export type TaskQualification = z.infer<typeof TaskQualificationSchema>;
+
+export const RoutingConfigurationSchema = z.object({
+  version: z.literal(1), coordinator: ModelSelectionSchema,
+  specialists: z.object({
+    retrieval: ModelSelectionSchema, implementation: ModelSelectionSchema,
+    analysisLow: ModelSelectionSchema, analysis: ModelSelectionSchema, defensive: ModelSelectionSchema,
+  }).strict(),
+}).strict();
+export type RoutingConfiguration = z.infer<typeof RoutingConfigurationSchema>;
+export const DEFAULT_ROUTING_CONFIGURATION: RoutingConfiguration = {
+  version: 1, coordinator: { model: 'gpt-6-astra', reasoningEffort: 'ultra' },
+  specialists: {
+    retrieval: { model: 'gpt-5.6-luna', reasoningEffort: 'low' },
+    implementation: { model: 'gpt-5.6-luna', reasoningEffort: 'medium' },
+    analysisLow: { model: 'gpt-5.6-sol', reasoningEffort: 'medium' },
+    analysis: { model: 'gpt-5.6-sol', reasoningEffort: 'high' },
+    defensive: { model: 'gpt-daybreak-blue-latest', reasoningEffort: 'high' },
+  },
+};
+
 export const RoutingDecisionSchema = z.object({
   status: z.enum(['deterministic', 'candidate', 'blocked']),
   assignment: z.enum(['none', 'coordinator', 'delegate']),
   candidate: ModelSelectionSchema.nullable(),
   reason: z.string().min(1),
-  rule: z.enum(['deterministic', 'defensive-primary', 'explicit-request', 'coordinator', 'bounded-implementation', 'separable-analysis']),
+  rule: z.enum(['deterministic', 'defensive-primary', 'explicit-request', 'coordinator', 'bounded-retrieval', 'bounded-implementation', 'separable-analysis']),
   policyVersion: z.string(),
   policyHash: z.string().regex(/^[a-f0-9]{64}$/),
   inputHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -55,25 +88,28 @@ export const RoutingDecisionSchema = z.object({
   }),
 });
 export type RoutingDecision = z.infer<typeof RoutingDecisionSchema>;
-export interface RoutingPolicyOptions { coordinator?: ModelSelection }
+export interface RoutingPolicyOptions { coordinator?: ModelSelection; configuration?: RoutingConfiguration; configurationSource?: 'profile-file' | 'built-in-default' | 'snapshot' }
 
-export const ROUTING_POLICY_VERSION = '1.0.0';
+export const ROUTING_POLICY_VERSION = '2.0.0';
 
 /** Pure preflight policy. It makes no model calls, dispatches, retries, or authorization changes. */
 export class RoutingPolicy {
   readonly version = ROUTING_POLICY_VERSION;
   readonly coordinator: Readonly<ModelSelection>;
   readonly hash: string;
-  private readonly specialists = {
-    implementation: { model: 'gpt-5.6-luna', reasoningEffort: 'medium' },
-    analysis: { model: 'gpt-5.6-sol', reasoningEffort: 'high' },
-    defensive: { model: 'gpt-daybreak-blue-latest', reasoningEffort: 'high' },
-  } as const;
+  readonly configuration: RoutingConfiguration;
+  readonly configurationSource: NonNullable<RoutingPolicyOptions['configurationSource']>;
+  private readonly specialists: RoutingConfiguration['specialists'];
 
   constructor(options: RoutingPolicyOptions = {}) {
-    this.coordinator = Object.freeze(ModelSelectionSchema.parse(options.coordinator ?? {
-      model: 'gpt-6-astra', reasoningEffort: 'ultra',
-    }));
+    this.configuration = RoutingConfigurationSchema.parse(options.configuration ?? DEFAULT_ROUTING_CONFIGURATION);
+    this.configurationSource = options.configurationSource ?? (options.configuration ? 'snapshot' : 'built-in-default');
+    if (options.coordinator) this.configuration.coordinator = ModelSelectionSchema.parse(options.coordinator);
+    if (this.configuration.specialists.defensive.model !== 'gpt-daybreak-blue-latest') {
+      throw new Error('Routing configuration cannot replace the primary defensive specialist.');
+    }
+    this.specialists = this.configuration.specialists;
+    this.coordinator = Object.freeze({ ...this.configuration.coordinator });
     this.hash = this.digest({ version: this.version, coordinator: this.coordinator, specialists: this.specialists });
   }
 
@@ -107,7 +143,9 @@ export class RoutingPolicy {
       decision.rule = 'explicit-request';
       decision.candidate = {
         model: input.explicitRequestedModel,
-        reasoningEffort: input.explicitRequestedReasoningEffort ?? this.defaultEffort(input.explicitRequestedModel),
+        reasoningEffort: input.explicitRequestedReasoningEffort ?? this.decide({
+          ...input, explicitRequestedModel: undefined, explicitRequestedReasoningEffort: undefined,
+        }).candidate!.reasoningEffort,
       };
       decision.assignment = decision.candidate.model === this.coordinator.model ? 'coordinator' : 'delegate';
       decision.reason = 'Use the explicitly requested model; no replacement is permitted if its capability is unavailable.';
@@ -120,16 +158,22 @@ export class RoutingPolicy {
         decision.reason = 'Keep the task with the coordinator: a delegation benefit has not been identified.';
       } else if (input.complexity === 'high' || input.uncertainty === 'high' || input.risk === 'high') {
         decision.reason = 'Keep this high-complexity, high-uncertainty, or high-risk task with the coordinator; define a smaller subtask before delegating.';
+      } else if (input.taskClass === 'retrieval' && input.complexity === 'low' && input.uncertainty === 'low' && input.risk === 'low') {
+        decision.rule = 'bounded-retrieval';
+        decision.assignment = 'delegate';
+        decision.candidate = { ...this.specialists.retrieval };
+        decision.reason = 'Use the configured retrieval specialist for bounded source lookup/extraction with independent verification. Deterministic lookups should use a tool directly.';
       } else if (input.taskClass === 'implementation' && input.complexity === 'low' && input.uncertainty === 'low' && input.risk === 'low') {
         decision.rule = 'bounded-implementation';
         decision.assignment = 'delegate';
         decision.candidate = { ...this.specialists.implementation };
-        decision.reason = `Luna is a candidate for this bounded, low-risk implementation with independent verification and ${input.delegationBenefit} delegation benefit.`;
-      } else if (input.taskClass === 'review' || input.taskClass === 'research') {
+        decision.reason = `Use the configured implementation specialist for bounded, low-risk work with independent verification and ${input.delegationBenefit} delegation benefit.`;
+      } else if (['retrieval', 'review', 'research', 'implementation'].includes(input.taskClass)) {
         decision.rule = 'separable-analysis';
         decision.assignment = 'delegate';
-        decision.candidate = { ...this.specialists.analysis };
-        decision.reason = `Sol is a candidate for this separable analysis or review of at most moderate complexity, uncertainty, and risk with ${input.delegationBenefit} delegation benefit.`;
+        const low = input.complexity === 'low' && input.uncertainty === 'low' && input.risk === 'low';
+        decision.candidate = { ...(low ? this.specialists.analysisLow : this.specialists.analysis) };
+        decision.reason = `Use the configured ${low ? 'low-complexity' : 'moderate-complexity'} analysis specialist for this separable task with ${input.delegationBenefit} delegation benefit.`;
       }
     }
 
@@ -139,23 +183,10 @@ export class RoutingPolicy {
     const missing = this.missingCapability(decision.candidate!, catalog);
     if (!missing) return { ...decision, evidenceLevel: 'runtime-validated', requiresCapabilityValidation: false, capabilityValidation: 'matched' };
 
-    // This is a preflight fallback, not permission to retry or change models during a run.
-    const canReturnToCoordinator = decision.rule === 'bounded-implementation' || decision.rule === 'separable-analysis';
-    if (canReturnToCoordinator && !this.missingCapability(this.coordinator, catalog)) {
-      const from = decision.candidate!;
-      const reason = `${missing} Keep the task with the configured strong coordinator; no smaller substitute was selected.`;
-      return { ...decision, assignment: 'coordinator', candidate: { ...this.coordinator }, reason,
-        evidenceLevel: 'runtime-validated', requiresCapabilityValidation: false, capabilityValidation: 'matched',
-        fallback: { from, to: { ...this.coordinator }, reason } };
-    }
+    // An unavailable specialist must not silently turn a small task into an Ultra worker.
     return { ...decision, status: 'blocked', assignment: 'none', candidate: null,
       reason: `${missing} No permitted fallback is available; a new routing decision is required before execution.`,
       requiresCapabilityValidation: false, capabilityValidation: 'unavailable' };
-  }
-
-  private defaultEffort(model: string): string {
-    if (model === this.coordinator.model) return this.coordinator.reasoningEffort;
-    return Object.values(this.specialists).find(candidate => candidate.model === model)?.reasoningEffort ?? this.coordinator.reasoningEffort;
   }
 
   private missingCapability(candidate: Readonly<ModelSelection>, catalog: RuntimeModelCapability[]): string | null {
