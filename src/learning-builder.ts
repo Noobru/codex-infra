@@ -34,6 +34,9 @@ export interface LearningBuilderOptions { engineFactory?: (root: string) => Task
 
 /** Named checks parse artifacts only. They never import, run, or install files inside a generated bundle. */
 export class LearningBuildArtifacts {
+  static key(input: Pick<LearningBuildInput, 'caseId' | 'attempt'>): string {
+    return KnowledgeFiles.hash(JSON.stringify([input.caseId, input.attempt])).slice(0, 24);
+  }
   /** Keep the immutable source receipt available when the worker reference budget is exceeded. */
   static evidence(refs: string[], source: string): string[] {
     const unique = [...new Set([source, ...refs])];
@@ -56,7 +59,7 @@ export class LearningBuilder {
   constructor(readonly root: string, private readonly options: LearningBuilderOptions = {}) { this.files = new KnowledgeFiles(root); }
 
   async build(raw: LearningBuildInput, options: { signal?: AbortSignal; onJobPrepared?: (job: Job) => void | Promise<void> } = {}): Promise<LearningBuildResult> {
-    const input = LearningBuildInputSchema.parse(raw), key = KnowledgeFiles.hash(JSON.stringify([input.caseId, input.attempt])).slice(0, 24);
+    const input = LearningBuildInputSchema.parse(raw), key = LearningBuildArtifacts.key(input);
     const base = `artifacts/learning/builds/${key}`, resultPath = `${base}/result.json`;
     const jobIds: string[] = [];
     let stage: 'build' | 'review' = 'build', engine: TaskEngine | undefined;

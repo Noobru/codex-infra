@@ -73,6 +73,8 @@ export class DashboardReader {
           id:item.id,projectId:item.projectId,status:item.status,title:EvidenceSanitizer.text(item.title,240),kind:item.kind,
           attempts:item.attempts,hash:item.hash,candidateId:item.candidateId,updatedAt:item.updatedAt,
           createdAt:item.createdAt,reason:EvidenceSanitizer.text(item.content,2400),
+          recovery:item.recovery?{action:item.recovery.action,source:EvidenceSanitizer.text(item.recovery.source,1200),
+            recordedAt:item.recovery.recordedAt,successorId:item.recovery.successorId??null}:null,
           lastError:item.lastError?EvidenceSanitizer.text(item.lastError,1200):null,jobIds:item.jobIds,
           originJobId:'jobId' in item.origin?item.origin.jobId:null,
           evidence:item.evidence.map(ref=>EvidenceSanitizer.text(ref,600)),artifactPath:item.artifactPath,

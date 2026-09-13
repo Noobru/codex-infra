@@ -82,6 +82,13 @@ test('aggregate views use canonical records and never require registered product
   assert.equal(story.learningCycle?.data?.items[0]?.reason,pending.content);
   assert.equal(story.learningCycle?.data?.items[0]?.createdAt,createdAt);
   assert.equal(story.runtimeEffects?.data?.window,null,'learning usage is inventory-wide, not the efficiency window');
+  await fs.writeFile(path.join(root,artifactPath),JSON.stringify({...pending,status:'superseded',recovery:{action:'supersede',
+    expectedRevision:1,author:{name:'Fixture coordinator',role:'model'},source:'Covered by a validated fixture; disabled state preserved.',
+    evidence:['fixture-only'],successorId:'learning_'+'b'.repeat(32),recordedAt:createdAt}}));
+  const resolved=await reader.screen({view:'learning',projectId:'ui-completed'});
+  assert.equal(resolved.learningCycle?.data?.items[0]?.status,'superseded');
+  assert.equal(resolved.learningCycle?.data?.items[0]?.recovery?.action,'supersede');
+  assert.equal(resolved.learningCycle?.data?.items[0]?.hash,undefined,'supersession never implies a capability was generated');
   const recovery=await reader.screen({view:'evidence',projectId:'ui-empty'});
   assert.equal(recovery.run,null);
   assert.equal(recovery.recovery!.state,'empty');

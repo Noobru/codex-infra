@@ -1,7 +1,7 @@
 {
   "version": 1,
   "packageVersion": "0.6.1",
-  "createdAt": "2026-09-13T14:36:09.249Z",
+  "createdAt": "2026-09-13T16:00:45.080Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -84,8 +84,8 @@
     },
     {
       "path": "docs/AUTONOMOUS-LEARNING.md",
-      "bytes": 11361,
-      "sha256": "8a23acd6feb8b5f880d1bb5655312c0068529bb1b553847026fe5f4ebef5f881"
+      "bytes": 12644,
+      "sha256": "7c96948aced7d8234147de08df7a25ac5f95cd221cf3e0c2a864d2d711579f43"
     },
     {
       "path": "docs/CONTEXT-CONTRACT.md",
@@ -114,8 +114,8 @@
     },
     {
       "path": "docs/USO.md",
-      "bytes": 22231,
-      "sha256": "f299e2fe29328e9ab92b64469a290069e7f3c6843b3c9ee19aa6fa42e71b7390"
+      "bytes": 22831,
+      "sha256": "fdcf64d8e3ff9da1153428c9462095dbbe16b0284ea77b42dd21e998871a9610"
     },
     {
       "path": "fixtures/model-routing/AGENTS.md",
@@ -304,8 +304,8 @@
     },
     {
       "path": "src/autonomous-learning.ts",
-      "bytes": 25030,
-      "sha256": "232431bc1e5763e1f206ac453f27f2b4fc6f71c5796fecdb7ad4a731f2e9062e"
+      "bytes": 28378,
+      "sha256": "e5130fe914f3c88ec02146cbe5581ca659968b69f4cc2c0cc6f8e954f2a0789c"
     },
     {
       "path": "src/capability-planner.ts",
@@ -314,8 +314,8 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 19728,
-      "sha256": "bd2233921d636a5a95363207146a2059f718b1fc8c873673aa5a77bc1411af86"
+      "bytes": 20013,
+      "sha256": "1ee482efb63654041c40e66447de9dbec449a841a6eb146502ed5a1b5226ee17"
     },
     {
       "path": "src/codex-worker.ts",
@@ -329,8 +329,8 @@
     },
     {
       "path": "src/dashboard.ts",
-      "bytes": 13775,
-      "sha256": "c9d7ba3ae53fd0a8ed052a267d82b1bc72a78fee7bd12f4aec3e2946a8696472"
+      "bytes": 13994,
+      "sha256": "9e2c3a930e41f98723a07d2e86f9156621a795a9885f51d1ce471b40c5e2a751"
     },
     {
       "path": "src/efficiency-history.ts",
@@ -414,8 +414,8 @@
     },
     {
       "path": "src/learning-builder.ts",
-      "bytes": 17219,
-      "sha256": "46df8ec6c94c2121f90e82c1bdb286d767ce673adf6399e994c30efa01fe6a0b"
+      "bytes": 17347,
+      "sha256": "9968ab3899345252459db551371cd5f09ced42097ac68811d334561609a59734"
     },
     {
       "path": "src/learning-runtime-effects.ts",
@@ -439,8 +439,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 24314,
-      "sha256": "9c37247d29750853c86c991f8c6b6ae6d17dfa0270470562bf589f6f08e78ee1"
+      "bytes": 24813,
+      "sha256": "65a901bc95d6a6a69621d4ddfe370647957268a4d2bf8c8064dde1e2a05a34b9"
     },
     {
       "path": "src/model-catalog.ts",
@@ -619,8 +619,8 @@
     },
     {
       "path": "test/autonomous-learning.test.ts",
-      "bytes": 21898,
-      "sha256": "c9d503d6d6a586973f40edacd77235917d30ba63e5e44543c74e215559f14c6b"
+      "bytes": 25478,
+      "sha256": "c47ac8c954c13706373d06a3b7449719a8171c186210e740a61c5092c0eaa582"
     },
     {
       "path": "test/capability-planner.test.ts",
@@ -639,8 +639,8 @@
     },
     {
       "path": "test/dashboard.test.ts",
-      "bytes": 8204,
-      "sha256": "1ec0971f2298d59118734cf47658c0140c3fdbd130c2c9b029da126370e3d2f0"
+      "bytes": 8939,
+      "sha256": "453fe1aceb658d5caed2f50e958355c15b0db379d5d15e1b4e98b04d50c7a843"
     },
     {
       "path": "test/efficiency-history.test.ts",
@@ -914,8 +914,8 @@
     },
     {
       "path": "ui/src/LearningCapabilities.tsx",
-      "bytes": 7750,
-      "sha256": "1841cc4d3e16e688c32aa1a64e56f7fc6552e0c91016d4bb3aca2dfa156fb979"
+      "bytes": 8397,
+      "sha256": "76cc6acb46bbdbcd48a6ae48c9d7abd4d61b9e2fb4a66e53b88494e6b2f00cfb"
     },
     {
       "path": "ui/src/LearningRuntimeEffects.tsx",

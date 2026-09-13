@@ -10,14 +10,21 @@ import { EvidenceSanitizer } from './evidence.js';
 import { atomicWriteJson, readJson } from './legacy/command-os-utils.js';
 import type { DrainResult } from './queue.js';
 import { LearningBuildArtifacts, LearningBuildInputSchema, type LearningBuilder } from './learning-builder.js';
+import { StateStore } from './state.js';
 
 const caseId = z.string().regex(/^learning_[a-f0-9]{32}$/);
+export const LearningRecoverySchema = KnowledgeDecisionSchema.extend({
+  expectedRevision: z.number().int().positive(),
+  action: z.enum(['resume', 'supersede']),
+  successorId: caseId.optional(),
+}).strict();
 export const LearningCaseSchema = z.object({
   version: z.literal(1), id: caseId, projectId: KnowledgeProjectSchema,
   revision: z.number().int().positive(), title: z.string(), content: z.string(),
   kind: z.enum(['script', 'skill', 'practice']), origin: KnowledgeOriginSchema,
   candidateId: z.uuid().optional(), hash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
-  status: z.enum(['queued', 'building', 'reviewing', 'validating', 'active', 'attention', 'disabled']),
+  status: z.enum(['queued', 'building', 'reviewing', 'validating', 'active', 'attention', 'disabled', 'superseded']),
+  recovery: LearningRecoverySchema.extend({ recordedAt: z.iso.datetime() }).nullable().default(null),
   attempts: z.number().int().nonnegative(), jobIds: z.array(z.uuid()), evidence: z.array(z.string()),
   ownerPid: z.number().int().positive().nullable(), lastError: z.string().nullable(),
   retryAfter: z.iso.datetime().nullable().default(null),
@@ -70,6 +77,42 @@ export class AutonomousLearning {
     caseId.parse(id);
     const names = await this.files.names(`artifacts/learning/cases/${id}`);
     return this.files.read(`artifacts/learning/cases/${id}/${names.filter(name => /^revision-\d{6}\.json$/.test(name)).at(-1) ?? 'missing.json'}`, LearningCaseSchema);
+  }
+
+  /** Explicit, evidence-backed disposition; never resets attempts or retries a worker implicitly. */
+  async recover(id: string, raw: unknown): Promise<LearningCase> {
+    const input = LearningRecoverySchema.parse(raw);
+    return this.withLock('drain', async () => {
+      const item = await this.read(id);
+      if (item.revision !== input.expectedRevision) throw new Error('Learning case revision changed; read current evidence first.');
+      if (item.status !== 'attention' || this.alive(item.ownerPid)) throw new Error('Recovery requires an unattended attention case.');
+      const recovery = { ...input, recordedAt: new Date().toISOString() };
+      const evidence = [...new Set([...item.evidence, ...input.evidence])];
+      if (input.action === 'supersede') {
+        if (!input.successorId || input.successorId === id) throw new Error('A different successor case is required.');
+        const successor = await this.read(input.successorId);
+        if (!successor.hash || !['active', 'disabled'].includes(successor.status) || successor.kind !== item.kind)
+          throw new Error('Successor must have a validated capability of the same kind.');
+        const record = await new LearningRuntimeStore(this.root).read(successor.hash);
+        if (record.manifest.candidateId !== successor.candidateId || record.manifest.projectId !== successor.projectId
+          || !record.state.activation || !record.state.validation || !['active', 'disabled'].includes(record.state.status))
+          throw new Error('Successor activation and validation evidence are required.');
+        return this.append(item, { status: 'superseded', recovery, evidence: [...new Set([...evidence, successor.artifactPath,
+          record.state.validation.path])], ownerPid: null, retryAfter: null, resumeAttempt: false });
+      }
+      if (input.successorId || item.hash || !item.buildInput || !item.jobIds.length)
+        throw new Error('Resume requires an interrupted build with its immutable input and job.');
+      const key = LearningBuildArtifacts.key(item.buildInput);
+      const state = new StateStore(path.join(this.root, 'state/jobs.sqlite'), { readOnly: true });
+      try {
+        const job = state.get(item.jobIds.at(-1)!);
+        if (job.status !== 'completed' || ![`learning-${key}-build`, `learning-${key}-review`].includes(job.projectId))
+          throw new Error('Inspect and explicitly retry the interrupted worker first; its named checks must complete before case recovery.');
+      } finally { state.close(); }
+      const result = await readJson(path.join(this.root, `artifacts/learning/builds/${key}/result.json`), null) as {review?: {decision?: string}} | null;
+      if (result && result.review?.decision !== 'approved') throw new Error('A rejected build requires a new reviewed version, not resuming its cached result.');
+      return this.append(item, { status: 'queued', recovery, evidence, ownerPid: null, retryAfter: null, resumeAttempt: true });
+    });
   }
 
   /** Called after material execution/interaction events. Dashboard reads never enter this path. */

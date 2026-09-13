@@ -180,6 +180,8 @@ O filtro afeta contagens de runs e medições de eficiência; a fila de aprendiz
 
 ## Leitura do painel
 
+“Precisa de atenção” é um caso estacionado. O agente pode registrar `learning-recover ID --file decision.json`, com `expectedRevision`, `author`, `source`, `evidence` e `action`. `resume` exige recuperar explicitamente o worker interrompido e concluir seus checks antes de retomar revisão/testes/ativação pelo ciclo. `supersede` exige `successorId` de uma capacidade já validada/ativada e registra o encerramento no Histórico, preservando a desativação do sucessor, se houver. Nenhuma dessas ações zera tentativas ou dispara workers; `learning-reconcile` retoma os casos elegíveis.
+
 - **Visão geral:** acompanhe o estado atual e abra uma execução para investigar. “Falhas no histórico” conta tentativas encerradas; não significa que todos os problemas continuam abertos.
 - **Aprendizados:** consulte o motivo, a ativação e o uso na mesma ficha. Ativa significa disponível. Uso exige chamada registrada; o histórico mostra a versão exata, os recibos e o hash para pedir desativação.
 - **Eficiência:** escolha medida e período. Tokens por turno, total diário, duração e taxa de conclusão têm significados diferentes, explicados ao lado dos dados. Atribuir economia ao aprendizado exige uma comparação válida.

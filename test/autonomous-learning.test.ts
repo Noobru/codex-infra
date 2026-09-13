@@ -10,7 +10,7 @@ import { KnowledgeLearningStore } from '../src/knowledge-learning.js';
 import { LearningBundleInputSchema, LearningRuntimeStore, LearningActivationPolicySchema, type LearningSandboxExecutor } from '../src/learning-runtime.js';
 import { ProcessRunner } from '../src/process.js';
 import { StateStore } from '../src/state.js';
-import { LearningBuildError, LearningBuildInputSchema, type LearningBuilder } from '../src/learning-builder.js';
+import { LearningBuildError, LearningBuildInputSchema, LearningBuildArtifacts, type LearningBuilder } from '../src/learning-builder.js';
 import { KnowledgeFiles } from '../src/knowledge-store.js';
 import { ReworkDiscovery, type ReworkCluster } from '../src/rework-discovery.js';
 
@@ -100,6 +100,53 @@ async function stagedCase(t: TestContext, phase: 'packaged' | 'reviewed' | 'vali
     candidateId: f.candidate.id, hash, reviewDecision: agent, validationAttempts: ['validation-passed', 'active', 'disabled'].includes(phase) ? 2 : 1 });
   return { ...f, item, runtime, hash };
 }
+
+test('explicit recovery resumes only a completed interrupted worker, preserving input, attempts and history', async t => {
+  const f = await fixture(t), b = builder(['approved']), cycle = new AutonomousLearning(f.root, b, sandbox);
+  await cycle.reconcile();
+  const initial = (await cycle.list()).items[0]!;
+  const input = LearningBuildInputSchema.parse({caseId:initial.id, projectId:'fixture', kind:initial.kind,
+    title:initial.title, content:initial.content, evidence:initial.evidence, attempt:2});
+  const state = new StateStore(path.join(f.root,'state/jobs.sqlite'));
+  t.after(()=>state.close());
+  const job = state.create({idempotencyKey:'interrupted-build', projectId:`learning-${LearningBuildArtifacts.key(input)}-build`,
+    objective:'Fixed recovery fixture',mode:'workspace-write',profileHash:'fixture'});
+  state.transition(job.id,'failed');
+  const parked = await appendCase(f.root,initial,{status:'attention',attempts:2,buildInput:input,jobIds:[job.id],lastError:'deadline exceeded'});
+  const decision = {...agent,action:'resume',expectedRevision:parked.revision};
+  await assert.rejects(cycle.recover(initial.id,decision),/explicitly retry/);
+  state.transition(job.id,'ready'); state.claim(job.id,process.pid); state.transition(job.id,'validating'); state.transition(job.id,'completed',{ownerPid:null});
+  state.close();
+  await assert.rejects(cycle.recover(initial.id,{...decision,expectedRevision:1}),/revision changed/);
+  const resumed = await cycle.recover(initial.id,decision);
+  assert.equal(resumed.status,'queued'); assert.equal(resumed.resumeAttempt,true); assert.equal(resumed.attempts,2);
+  assert.deepEqual(resumed.buildInput,input); assert.equal(resumed.lastError,'deadline exceeded');
+  assert.equal(resumed.recovery?.action,'resume');
+  await assert.rejects(cycle.recover(initial.id,decision),/revision changed/);
+  await cycle.drain({maxJobs:1,totalTimeoutMs:10000});
+  assert.equal((await cycle.read(initial.id)).status,'active'); assert.equal(b.calls.length,1);
+  assert.deepEqual(b.calls[0],input);
+  assert.equal((await new KnowledgeFiles(f.root).read(parked.artifactPath,LearningCaseSchema)).status,'attention');
+});
+
+test('supersession requires a validated successor, preserves disabled state and never dispatches old cases', async t => {
+  const f = await stagedCase(t,'disabled');
+  const b = builder([]), cycle = new AutonomousLearning(f.root,b,sandbox);
+  const successor = await appendCase(f.root,f.item,{status:'disabled'});
+  const id='learning_'+'f'.repeat(32), artifactPath=`artifacts/learning/cases/${id}/revision-000001.json`;
+  const old = LearningCaseSchema.parse({...successor,id,revision:1,artifactPath,status:'attention',hash:undefined,
+    candidateId:undefined,attempts:2,lastError:'old fixture startup failed'});
+  await new KnowledgeFiles(f.root).writeJsonNew(artifactPath,old);
+  const decision={...agent,action:'supersede',expectedRevision:1,successorId:successor.id};
+  await assert.rejects(cycle.recover(id,{...decision,successorId:id}),/different successor/);
+  const retired=await cycle.recover(id,decision);
+  assert.equal(retired.status,'superseded'); assert.equal(retired.hash,undefined);
+  assert.equal(retired.attempts,2); assert.equal(retired.lastError,old.lastError);
+  assert.equal(retired.recovery?.successorId,successor.id);
+  assert.equal((await f.runtime.read(f.hash)).state.status,'disabled');
+  await cycle.reconcile(); await cycle.drain({maxJobs:1,totalTimeoutMs:10000});
+  assert.equal(b.calls.length,0); assert.equal((await cycle.read(id)).status,'superseded');
+});
 test('material findings run through build, review, actual fixture tests, activation, invocation and hash disable', async t => {
   const f = await fixture(t), b = builder(['approved']), cycle = new AutonomousLearning(f.root, b, sandbox);
   assert.equal((await cycle.reconcile()).created, 1);

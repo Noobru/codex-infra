@@ -2,7 +2,7 @@ import {useState} from 'react';
 import type {DashboardObservation} from './api';
 import {CopyId,EmptyState,timestamp,duration,type CopyProps} from './components';
 
-const statusNames:Record<string,string>={active:'Ativa',attention:'Precisa de atenção',queued:'Na fila',building:'Em construção',validating:'Em validação',reviewing:'Em revisão',disabled:'Desativada',rejected:'Revisão reprovada','validation-failed':'Teste reprovado',registered:'Pacote gerado',reviewed:'Revisada',validated:'Validada'};
+const statusNames:Record<string,string>={active:'Ativa',attention:'Precisa de atenção',queued:'Na fila',building:'Em construção',validating:'Em validação',reviewing:'Em revisão',disabled:'Desativada',superseded:'Substituída por caso validado',rejected:'Revisão reprovada','validation-failed':'Teste reprovado',registered:'Pacote gerado',reviewed:'Revisada',validated:'Validada'};
 type Props={data:DashboardObservation;onOpenRun:(id:string)=>void}&CopyProps;
 
 /** One story per exact executable version; pending cases stay separate until a bundle exists. */
@@ -14,7 +14,7 @@ export function LearningStories({data,onOpenRun,...copy}:Props){
     bundle,origin:cases.find(item=>item.hash===bundle.manifest.hash)??cases.find(item=>item.candidateId===bundle.manifest.candidateId),
     usage:data.runtimeEffects?.data?.items.find(item=>item.hash===bundle.manifest.hash)})),
     ...cases.filter(item=>!bundles.some(bundle=>bundle.manifest.hash===item.hash)).map(origin=>({id:origin.id,title:origin.title,projectId:origin.projectId,status:origin.status,bundle:undefined,origin,usage:undefined}))];
-  const bucket=(story:typeof stories[number])=>story.status==='disabled'||story.bundle&&bundles.some(bundle=>bundle.manifest.candidateId===story.bundle!.manifest.candidateId&&bundle.manifest.hash!==story.id&&bundle.state.status==='active')?'disabled':story.status==='active'?'active':['attention','rejected','validation-failed'].includes(story.status)?'attention':'progress';
+  const bucket=(story:typeof stories[number])=>['disabled','superseded'].includes(story.status)||story.bundle&&bundles.some(bundle=>bundle.manifest.candidateId===story.bundle!.manifest.candidateId&&bundle.manifest.hash!==story.id&&bundle.state.status==='active')?'disabled':story.status==='active'?'active':['attention','rejected','validation-failed'].includes(story.status)?'attention':'progress';
   const filters=[{id:'active',label:'Ativas'},{id:'progress',label:'Em preparação'},{id:'attention',label:'Precisam de atenção'},{id:'disabled',label:'Histórico'}];
   const complete=Boolean(data.learningRuntime?.data&&data.learningCycle?.data);
   const visible=stories.filter(item=>bucket(item)===filter);
@@ -32,10 +32,13 @@ export function LearningStories({data,onOpenRun,...copy}:Props){
       const project=data.projects.items.find(project=>project.id===item.projectId);
       return <article className="learning-story" key={item.id}>
         <header className="story-heading"><div><span className="story-project">{project?.name??item.projectId}{project?.population==='fixture'?' · ambiente de teste':''}</span><h2>{item.title}</h2></div><span className={`story-status ${item.status==='active'?'is-active':''}`}>{statusNames[item.status]??item.status}</span></header>
-        <div className="story-reason"><h3>Por que existe</h3><p>{reasonPreview??'O motivo não está disponível nesta fonte. Consulte os registros de origem.'}</p></div>
-        <dl className="story-facts"><div><dt>O que virou</dt><dd>{bundle?`${bundle.manifest.kind==='skill'?'Skill local':bundle.manifest.kind==='script'?'Script local':'Prática automatizada'} · v${bundle.manifest.capabilityVersion}`:'Pacote não disponível nesta leitura'}</dd></div><div><dt>Quando foi ativada</dt><dd>{bundle?.state.activation?timestamp(bundle.state.activation.recordedAt):bundle?'Sem ativação registrada':'Ativação não verificada'}</dd></div><div><dt>Já foi usada?</dt><dd>{usageAvailable?usage!.executions?`${usage!.executions} chamada${usage!.executions===1?'':'s'} registrada${usage!.executions===1?'':'s'}`:'Nenhuma chamada registrada':'Uso ainda não verificado'}</dd>{usageAvailable&&usage!.executions>0&&<small>{usage!.passed} com sucesso · {usage!.failed} com falha</small>}</div></dl>
-        {origin?.lastError&&item.status!=='active'&&<div className="story-warning"><strong>O que impediu o avanço</strong><p>{origin.lastError}</p><span>{origin.attempts} tentativa(s) · última atualização {timestamp(origin.updatedAt)}</span></div>}
+        {item.status!=='superseded'&&<div className="story-reason"><h3>Por que existe</h3><p>{reasonPreview??'O motivo não está disponível nesta fonte. Consulte os registros de origem.'}</p></div>}
+        {origin?.recovery&&<div className="story-reason"><h3>{origin.recovery.action==='supersede'?'Como foi encerrado':'Como foi retomado'}</h3><p>{origin.recovery.source}</p><small>{timestamp(origin.recovery.recordedAt)}</small></div>}
+        {item.status!=='superseded'&&<dl className="story-facts"><div><dt>O que virou</dt><dd>{bundle?`${bundle.manifest.kind==='skill'?'Skill local':bundle.manifest.kind==='script'?'Script local':'Prática automatizada'} · v${bundle.manifest.capabilityVersion}`:'Pacote não disponível nesta leitura'}</dd></div><div><dt>Quando foi ativada</dt><dd>{bundle?.state.activation?timestamp(bundle.state.activation.recordedAt):bundle?'Sem ativação registrada':'Ativação não verificada'}</dd></div><div><dt>Já foi usada?</dt><dd>{usageAvailable?usage!.executions?`${usage!.executions} chamada${usage!.executions===1?'':'s'} registrada${usage!.executions===1?'':'s'}`:'Nenhuma chamada registrada':'Uso ainda não verificado'}</dd>{usageAvailable&&usage!.executions>0&&<small>{usage!.passed} com sucesso · {usage!.failed} com falha</small>}</div></dl>}
+        {origin?.lastError&&!['active','superseded'].includes(item.status)&&<div className="story-warning"><strong>O que impediu o avanço</strong><p>{origin.lastError}</p><span>{origin.attempts} tentativa(s) · última atualização {timestamp(origin.updatedAt)}</span></div>}
         <details className="story-details"><summary>Ver histórico e evidências</summary>
+          {item.status==='superseded'&&origin?.lastError&&<p>Falha preservada no histórico: {origin.lastError}</p>}
+          {origin?.recovery?.successorId&&<p>Caso que substituiu este registro: <CopyId value={origin.recovery.successorId} {...copy}/></p>}
           {reason&&<p className="receipt-text">{reason}</p>}
           <ol className="story-timeline">
             {origin&&<li><strong>Aprendizado identificado</strong><span>{timestamp(origin.createdAt)}</span></li>}

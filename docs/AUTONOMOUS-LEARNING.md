@@ -6,6 +6,15 @@ O ciclo foi validado em uma aplicação pequena própria: duas falhas equivalent
 
 ## O ciclo real
 
+### Casos que precisam de atenção
+
+`attention` significa que o ciclo estacionou; não promete que há agente trabalhando. Após diagnosticar a causa, `learning-recover ID --file decision.json` (MCP `recover_learning_case`) registra uma decisão com `expectedRevision`, `author`, `source`, `evidence` e `action`:
+
+- `resume`: usado para uma construção interrompida com input imutável. Primeiro inspecione o worker e seus arquivos, faça `retry JOB_ID` explicitamente e execute-o com o limite adequado. A recuperação exige que esse mesmo worker tenha concluído seus checks; então recoloca o caso na fila para revisão independente, testes isolados e ativação. `learning-reconcile` despacha o ciclo. Um bundle rejeitado não é reaprovado por esse mecanismo.
+- `supersede`: exige `successorId` de um caso com versão já validada e ativada, mesmo que depois desativada. Registre por que esse sucessor cobre o caso antigo. O antigo passa ao Histórico como substituído; não ganha uma ativação ou sucesso fictício, nem reativa o sucessor.
+
+As duas ações preservam falhas, contadores, IDs e revisões anteriores. Não alteram a política nem repetem workers implicitamente. Revisão desatualizada, fase em andamento e evidência de sucessor insuficiente são recusadas.
+
 1. A conclusão de checks e os resultados materiais registrados na interação alimentam a descoberta. Repetições são agrupadas por evidência compatível; um erro isolado não prova uma solução reutilizável. `findings` explícitos preservam conteúdo, projeto e revisão de origem.
 2. Um caso persistente recebe síntese e revisão em dois jobs do `TaskEngine`. Cada etapa usa seu próprio workbench dentro dos artefatos da infraestrutura, sem executar o produto que originou o sinal.
 3. A síntese gera `bundle.json`: versão, arquivos, entrypoints Node/Python e testes. Os checks desta etapa validam somente o schema do JSON. O código gerado permanece como dado.

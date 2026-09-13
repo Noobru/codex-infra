@@ -26,7 +26,7 @@ import { EfficiencyHistory,EfficiencyHistoryInputSchema } from './efficiency-his
 import { ImprovementImpactReader } from './improvement-impact.js';
 import { InteractionTelemetry } from './interaction-telemetry.js';
 import { LearningApplications,LearningApplicationInputSchema } from './learning-applications.js';
-import { AutonomousLearning } from './autonomous-learning.js';
+import { AutonomousLearning, LearningRecoverySchema } from './autonomous-learning.js';
 import { LearningRuntimeStore, LearningRunInputSchema } from './learning-runtime.js';
 import { LearningSandbox } from './learning-sandbox.js';
 
@@ -36,6 +36,7 @@ const workflows=new WorkflowManager(engine),learning=new KnowledgeLearningStore(
 const server = new McpServer({name:'codex-infra',version:'0.6.1'});
 const runtime = new RuntimeObservation(root);
 const result = (value: unknown) => ({content:[{type:'text' as const,text:JSON.stringify(value)}]});
+server.registerTool('recover_learning_case',{description:'Record an explicit evidence-backed recovery of an attention case. Resume only after the interrupted worker was explicitly retried and completed; supersede only with a validated successor. Preserves attempts, failures and disabled versions; does not dispatch work.',inputSchema:{caseId:z.string(),input:LearningRecoverySchema}},async({caseId,input})=>result(await new AutonomousLearning(root).recover(caseId,input)));
 server.registerTool('learning_cycle_status',{description:'Read autonomous rework cases and exact versioned callable capabilities. Includes queued, active and attention states; never dispatches work.',annotations:{readOnlyHint:true},inputSchema:{projectId:z.string().optional()}},async({projectId})=>result({cases:await new AutonomousLearning(root).list(projectId),capabilities:await new LearningRuntimeStore(root).list(projectId)}));
 server.registerTool('run_learning_capability',{description:'Invoke an active reviewed and tested skill/script by exact hash. Uses an offline isolated workspace, returns outputs and records actual execution. Input data and application to the project must remain within the current authorized task.',inputSchema:{hash:z.string().regex(/^[a-f0-9]{64}$/),input:LearningRunInputSchema}},async({hash,input})=>result(await new LearningRuntimeStore(root,new LearningSandbox(root)).run(hash,input)));
 server.registerTool('disable_learning_capability',{description:'Disable one exact capability hash on the owner request. Preserves immutable history and immediately prevents future invocation and context inclusion.',inputSchema:{hash:z.string().regex(/^[a-f0-9]{64}$/),decision:KnowledgeOwnerDecisionSchema}},async({hash,decision})=>result(await new LearningRuntimeStore(root).disable(hash,decision)));
