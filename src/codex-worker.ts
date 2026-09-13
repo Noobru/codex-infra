@@ -212,6 +212,9 @@ export class CodexWorker {
         ...(selection?{model:selection.model}:{}),
         config: {
           ...toolConfig,
+          // Every worker is a leaf: nested native delegation bypasses Infra routing and admission.
+          'agents.enabled': false,
+          'features.multi_agent': false,
           ...(selection?{model_reasoning_effort:selection.reasoningEffort}:{}),
           'sandbox_workspace_write.writable_roots': [cwd],
           'sandbox_workspace_write.network_access': false,

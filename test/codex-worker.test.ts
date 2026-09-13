@@ -29,6 +29,7 @@ class FakeTransport implements WorkerTransport {
   resumeId = 'thread-1';
   models=[{id:'gpt-6-astra',model:'gpt-6-astra',supportedReasoningEfforts:[{reasoningEffort:'ultra'}]},{id:'gpt-5.6-luna',model:'gpt-5.6-luna',supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'medium'}]}];
   wrongModel=false;
+  wrongEffort=false;
   finalMessage: string | undefined = JSON.stringify({ status: 'completed', summary: 'Manifest inspected.' });
   behavior: 'completed' | 'early' | 'blocked' | 'hang' | 'quota' | 'failed' = 'completed';
   async connect() {}
@@ -48,7 +49,7 @@ class FakeTransport implements WorkerTransport {
     if (method === 'thread/start' || method === 'thread/resume') return {
       thread: { id: this.resumeId, cwd, status: { type: this.active ? 'active' : 'idle' } }, cwd,
       sandbox: { type: this.effectiveMode, networkAccess: false, writableRoots: [cwd], excludeTmpdirEnvVar: true, excludeSlashTmp: true },
-      approvalPolicy: 'on-request', modelProvider: 'openai', model: this.wrongModel?'wrong-model':params.model??'user-configured-model', reasoningEffort:params.config?.model_reasoning_effort??null,
+      approvalPolicy: 'on-request', modelProvider: 'openai', model: this.wrongModel?'wrong-model':params.model??'user-configured-model', reasoningEffort:this.wrongEffort?'ultra':params.config?.model_reasoning_effort??null,
       instructionSources: [path.join(cwd, 'AGENTS.md'), 123, 'not-an-absolute-path'],
     } as T;
     if (method === 'turn/start') {
@@ -98,6 +99,9 @@ test('one job starts one turn and waits for confirmed terminal completion', asyn
   assert.equal(turn.approvalPolicy, 'on-request');
   assert.equal(turn.model, 'gpt-5.6-luna');
   assert.equal(turn.effort, 'medium');
+  const thread = transport.calls.find(call => call.method === 'thread/start')!.params;
+  assert.equal(thread.config['agents.enabled'], false);
+  assert.equal(thread.config['features.multi_agent'], false);
   assert.deepEqual(turn.outputSchema.required, ['status', 'summary']);
   assert.deepEqual(turn.outputSchema.properties.status.enum, ['completed', 'blocked']);
   assert.equal(turn.outputSchema.additionalProperties, false);
@@ -136,10 +140,11 @@ test('routing validates actual model and effort before dispatch and records one 
  assert.equal(transport.calls.filter(call=>call.method==='turn/start').length,1);
 });
 test('unavailable coordinator effort, missing defensive specialist and effective mismatch do not generate',async()=>{
- for(const condition of ['effort','defensive','mismatch']) {
+ for(const condition of ['effort','defensive','mismatch','effort-mismatch']) {
   const transport=new FakeTransport();
   if(condition==='effort')transport.models[0]!.supportedReasoningEfforts=[{reasoningEffort:'high'}];
   if(condition==='mismatch')transport.wrongModel=true;
+  if(condition==='effort-mismatch')transport.wrongEffort=true;
   const routing = condition === 'defensive'
     ? { ...qualifiedRouting, taskClass: 'defensive-security' as const }
     : condition === 'effort'

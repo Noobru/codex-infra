@@ -1,7 +1,7 @@
 {
   "version": 1,
   "packageVersion": "0.6.1",
-  "createdAt": "2026-09-13T01:00:29.861Z",
+  "createdAt": "2026-09-13T01:49:40.416Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -104,8 +104,8 @@
     },
     {
       "path": "docs/MODEL-ROUTING.md",
-      "bytes": 3474,
-      "sha256": "c41a2d810764c7e6a3d4072038ef9a4a12b6e20cd010382bba434c84631bc438"
+      "bytes": 4636,
+      "sha256": "55e49b38580bb013472b1c0d2052711abadd36f3cd869cc721267486a0bbe002"
     },
     {
       "path": "docs/PROPOSTA.md",
@@ -314,8 +314,8 @@
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 20433,
-      "sha256": "d011447616de176b7c8ef932c818b4a4739b750bad28df48f53e29b05322eb5a"
+      "bytes": 20609,
+      "sha256": "5e791746fed2fe3687f394d3192e6445cb23b0edd2e384dbafeb164cb24d3564"
     },
     {
       "path": "src/context-pack.ts",
@@ -619,8 +619,8 @@
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 17674,
-      "sha256": "5414c68e934c177a6ba72b5a9429badb1bb4529cb8cbfe8aad991c4bc68b2f49"
+      "bytes": 18006,
+      "sha256": "80203cf37f46589ce1c0505cfd5c4ab6c5776c9f93e98f688ffa5df4ca27dfb0"
     },
     {
       "path": "test/context-pack.test.ts",

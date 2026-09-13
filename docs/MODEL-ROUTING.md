@@ -48,10 +48,25 @@ Jobs legados sem qualificação/política não são retomados automaticamente.
 
 ## Limite do Desktop
 
-O plugin instrui o coordenador a usar esse caminho. Não existe aqui um hook sobre
-`collaboration.spawn_agent` nativo do Desktop. Uma sessão que ainda carregue a skill
-ou o MCP anterior precisa de um novo thread após reinstalação. A versão instalada
-sozinha não prova reload do processo já aberto.
+O plugin instrui o coordenador a usar esse caminho. Os workers são processos do
+executável Codex instalado como dependência local fixada (`@openai/codex`), no modo
+`app-server`, com o login ChatGPT salvo. `AppServerClient` resolve esse binário local;
+não reutiliza o backend do Desktop nem seu mecanismo nativo de subagentes. Por isso
+as versões podem divergir: em 13/09/2026 UTC foram observados Infra `0.154.0` e
+Desktop `0.154.0-alpha.6.2`. Não há hook do Infra sobre `collaboration.spawn_agent`.
+
+Para bloquear esse caminho no host, configurar `agents.enabled = false` e
+`features.multi_agent = false` no `config.toml` do usuário, após sua autorização. São seções
+TOML distintas (`[agents]` e `[features]`). O `CodexWorker` também força ambas como
+`false` em cada `thread/start` ou `thread/resume`, impedindo delegação nativa aninhada
+nos workers. O caminho `delegate_task` e a matriz de modelos permanecem disponíveis.
+
+Uma leitura de configuração não prova que o Desktop removeu ferramentas já
+carregadas. Conferir o catálogo efetivo em sessão nova, sem chamar spawn nativo para
+compensar falha do bloqueio. Um processo MCP antigo também pode reter o build anterior:
+consultar `runtime_status` e usar CLI/MCP compilado fresco quando houver divergência.
+Não fechar ou reiniciar o Desktop automaticamente. A configuração é uma barreira de
+runtime, não um interceptador universal nem proteção contra reconfiguração explícita.
 
 Os receipts reais dos workers provam a seleção do Infra. Testes de transporte falso
 protegem a transmissão e bloqueios; não substituem a prova real de execução ou a
