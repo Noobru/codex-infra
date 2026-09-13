@@ -9,7 +9,7 @@ import { SupervisorManager } from './supervisor.js';
 import { EvidenceSanitizer } from './evidence.js';
 import { atomicWriteJson, readJson } from './legacy/command-os-utils.js';
 import type { DrainResult } from './queue.js';
-import { LearningBuildInputSchema, type LearningBuilder } from './learning-builder.js';
+import { LearningBuildArtifacts, LearningBuildInputSchema, type LearningBuilder } from './learning-builder.js';
 
 const caseId = z.string().regex(/^learning_[a-f0-9]{32}$/);
 export const LearningCaseSchema = z.object({
@@ -43,8 +43,15 @@ export class AutonomousLearning {
   async list(projectId?: string): Promise<{ items: LearningCase[]; warnings: string[] }> {
     if (projectId) KnowledgeProjectSchema.parse(projectId);
     const items: LearningCase[] = [], warnings: string[] = [];
-    const lastError = await readJson(path.join(this.root,'artifacts/learning/last-error.json'),null) as {warning?:string}|null;
-    if(lastError?.warning)warnings.push(EvidenceSanitizer.text(lastError.warning,2000));
+    const lastError = await readJson(path.join(this.root,'artifacts/learning/last-error.json'),null) as {warning?:string;resolvedAt?:string}|null;
+    if(lastError?.warning&&!lastError.resolvedAt)warnings.push(EvidenceSanitizer.text(lastError.warning,2000));
+    const pointer = await readJson(path.join(this.root, 'artifacts/learning/supervisor.json'), null) as {id?: string} | null;
+    if (pointer?.id) {
+      try {
+        const supervisor = await new SupervisorManager(this.root).status(pointer.id);
+        if (supervisor.state === 'failed') warnings.push(`Learning supervisor ${pointer.id}: ${EvidenceSanitizer.text(supervisor.error ?? 'Failed before completion; inspect its receipt.', 1200)}`);
+      } catch { warnings.push('Learning supervisor receipt unavailable.'); }
+    }
     for (const id of await this.files.names('artifacts/learning/cases')) {
       if (!caseId.safeParse(id).success) continue;
       try {
@@ -107,14 +114,21 @@ export class AutonomousLearning {
         if (existing && ['starting', 'running'].includes(existing.state)) return { started: false, reason: 'already-running', supervisor: existing };
       }
       const supervisor = await supervisors.start({ mode: 'learning', maxJobs: policy.maxCasesPerDrain,
-        totalTimeoutMs: Math.min(7_200_000, policy.maxCasesPerDrain * policy.maxBuildAttempts * (2 * policy.workerTimeoutMs + 120_000)) });
+        totalTimeoutMs: Math.min(7_200_000, policy.maxCasesPerDrain * policy.maxBuildAttempts * (2 * Math.max(policy.workerTimeoutMs,LearningRuntimeStore.workerTimeout(policy,2)) + 120_000)) });
       await atomicWriteJson(path.join(this.root, 'artifacts/learning/supervisor.json'), supervisor);
       return { started: true, supervisor };
     });
   }
 
   async onEvent(projectId?: string) {
-    try { return { ...await this.reconcile(projectId), dispatch: await this.kick() }; }
+    try {
+      const result={...await this.reconcile(projectId),dispatch:await this.kick()};
+      if(result.enabled){
+        const previous=await readJson(path.join(this.root,'artifacts/learning/last-error.json'),null) as {warning?:string;resolvedAt?:string}|null;
+        if(previous?.warning&&!previous.resolvedAt)await atomicWriteJson(path.join(this.root,'artifacts/learning/last-error.json'),{...previous,resolvedAt:new Date().toISOString()});
+      }
+      return result;
+    }
     catch (error) {
       const warning = this.error(error);
       await atomicWriteJson(path.join(this.root, 'artifacts/learning/last-error.json'), { recordedAt: new Date().toISOString(), warning }).catch(() => {});
@@ -135,7 +149,12 @@ export class AutonomousLearning {
           .slice(0, Math.min(options.maxJobs, policy.maxCasesPerDrain));
         for (const item of pending) {
           if (controller.signal.aborted) return { jobs: [], stopReason: 'aborted' };
-          await this.process(item, policy, controller.signal);
+          try { await this.process(item, policy, controller.signal); }
+          catch (error) {
+            // Includes readiness/input failures before a model job exists. Park once, preserving history.
+            const current = await this.read(item.id);
+            await this.append(current, {status:'attention', ownerPid:null, lastError:this.error(error), retryAfter:null, resumeAttempt:false});
+          }
           if (controller.signal.aborted) return { jobs: [], stopReason: 'aborted' };
         }
         return { jobs: [], stopReason: pending.length ? 'max_jobs' : 'no_ready_jobs' };
@@ -169,7 +188,7 @@ export class AutonomousLearning {
       // Keep exactly the same data and runtime choices for a resumed TaskEngine attempt.
       const input = item.resumeAttempt && item.buildInput ? item.buildInput : LearningBuildInputSchema.parse({
         caseId: item.id, projectId: item.projectId, title: item.title, content: item.content, kind: item.kind,
-        evidence: item.evidence, attempt: item.resumeAttempt ? item.attempts : item.attempts + 1,
+        evidence: LearningBuildArtifacts.evidence(item.evidence, item.artifactPath), attempt: item.resumeAttempt ? item.attempts : item.attempts + 1,
         allowedRuntimes: availableRuntimes, ...((item.resumeAttempt ? item.buildFeedback : item.lastError)
           ? { feedback: item.resumeAttempt ? item.buildFeedback : item.lastError } : {}),
       });
@@ -191,7 +210,7 @@ export class AutonomousLearning {
         item = await this.append(item, { status: 'reviewing', jobIds: [...new Set([...item.jobIds, ...built.jobIds])] });
         const decision = KnowledgeDecisionSchema.parse({ author: { name: 'Autonomous learning reviewer', role: 'model' },
           source: `Independent TaskEngine review: ${built.review.reason}`,
-          evidence: [built.artifactPath, ...built.review.evidence, ...built.jobIds.map(id => `artifacts/jobs/${id}`)] });
+          evidence: LearningBuildArtifacts.evidence([...built.review.evidence, ...built.jobIds.map(id => `artifacts/jobs/${id}`)], built.artifactPath) });
         if (built.review.decision !== 'approved') throw new Error(`Review rejected: ${built.review.reason}`);
         const candidate = item.candidateId ? await candidates.read(item.candidateId) : await candidates.proposeOnce({
           projectId: item.projectId, origin: item.origin, title: item.title, kind: item.kind, content: item.content,
@@ -258,7 +277,7 @@ export class AutonomousLearning {
       }
       await runtime.activate(item.hash!, { ...decision, author: { name: 'Autonomous learning coordinator', role: 'model' },
         source: 'Owner standing policy; independent review and isolated tests passed for this exact version.',
-        evidence: [...new Set([...decision.evidence, record.state.validation!.path])] });
+        evidence: LearningBuildArtifacts.evidence([...decision.evidence,record.state.validation!.path,...item.evidence],item.artifactPath) });
       return this.append(item, { status: 'active', ownerPid: null, lastError: null, retryAfter: null, resumeAttempt: false });
     } catch (error) {
       // Exceptions (interruption/unavailable executor) resume the same reviewed hash, with a

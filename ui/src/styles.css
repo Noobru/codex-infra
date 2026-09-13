@@ -458,3 +458,10 @@ body { font-size: 15px; line-height: 1.5; }
  .run-hero-card{padding:18px}.run-hero-stats{gap:14px}.learning-loop{min-width:0;overflow-wrap:anywhere}.filter-divider{display:none}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+.population-scope{margin:16px 0;padding:16px;border:1px solid var(--line);border-radius:8px}
+.population-scope label{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.population-counts{display:flex;flex-wrap:wrap;gap:8px 24px;font-size:12px;line-height:1.7}
+.population-counts strong{text-transform:capitalize}
+.population-scope .scope-caption{margin:12px 0}
+.population-scope .select-wrap{height:auto;min-height:40px;width:fit-content;max-width:100%}
+.population-scope select{max-width:100%}

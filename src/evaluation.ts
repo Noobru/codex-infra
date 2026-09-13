@@ -159,7 +159,7 @@ export class EvaluationStore {
   }
 
   /** A bounded inventory of persisted evaluations; malformed records remain visible as warnings. */
-  async list(options: {projectId?: string; limit?: number; offset?: number} = {}) {
+  async list(options: {projectId?: string; includeProject?:(id:string)=>boolean; limit?: number; offset?: number} = {}) {
     const limit = z.number().int().min(1).max(100).parse(options.limit ?? 50);
     const offset = z.number().int().nonnegative().parse(options.offset ?? 0);
     const warnings: string[] = [];
@@ -171,7 +171,7 @@ export class EvaluationStore {
     entries.sort((a, b) => b.modified - a.modified || a.name.localeCompare(b.name));
     const inspected = entries.slice(0, 500);
     for (const entry of inspected) {
-      try { const receipt = await this.read(entry.name.slice(0, -5)); if (!options.projectId || receipt.projectId === options.projectId) records.push(receipt); }
+      try { const receipt = await this.read(entry.name.slice(0, -5)); if ((!options.projectId || receipt.projectId === options.projectId)&&(!options.includeProject||options.includeProject(receipt.projectId))) records.push(receipt); }
       catch { warnings.push(`${entry.name}: evaluation could not be read.`); }
     }
     records.sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || a.id.localeCompare(b.id));

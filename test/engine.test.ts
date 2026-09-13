@@ -12,6 +12,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {fixtureQualification} from './qualification-fixture.js';
 import {DEFAULT_ROUTING_CONFIGURATION, TaskQualificationSchema} from '../src/routing.js';
+import {TaskContractBuilder, TaskDetailsSchema} from '../src/task-contract.js';
 
 async function fixture(t: TestContext, worker?: Pick<CodexWorker,'run'>) {
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'infra-engine-'));
@@ -187,6 +188,19 @@ test('legacy model tasks and unactivated restored projects never silently dispat
  await assert.rejects(engine.run(job.id),/not activated/);
  await assert.rejects(engine.prepare({...input,idempotencyKey:'new'}),/not activated/);
 });
+test('legacy model task reconstruction preserves the historical offline contract',async t=>{
+ let received:any;
+ const {root,engine}=await fixture(t,{run:async input=>{received=JSON.parse(input.context);return {status:'completed',summary:'Legacy fixture inspected'};}});
+ const input={project:'test',objective:'Reconstruct legacy contract',idempotencyKey:'legacy-contract',mode:'read-only' as const,kind:'codex' as const,routing:fixtureQualification,checkIds:['pass']};
+ const job=await engine.prepare(input);
+ const manifestPath=path.join(engine.artifactDir(job.id),'manifest.json');
+ const manifest=JSON.parse(await fs.readFile(manifestPath,'utf8'));delete manifest.taskContract;
+ await fs.writeFile(manifestPath,JSON.stringify(manifest));
+ assert.equal((await engine.run(job.id)).status,'completed');
+ assert.equal(received.taskContract.details.networkAccess,false);
+ const saved=JSON.parse(await fs.readFile(path.join(engine.artifactDir(job.id),'attempt-1/task-contract.json'),'utf8'));
+ assert.equal(saved.details.networkAccess,false);
+});
 test('cancellation keeps the active lock until the worker confirms shutdown',async t=>{
   let started!:()=>void; const ready=new Promise<void>(resolve=>{started=resolve;});
   let released!:()=>void; const release=new Promise<void>(resolve=>{released=resolve;});
@@ -260,3 +274,31 @@ test('validation targets the context after the worker and supplies a recoverable
  assert.equal(captured.git.head,'b'.repeat(40));
 });
 
+
+test('checks receive the pinned comparison base independently of the candidate HEAD',async t=>{
+ const {root,engine}=await fixture(t);
+ const base='a'.repeat(40),target='b'.repeat(40);
+ const originalContext=engine.registry.context.bind(engine.registry);
+ engine.registry.context=async profile=>{
+  const context=await originalContext(profile);
+  return {...context,git:{...context.git,head:target}};
+ };
+ const job=await engine.prepare({project:'test',objective:'Compare candidate to staging',idempotencyKey:'comparison-base',mode:'read-only',kind:'checks',checkIds:['pass'],taskDetails:{comparisonBaseSha:base}});
+ engine.registry.check=async (_profile,checkId,_mode,options)=>{
+  assert.equal(options?.execution?.baseSha,base);
+  assert.equal(options?.execution?.targetSha,target);
+  return {checkId,executable:'fixture',args:[],cwd:root,exitCode:0,stdout:'',stderr:'',durationMs:0};
+ };
+ assert.equal((await engine.run(job.id)).status,'completed');
+ const manifest=JSON.parse(await fs.readFile(path.join(engine.artifactDir(job.id),'manifest.json'),'utf8'));
+ assert.equal(manifest.taskContract.details.comparisonBaseSha,base);
+});
+
+test('comparison base is an immutable SHA in the task contract hash',()=>{
+ const builder=new TaskContractBuilder();
+ const task={projectId:'test',objective:'Compare candidate to staging',mode:'read-only' as const,kind:'checks' as const,checkIds:['pass']};
+ const first=builder.build({...task,details:{comparisonBaseSha:'a'.repeat(40)}});
+ const second=builder.build({...task,details:{comparisonBaseSha:'b'.repeat(40)}});
+ assert.notEqual(first.hash,second.hash);
+ assert.equal(TaskDetailsSchema.safeParse({comparisonBaseSha:'origin/staging'}).success,false);
+});

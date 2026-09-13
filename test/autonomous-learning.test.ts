@@ -51,6 +51,35 @@ function builder(decisions: ('approved'|'rejected')[]) {
       review: { decision: decisions[calls.length-1] ?? 'approved', reason: 'Fixture review result', evidence: ['fixed fixture review'], bundleHash: 'a'.repeat(64) } };
   } };
 }
+
+test('large evidence history reaches the builder with an immutable full-source reference', async t => {
+  const f = await fixture(t), b = builder(['approved']), cycle = new AutonomousLearning(f.root, b, sandbox);
+  await cycle.reconcile();
+  const initial = (await cycle.list()).items[0]!;
+  const refs = Array.from({length:75}, (_,i)=>`artifacts/evidence-${i}.json`);
+  const sourced = await appendCase(f.root, initial, {evidence:refs});
+  await cycle.drain({maxJobs:1,totalTimeoutMs:10000});
+  assert.equal(b.calls.length,1);
+  assert.equal(b.calls[0]!.evidence.length,50);
+  assert.equal(b.calls[0]!.evidence[0],sourced.artifactPath);
+  assert.deepEqual((await cycle.read(initial.id)).evidence.slice(0,75),refs);
+  assert.equal((await cycle.read(initial.id)).status,'active');
+});
+
+test('pre-build exceptions park the case with an error and are not retried on the next drain', async t => {
+  const f = await fixture(t), b = builder([]);
+  let probes=0;
+  const cycle = new AutonomousLearning(f.root,b,{...sandbox, async available(){probes++;throw new Error('Readiness fixture failed');}});
+  await cycle.reconcile();
+  await cycle.drain({maxJobs:1,totalTimeoutMs:10000});
+  const item=(await cycle.list()).items[0]!;
+  assert.equal(item.status,'attention'); assert.match(item.lastError!,/Readiness fixture failed/);
+  assert.equal(item.ownerPid,null); assert.equal(item.retryAfter,null); assert.equal(item.attempts,0);
+  const firstProbes=probes;
+  assert.ok(firstProbes>0);
+  await cycle.drain({maxJobs:1,totalTimeoutMs:10000});
+  assert.equal(probes,firstProbes); assert.equal(b.calls.length,0);
+});
 async function appendCase(root: string, item: LearningCase, update: Partial<LearningCase>) {
   const revision = item.revision + 1;
   const next = LearningCaseSchema.parse({ ...item, ...update, revision, updatedAt: new Date().toISOString(),
@@ -118,6 +147,20 @@ test('prepared build and independent review jobs persist their visible stage bef
   assert.deepEqual(observed, ['building', 'reviewing']);
   assert.equal((await cycle.list()).items[0]!.status, 'attention');
 });
+test('successful reconciliation resolves a prior event error while preserving its warning receipt',async t=>{
+  const f=await fixture(t),cycle=new AutonomousLearning(f.root,builder([]),sandbox);
+  await cycle.reconcile();
+  const item=(await cycle.list()).items[0]!;
+  await appendCase(f.root,item,{status:'attention',attempts:2,retryAfter:null});
+  const errorPath=path.join(f.root,'artifacts/learning/last-error.json');
+  await fs.writeFile(errorPath,JSON.stringify({recordedAt:'2026-09-12T00:00:00Z',warning:'Temporary policy read error'}));
+  assert.ok((await cycle.list()).warnings.some(w=>w.includes('Temporary policy')));
+  await cycle.onEvent();
+  assert.equal((await cycle.list()).warnings.length,0);
+  const receipt=JSON.parse(await fs.readFile(errorPath,'utf8'));
+  assert.equal(receipt.warning,'Temporary policy read error');assert.ok(receipt.resolvedAt);
+});
+
 test('missing policy never schedules discovery or models', async t => {
   const f = await fixture(t), b = builder(['approved']);
   await fs.rename(path.join(f.root, 'profiles/learning-policy.json'), path.join(f.root, 'profiles/learning-policy.disabled.json'));

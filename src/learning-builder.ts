@@ -34,6 +34,11 @@ export interface LearningBuilderOptions { engineFactory?: (root: string) => Task
 
 /** Named checks parse artifacts only. They never import, run, or install files inside a generated bundle. */
 export class LearningBuildArtifacts {
+  /** Keep the immutable source receipt available when the worker reference budget is exceeded. */
+  static evidence(refs: string[], source: string): string[] {
+    const unique = [...new Set([source, ...refs])];
+    return KnowledgeEvidenceSchema.parse(unique.slice(0, 50));
+  }
   static async check(kind: 'bundle' | 'review', file: string, expectedHash?: string): Promise<void> {
     const stat = await fs.stat(file);
     if (!stat.isFile() || stat.size > 1024 * 1024) throw new Error('Learning build artifact is missing or oversized.');
@@ -81,7 +86,7 @@ export class LearningBuilder {
         routing: { taskClass: 'implementation', bounded: true, independentlyVerifiable: true, contextCoupling: 'low',
             complexity: input.attempt === 1 ? 'low' : 'high', uncertainty: input.attempt === 1 ? 'low' : 'high', risk: 'low', delegationBenefit: 'expected',
             rationale: input.attempt === 1 ? 'Bounded capability construction with explicit schema and independent review/tests.' : 'Repair after a rejected construction needs the coordinator to resolve the observed uncertainty.' },
-      }, policy.workerTimeoutMs, options, jobIds, stage);
+      }, LearningRuntimeStore.workerTimeout(policy,input.attempt), options, jobIds, stage);
       const rawBundlePath = `${base}/build/bundle.json`;
       const bundle = await this.files.read(rawBundlePath, LearningBundleInputSchema);
       if ([...bundle.entrypoints, ...bundle.tests].some(entry => !allowedRuntimes.includes(entry.runtime)))
@@ -156,7 +161,7 @@ export class LearningBuilder {
     return completed;
   }
   private details(): PrepareInput['taskDetails'] {
-    return { performanceScope: { taskClass: 'learning-capability-build', problemCategory: 'reusable-engineering-capability' },
+    return { networkAccess: false, performanceScope: { taskClass: 'learning-capability-build', problemCategory: 'reusable-engineering-capability' },
       requiredSourceLabels: ['learning-contract', 'learning-input'], contextBudgetChars: 48000,
       acceptanceCriteria: ['Emit the requested JSON artifact matching the canonical schema. Preserve the exact reviewed bundle.'],
       constraints: ['Only the owned learning workbench is writable. Generated code is data and must not run during synthesis or review.',

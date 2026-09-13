@@ -16,6 +16,7 @@ import {LearningApplications} from './learning-applications.js';
 import {LearningRuntimeStore} from './learning-runtime.js';
 import {AutonomousLearning} from './autonomous-learning.js';
 import {LearningRuntimeEffects} from './learning-runtime-effects.js';
+import {WorkPopulations,WorkPopulationSchema} from './work-population.js';
 
 export const DashboardViewSchema = z.enum(['overview','live','efficiency','project','evidence','learning']);
 export type DashboardView = z.output<typeof DashboardViewSchema>;
@@ -42,13 +43,15 @@ export class DashboardReader {
   }
   async screen(options:DashboardOptions={}) {
     const view=DashboardViewSchema.parse(options.view??'overview');
+    const groups=await WorkPopulations.read(this.root),population=WorkPopulationSchema.parse(options.population??'all');
+    const includeProject=(id:string|null|undefined)=>groups.includes(id,population);
     const historyOptions=EfficiencyHistoryInputSchema.parse({projectId:options.projectId,days:options.historyDays});
     const [overview,profiles,activity,operations,learningRuntime,learningCycle]=await Promise.all([
       this.reader.overview(options),
       this.source(async()=>{await fs.access(this.registry.registryPath);return this.registry.list();},'Project registry'),
       Promise.resolve(this.reader.projectActivity()),
       this.source(()=>new OperationsObservation(this.root).read(options.projectId,{offset:options.interactionOffset,limit:options.interactionLimit,status:options.interactionStatus}),'Operational receipts'),
-      view==='learning'?this.source(async()=>{
+      view==='learning'||view==='efficiency'?this.source(async()=>{
         const result=await new LearningRuntimeStore(this.root).list(options.projectId);
         return {warnings:result.warnings.map(message=>EvidenceSanitizer.text(message,400)),items:result.items.map(({manifest,state})=>({
           manifest:{hash:manifest.hash,candidateId:manifest.candidateId,projectId:manifest.projectId,
@@ -64,7 +67,7 @@ export class DashboardReader {
           },
         })).sort((a,b)=>(b.state.disabled?.recordedAt??b.state.updatedAt).localeCompare(a.state.disabled?.recordedAt??a.state.updatedAt)||a.manifest.hash.localeCompare(b.manifest.hash))};
       },'Executable learning capabilities'):Promise.resolve(null),
-      view==='learning'?this.source(async()=>{
+      view==='learning'||view==='overview'?this.source(async()=>{
         const result=await new AutonomousLearning(this.root).list(options.projectId);
         return {warnings:result.warnings.map(message=>EvidenceSanitizer.text(message,400)),items:result.items.map(item=>({
           id:item.id,projectId:item.projectId,status:item.status,title:EvidenceSanitizer.text(item.title,240),kind:item.kind,
@@ -81,7 +84,7 @@ export class DashboardReader {
     const projects=profiles.data?.map(profile=>({id:profile.id,name:EvidenceSanitizer.text(profile.name,160),status:profile.status,
       stack:profile.stack.map(item=>EvidenceSanitizer.text(item,80)),checks:profile.checks.map(item=>item.id),sourceCount:profile.sources.length,
       activity:activity.find(item=>item.projectId===profile.id)??{projectId:profile.id,total:0,active:0,completed:0,latestId:null,updatedAt:null}}))??[];
-    const evaluations=await this.source(()=>this.evaluations.list({projectId:options.projectId,limit:50,offset:options.evaluationOffset}),'Evaluation receipts');
+    const evaluations=await this.source(()=>this.evaluations.list({projectId:options.projectId,includeProject,limit:50,offset:options.evaluationOffset}),'Evaluation receipts');
     if(evaluations.data){evaluations.warnings=evaluations.data.warnings; evaluations.state=evaluations.warnings.length||evaluations.data.truncated?'partial':evaluations.data.total?'ready':'empty';}
     const needsRun=view==='live'||view==='evidence';
     const selectedId=options.jobId??overview.runs[0]?.id;
@@ -89,9 +92,9 @@ export class DashboardReader {
     const recovery=view==='evidence'?await this.source(()=>new RecoveryManager(this.root).observations(),'Recovery metadata'):null;
     if(recovery?.data){recovery.warnings=recovery.data.warnings;recovery.state=recovery.warnings.length?'partial':recovery.data.snapshots.length||recovery.data.verifications.length?'ready':'empty';}
     const comparison=view==='efficiency'&&options.comparison?await this.source(()=>this.evaluations.compare(options.comparison!),'Evaluation comparison'):null;
-    const insights=view==='efficiency'||view==='learning'?await this.source(()=>new OperationalInsights(this.root).observations({projectId:options.projectId}),'Automatic findings'):null;
+    const insights=view==='efficiency'||view==='learning'?await this.source(()=>new OperationalInsights(this.root).observations({projectId:options.projectId,includeProject}),'Automatic findings'):null;
     if(insights?.data){insights.warnings=insights.data.warnings;insights.state=insights.warnings.length||insights.data.truncated?'partial':insights.data.comparisons.length||insights.data.signals.length?'ready':'empty';}
-    const history=view==='efficiency'?await this.source(()=>new EfficiencyHistory(this.root).history(historyOptions),'Efficiency history'):null;
+    const history=view==='efficiency'?await this.source(()=>new EfficiencyHistory(this.root,{includeProject}).history(historyOptions),'Efficiency history'):null;
     if(history?.data){history.warnings=history.data.coverage.warnings;history.state=history.warnings.length||history.data.coverage.truncated?'partial':'ready';}
     const [improvements,runtimeEffects]=await Promise.all([
       history?.data?this.source(()=>new ImprovementImpactReader(this.root).read(history.data!,options.projectId),'Improvement effects'):Promise.resolve(null),
@@ -99,6 +102,8 @@ export class DashboardReader {
     ]);
     if(improvements?.data){improvements.warnings=improvements.data.warnings;improvements.state=improvements.warnings.length||improvements.data.truncated?'partial':improvements.data.cases.length?'ready':'empty';}
     if(runtimeEffects?.data){runtimeEffects.warnings=runtimeEffects.data.warnings;runtimeEffects.state=runtimeEffects.warnings.length||runtimeEffects.data.coverage.truncated?'partial':runtimeEffects.data.items.length?'ready':'empty';}
+    if(runtimeEffects?.data)runtimeEffects.data.items=runtimeEffects.data.items.filter(item=>includeProject(item.projectId));
+    if(improvements?.data)improvements.data.cases=improvements.data.cases.filter(item=>includeProject(item.projectId));
     const learningEffects=improvements?.data?await this.source(()=>new LearningApplications(this.root).readEffects(improvements.data!.cases.map(candidate=>candidate.candidateId)),'Learning token effects'):null;
     if(learningEffects?.data){learningEffects.warnings=learningEffects.data.warnings;learningEffects.state=learningEffects.warnings.length?'partial':'ready';}
     const learning=view==='learning'?{

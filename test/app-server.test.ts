@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AppServerClient, AppServerError } from '../src/app-server.js';
+import { AppServerClient, AppServerError, type AppServerOptions } from '../src/app-server.js';
 
 // Each test launches only this inline JSONL fixture, never Codex or a model.
-function fixture(body = '', timeout = 2_000): AppServerClient {
+function fixture(body = '', timeout = 2_000, options: Partial<AppServerOptions> = {}): AppServerClient {
   const script = `
     const readline = require('node:readline');
     const send = message => process.stdout.write(JSON.stringify(message) + '\\n');
@@ -15,7 +15,7 @@ function fixture(body = '', timeout = 2_000): AppServerClient {
       ${body}
     });
   `;
-  return new AppServerClient({ command: process.execPath, args: ['-e', script], requestTimeoutMs: timeout });
+  return new AppServerClient({ command: process.execPath, args: ['-e', script], requestTimeoutMs: timeout, ...options });
 }
 
 test('initializes once, correlates out-of-order requests and streams notifications', async t => {
@@ -140,6 +140,21 @@ test('account probe refuses API key auth and preserves unauthenticated status', 
   t.after(() => Promise.all([api.close(), none.close()]));
   await assert.rejects(api.probeAccount(), { code: 'AUTH_MODE_REFUSED' });
   assert.deepEqual(await none.probeAccount(), { type: null, rateLimits: null });
+});
+
+test('selected GitHub login is child-scoped while ambient credentials stay excluded', async t => {
+  const previous = process.env.GH_TOKEN;
+  process.env.GH_TOKEN = 'ambient-placeholder';
+  const script = `send({id:message.id,result:{selected:process.env.GH_TOKEN==='selected-test-placeholder',ambient:process.env.GH_TOKEN==='ambient-placeholder'}});`;
+  const isolated = fixture(script);
+  const selected = fixture(script, 2000, {gitHubAuth:true,githubTokenProvider:async()=> 'selected-test-placeholder'});
+  t.after(() => Promise.all([isolated.close(), selected.close()]));
+  try {
+    await isolated.connect(); await selected.connect();
+    assert.deepEqual(await isolated.request('check'), {selected:false,ambient:false});
+    assert.deepEqual(await selected.request('check'), {selected:true,ambient:false});
+    assert.equal(process.env.GH_TOKEN, 'ambient-placeholder');
+  } finally { if(previous===undefined)delete process.env.GH_TOKEN;else process.env.GH_TOKEN=previous; }
 });
 
 test('child environment omits API credentials while preserving existing login location', async t => {

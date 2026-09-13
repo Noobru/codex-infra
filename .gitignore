@@ -5,6 +5,7 @@ state/
 artifacts/
 profiles/*
 !profiles/model-routing.json
+!profiles/observation.json
 workspaces/
 recovery/
 imports/

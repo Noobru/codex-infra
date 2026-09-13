@@ -209,7 +209,7 @@ export class TaskEngine {
       }
       const currentContext = await this.registry.context(runtimeProfile);
       await atomicWriteJson(path.join(attempt, 'before.json'), currentContext);
-      const taskContract=manifest.taskContract??new TaskContractBuilder().build({projectId:job.projectId,objective:job.objective,mode:job.mode,kind:manifest.kind,checkIds:manifest.checkIds,requirementIds:manifest.requirementIds});
+      const taskContract=manifest.taskContract??new TaskContractBuilder().build({projectId:job.projectId,objective:job.objective,mode:job.mode,kind:manifest.kind,checkIds:manifest.checkIds,requirementIds:manifest.requirementIds,details:{networkAccess:false}});
       const {contextPack,knowledge}=await this.contextPack(runtimeProfile,currentContext,taskContract);
       await atomicWriteJson(path.join(attempt,'knowledge.json'),knowledge);
       const capabilityPlan=new CapabilityPlanner().plan(runtimeProfile,taskContract,contextPack);
@@ -226,6 +226,8 @@ export class TaskEngine {
       if (manifest.kind === 'codex') {
         await evidence.effect('worker-dispatch','allow','One model turn under the saved routing contract and runtime admission');
         const result = await this.worker.run({cwd: runtimeProfile.root, mode: job.mode, objective: job.objective,
+          networkAccess: taskContract.details.networkAccess ?? false,
+          gitHubAuth: taskContract.details.gitHubAuth ?? false,
           context: JSON.stringify({taskContract,contextPack,capabilityPlan,previousAttempt,dependencyHandoffs}), ...(job.threadId ? {threadId: job.threadId} : {}), timeoutMs,
           ...(manifest.routing?{routing:manifest.routing}:{}),
           ...(manifest.routingPolicy?{routingPolicy:manifest.routingPolicy}:{}),
@@ -249,7 +251,7 @@ export class TaskEngine {
         if (controller.signal.aborted) return this.state.transition(id, 'cancelled');
         const logPrefix=path.join(attempt,'check-'+String(checks.length+1));
         await evidence.effect('check:'+checkId,'allow','Named check selected in the immutable task contract');
-        checks.push(await this.registry.check(runtimeProfile, checkId, job.mode,{signal:controller.signal,outputFiles:{stdout:logPrefix+'.stdout.log',stderr:logPrefix+'.stderr.log'},execution:{jobId:id,attempt:job.attempts,baseSha:manifest.workspace?.baseSha??null,targetSha:validationContext.git.head,artifactDir:logPrefix}}));
+        checks.push(await this.registry.check(runtimeProfile, checkId, job.mode,{signal:controller.signal,outputFiles:{stdout:logPrefix+'.stdout.log',stderr:logPrefix+'.stderr.log'},execution:{jobId:id,attempt:job.attempts,baseSha:taskContract.details.comparisonBaseSha??manifest.workspace?.baseSha??null,targetSha:validationContext.git.head,artifactDir:logPrefix}}));
         await atomicWriteJson(path.join(attempt, 'checks.json'), checks);
         await evidence.effect('check-result:'+checkId,'allow','Check completed; acceptance is evaluated separately','exit='+String(checks.at(-1)!.exitCode)+'; cleanupConfirmed='+String(!checks.at(-1)!.cleanupFailed));
         if (checks.at(-1)!.cleanupFailed) return this.state.transition(id, 'validating', {error: 'Unconfirmed cleanup: acceptance check process. Inspect attempt evidence and confirm shutdown before releasing this lock.'});

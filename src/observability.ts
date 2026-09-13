@@ -6,6 +6,7 @@ import { EvidenceSanitizer } from './evidence.js';
 import { readJson, resolveRealSubPath } from './legacy/command-os-utils.js';
 import { RoutingDecisionSchema } from './routing.js';
 import {PerformanceScopeSchema} from './performance-scope.js';
+import {WorkPopulations,WorkPopulationSchema,type WorkPopulation} from './work-population.js';
 
 const shortText = z.string().transform(value => EvidenceSanitizer.text(value, 400));
 const measuredNumber = z.number().finite().nonnegative();
@@ -77,7 +78,7 @@ export interface ObservationSummary {
   completedTechnical: boolean; accepted: null; elapsedWallClockMs: number | null;
   durationBasis: 'created-to-last-update' | 'created-to-observation'; resultSummary: string | null; errorSummary: string | null;
 }
-export interface ObservationOverviewOptions { projectId?: string; limit?: number; offset?: number; status?: string; query?: string; sort?: 'newest' | 'oldest' }
+export interface ObservationOverviewOptions { projectId?: string; population?:WorkPopulation; limit?: number; offset?: number; status?: string; query?: string; sort?: 'newest' | 'oldest' }
 export interface ObservationRunOptions { afterEventId?: number; limit?: number }
 
 /** Reads the canonical queue and bounded owned receipts. No writes, job dispatch, or acceptance inference. */
@@ -96,7 +97,9 @@ export class ObservationReader {
     const limit = this.pageNumber(options.limit, 20, 100, true);
     const offset = this.pageNumber(options.offset, 0, Number.MAX_SAFE_INTEGER);
     const observedAt = new Date().toISOString();
-    const selected = this.state.list().filter(job => options.projectId === undefined || job.projectId === options.projectId).reverse();
+    const population=WorkPopulationSchema.parse(options.population??'all'),groups=await WorkPopulations.read(this.root);
+    const scope = this.state.list().filter(job => options.projectId === undefined || job.projectId === options.projectId).reverse();
+    const selected=scope.filter(job=>groups.includes(job.projectId,population));
     const byStatus = Object.fromEntries(statuses.map(status => [status, selected.filter(job => job.status === status).length])) as Record<JobStatus, number>;
     if (options.status && !['all', 'waiting', ...statuses].includes(options.status)) throw new Error('Invalid status filter');
     const matching = selected.filter(job => (!options.status || options.status === 'all' || (options.status === 'waiting' ? job.status.startsWith('waiting_') : job.status === options.status))
@@ -104,12 +107,14 @@ export class ObservationReader {
     matching.sort((a, b) => (options.sort === 'oldest' ? 1 : -1) * (a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)));
     return {
       observedAt, projectId: options.projectId ?? null,
-      filters:{status:options.status??'all',query:options.query??'',sort:options.sort??'newest'},
+      filters:{status:options.status??'all',query:options.query??'',sort:options.sort??'newest',population},
+      populations:['operational','fixture','learning','unclassified'].map(category=>({category,total:scope.filter(job=>groups.category(job.projectId)===category).length,failed:scope.filter(job=>groups.category(job.projectId)===category&&job.status==='failed').length})),
+      classificationWarnings:groups.warnings,
       scopeTotal: selected.length,
       page: { limit, offset, total: matching.length, nextOffset: offset + limit < matching.length ? offset + limit : null },
       counts: { byStatus, completedTechnical: byStatus.completed, accepted: null,
         retriesObserved: selected.reduce((count, job) => count + Math.max(0, job.attempts - 1), 0) },
-      runs: matching.slice(offset, offset + limit).map(job => this.summary(job, observedAt)),
+      runs: matching.slice(offset, offset + limit).map(job => ({...this.summary(job, observedAt),population:groups.category(job.projectId)})),
       unknown: { ownerMinutes: null, cost: null, efficiency: null },
       limitations: ['Completion is the recorded technical state, not owner acceptance.', 'Duration is elapsed wall clock and includes waiting; it is not human effort or model compute time.', 'Model turns, tokens, and quota are shown only in run receipts when observed.'],
     };

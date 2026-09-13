@@ -2,12 +2,14 @@ import {EvaluationStore,type EvaluationReceipt,type EvaluationMetric} from './ev
 import {KnowledgeLearningStore,type KnowledgeCandidate} from './knowledge-learning.js';
 import type {EfficiencyHistoryResult} from './efficiency-history.js';
 import {OperationalInsights,type AttemptExecutionEvidence} from './operational-insights.js';
+import {LearningRuntimeEffects,type LearningRuntimeUsage} from './learning-runtime-effects.js';
 
 export interface ImprovementSample {
   attempts:number;knownOutcomes:number;failedAttempts:number;failureRate:number|null;repeatAttempts:number;
   evaluationIds:string[];jobIds:string[];
 }
 export interface ImprovementImpact {
+  runtime?:Pick<LearningRuntimeUsage,'status'|'hash'|'activatedAt'|'disabledAt'|'executions'|'passed'|'failed'>;
   candidateId:string;projectId:string;title:string;kind:string;status:string;problem:string;proposedChange:string;language:string|null;
   expectedChange:string|null;introducedAt:string|null;reversedAt:string|null;contextInclusions:number;
   baseline:ImprovementSample;after:ImprovementSample;failureRateDelta:number|null;repeatAttemptDelta:number|null;
@@ -94,7 +96,18 @@ export class ImprovementImpactReader {
         comparisons:this.metricDifferences(before,after,key),evidence:[...new Set([candidate.artifactPath,...candidate.originEvidence.refs,
           ...before.map(r=>r.artifactPath),...after.map(r=>r.artifactPath),...[...before,...after].flatMap(receipt=>observed.get(receipt.jobId+'/'+receipt.attempt)?.evidence??[]),...bindings.flatMap(binding=>binding.evidence)])],nextEvidence});
     }
-    return {cases,warnings:[...new Set(warnings)],truncated:knowledge.items.length>100||offset!==null||inventoryTruncated||executionTruncated,
+    const runtime=await new LearningRuntimeEffects(this.root).read({projectId,history});
+    warnings.push(...runtime.warnings);
+    for(const item of cases){
+      const capabilities=runtime.items.filter(cap=>cap.candidateId===item.candidateId).sort((a,b)=>(b.activatedAt??'').localeCompare(a.activatedAt??''));
+      const cap=capabilities.find(cap=>cap.status==='active')??capabilities[0];
+      if(cap){
+        item.runtime={status:cap.status,hash:cap.hash,activatedAt:cap.activatedAt,disabledAt:cap.disabledAt,executions:cap.executions,passed:cap.passed,failed:cap.failed};
+        item.nextEvidence=item.nextEvidence.filter(text=>!text.includes('before an explicit promotion'));
+        item.nextEvidence.push(cap.status==='active'?(cap.executions?'Compare attributed executions with compatible baselines; savings are not established.':'Capability active; awaiting its first recorded execution.'):`Executable version is ${cap.status}; activation is separate from manual knowledge promotion.`);
+      }
+    }
+    return {cases,warnings:[...new Set(warnings)],truncated:knowledge.items.length>100||offset!==null||inventoryTruncated||executionTruncated||runtime.coverage.truncated,
       method:'Declared baseline versus evaluated attempts with captured execution windows, matching task scope/check commands and exact promoted content in context. Counts include failed gates; outcome deltas require one compatible cohort and metric averages use individual observations only. Context inclusion does not certify correct application or cause.',
       tokens:'Desktop token trends are measured per completed turn; they are not assigned to an individual error or candidate without a matching scoped record.'};
   }

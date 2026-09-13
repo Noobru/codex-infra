@@ -5,6 +5,9 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
 export interface AppServerOptions {
+  /** Reuse the host's existing GitHub CLI login in this child only. Never persisted. */
+  gitHubAuth?: boolean;
+  githubTokenProvider?: () => Promise<string>;
   codexPath?: string;
   cwd?: string;
   requestTimeoutMs?: number;
@@ -60,7 +63,7 @@ export function localCodexBinary(): string {
 
 function childEnvironment(): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-    !/(?:api_?key|access_?token|auth_?token)/i.test(key)
+    !/(?:key|token|secret|password|credential)/i.test(key)
     && !/^(OPENAI_BASE_URL|OPENAI_ORG_ID|OPENAI_PROJECT_ID)$/i.test(key)));
 }
 
@@ -122,8 +125,17 @@ export class AppServerClient {
       const args = this.options.command ? this.options.args ?? [] : [
         'app-server', '-c', 'forced_login_method="chatgpt"', '-c', 'model_provider="openai"',
       ];
+      const env = childEnvironment();
+      if (this.options.gitHubAuth) {
+        const token = await (this.options.githubTokenProvider ?? (() => new Promise<string>((resolve, reject) => {
+          execFile('gh', ['auth', 'token', '--hostname', 'github.com'], { encoding: 'utf8', windowsHide: true, timeout: 10000, env },
+            (error, stdout) => error ? reject(new AppServerError('Existing GitHub CLI authentication is unavailable.', 'GITHUB_AUTH_UNAVAILABLE')) : resolve(stdout.trim()));
+        })))();
+        if (!token || /[\r\n]/.test(token)) throw new AppServerError('Existing GitHub CLI authentication is unavailable.', 'GITHUB_AUTH_UNAVAILABLE');
+        env.GH_TOKEN = token;
+      }
       const child = spawn(command, args, {
-        cwd: this.options.cwd, env: childEnvironment(), shell: false, windowsHide: true,
+        cwd: this.options.cwd, env, shell: false, windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       this.child = child;

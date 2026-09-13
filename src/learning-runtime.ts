@@ -55,6 +55,7 @@ export const LearningActivationPolicySchema = z.object({
   maxBuildAttempts: z.number().int().min(1).max(5).default(2),
   maxCasesPerDrain: z.number().int().min(1).max(20).default(1),
   workerTimeoutMs: z.number().int().min(1000).max(600000).default(300000),
+  repairWorkerTimeoutMs: z.number().int().min(1000).max(600000).optional(),
 }).strict();
 export type LearningActivationPolicy = z.output<typeof LearningActivationPolicySchema>;
 export type LearningPolicyReader = () => Promise<LearningActivationPolicy | null>;
@@ -120,6 +121,9 @@ export type LearningRunReceipt = z.output<typeof LearningRunReceiptSchema>;
 
 /** Versioned local capabilities share KnowledgeFiles and the existing candidate/review provenance. */
 export class LearningRuntimeStore {
+  static workerTimeout(policy:LearningActivationPolicy,attempt:number):number {
+    return attempt>1 ? policy.repairWorkerTimeoutMs??Math.min(600000,2*policy.workerTimeoutMs) : policy.workerTimeoutMs;
+  }
   private readonly files: KnowledgeFiles;
   private readonly learning: KnowledgeLearningStore;
   constructor(readonly root: string, private readonly executor?: LearningSandboxExecutor, private readonly policyReader?: LearningPolicyReader) {

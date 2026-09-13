@@ -169,4 +169,10 @@ Se estiver no terminal que iniciou esse processo, `Ctrl+C` o encerra. Para proce
 
 ## Validação local
 
+### Escopo das observações
+
+Overview e Efficiency permitem selecionar trabalho operacional, fixtures de teste, geração de aprendizado, registros sem classificação ou todo o histórico. A configuração local `profiles/observation.json` associa IDs de projetos a `operational`, `fixture` ou `learning`. Cadastre ali novos projetos para incluí-los no escopo operacional; IDs desconhecidos ficam em `unclassified`, visíveis no resumo e no filtro. Workbenches criados pelo aprendizado em `artifacts/learning/builds` são reconhecidos pela raiz registrada. Nenhum título é usado para inferir se uma falha é de teste.
+
+O filtro afeta contagens de runs e medições de eficiência; a fila de aprendizado e os recibos operacionais mantêm seus próprios escopos de projeto. Falhas históricas permanecem consultáveis. Uma capacidade ativa pode ter zero execuções: ativação, uso observado e economia demonstrada são evidências diferentes.
+
 `npm run verify` executa build, a suíte completa do núcleo e typecheck/build da UI, preservando um recibo na área local de artefatos. Não gera uma tarefa de modelo e não publica no GitHub. Após alterações posteriores no candidato, revalide antes de um push.

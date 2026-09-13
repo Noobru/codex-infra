@@ -99,6 +99,10 @@ node dist/src/cli.js capability-disable HASH_COMPLETO --file owner-decision.loca
 
 ## Evidência e acompanhamento
 
+Referências de evidência enviadas à construção, revisão e ativação respeitam o limite de 50 por contrato. O primeiro item aponta ao recibo imutável que conserva a origem completa; a história do caso não é truncada. Exceções anteriores ao build ficam em `attention`, com a causa registrada e sem repetição automática cega. Falhas de supervisor aparecem no painel; um erro de entrada resolvido por reconciliação bem-sucedida mantém o recibo com `resolvedAt`.
+
+`workerTimeoutMs` limita a primeira construção e a revisão. O reparo usa o dobro desse prazo, limitado a 600.000 ms; `repairWorkerTimeoutMs`, opcional em processos atualizados, permite um limite explícito dentro do mesmo teto. O supervisor usa o orçamento compartilhado. O número máximo de tentativas não aumenta e um caso já esgotado não é reaberto automaticamente. Mantenha o campo opcional ausente enquanto MCPs antigos ainda estiverem carregados; o cálculo padrão já oferece o prazo de reparo sem invalidar a política nesses processos.
+
 | Artefato | O que comprova |
 |---|---|
 | `artifacts/learning/cases/` | Caso, origem, tentativas, jobs, estado e próximo impedimento. |

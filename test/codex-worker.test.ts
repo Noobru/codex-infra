@@ -14,7 +14,7 @@ const qualifiedRouting: TaskQualification = {
   rationale: 'Inspect the manifest as a bounded, independently verifiable task.',
 };
 const base: WorkerInput = {
-  cwd, mode: 'read-only', objective: 'Inspect the project manifest.', context: '', timeoutMs: 2_000,
+  cwd, mode: 'read-only', networkAccess: false, objective: 'Inspect the project manifest.', context: '', timeoutMs: 2_000,
   routing: qualifiedRouting, routingPolicy: DEFAULT_ROUTING_CONFIGURATION,
 };
 
@@ -25,6 +25,7 @@ class FakeTransport implements WorkerTransport {
   auth = 'chatgpt';
   quota = 94;
   effectiveMode = 'readOnly';
+  wrongNetwork = false;
   active = false;
   resumeId = 'thread-1';
   models=[{id:'gpt-6-astra',model:'gpt-6-astra',supportedReasoningEfforts:[{reasoningEffort:'ultra'}]},{id:'gpt-5.6-luna',model:'gpt-5.6-luna',supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'medium'}]}];
@@ -48,7 +49,7 @@ class FakeTransport implements WorkerTransport {
     if(method==='model/list')return {data:this.models,nextCursor:null} as T;
     if (method === 'thread/start' || method === 'thread/resume') return {
       thread: { id: this.resumeId, cwd, status: { type: this.active ? 'active' : 'idle' } }, cwd,
-      sandbox: { type: this.effectiveMode, networkAccess: false, writableRoots: [cwd], excludeTmpdirEnvVar: true, excludeSlashTmp: true },
+      sandbox: { type: this.effectiveMode, networkAccess: this.wrongNetwork ? !params.config['sandbox_workspace_write.network_access'] : this.effectiveMode === 'readOnly' ? false : params.config['sandbox_workspace_write.network_access'], writableRoots: [cwd], excludeTmpdirEnvVar: true, excludeSlashTmp: true },
       approvalPolicy: 'on-request', modelProvider: 'openai', model: this.wrongModel?'wrong-model':params.model??'user-configured-model', reasoningEffort:this.wrongEffort?'ultra':params.config?.model_reasoning_effort??null,
       instructionSources: [path.join(cwd, 'AGENTS.md'), 123, 'not-an-absolute-path'],
     } as T;
@@ -74,7 +75,7 @@ async function engineFixture(t: TestContext, transport: FakeTransport) {
   await fs.mkdir(path.join(root, 'profiles'));
   await fs.writeFile(path.join(root, 'profiles', 'registry.json'), JSON.stringify({ version: 1, projects: [{
     id: 'routing-fixture', name: 'Routing fixture', aliases: [], root: process.cwd(), status: 'active',
-    stack: ['node'], modes: ['read-only'], sourceRoots: [], sources: [],
+    stack: ['node'], modes: ['read-only', 'workspace-write'], sourceRoots: [], sources: [],
     checks: [{ id: 'node-version', executable: process.execPath, args: ['--version'], readOnly: true }],
   }] }));
   const engine = new TaskEngine(root, worker(transport));
@@ -234,6 +235,52 @@ test('workspace-write requests exact writable root and no network access', async
   assert.deepEqual(turn.sandboxPolicy.writableRoots, [cwd]);
   assert.equal(turn.sandboxPolicy.networkAccess, false);
   assert.equal(turn.sandboxPolicy.excludeTmpdirEnvVar, true);
+});
+
+test('delegated network authority reaches the runtime and preserves the exact workspace boundary', async t => {
+  const transport = new FakeTransport(); transport.effectiveMode = 'workspaceWrite';
+  const { engine, root } = await engineFixture(t, transport);
+  const delegated = await engine.delegate({
+    project: 'routing-fixture', objective: 'Read the authorized remote issue', idempotencyKey: 'network-task',
+    mode: 'workspace-write', checkIds: ['node-version'], qualification: qualifiedRouting,
+    taskDetails: { networkAccess: true, gitHubAuth: true, constraints: ['Read remote issue only; do not publish.'] },
+  });
+  assert.equal(delegated.job.status, 'completed');
+  const thread = transport.calls.find(call => call.method === 'thread/start')!.params;
+  const turn = transport.calls.find(call => call.method === 'turn/start')!.params;
+  assert.equal(thread.config['sandbox_workspace_write.network_access'], true);
+  assert.equal(turn.sandboxPolicy.networkAccess, true);
+  assert.deepEqual(turn.sandboxPolicy.writableRoots, [cwd]);
+  const manifest = JSON.parse(await fs.readFile(path.join(root, 'artifacts/jobs', delegated.job.id, 'manifest.json'), 'utf8'));
+  assert.equal(manifest.taskContract.details.networkAccess, true);
+  assert.equal(manifest.taskContract.details.gitHubAuth, true);
+  assert.equal(thread.config['shell_environment_policy.ignore_default_excludes'], true);
+});
+
+test('effective network mismatch blocks generation instead of silently changing authority', async () => {
+  const transport = new FakeTransport(); transport.effectiveMode = 'workspaceWrite'; transport.wrongNetwork = true;
+  const result = await worker(transport).run({ ...base, mode: 'workspace-write', networkAccess: true });
+  assert.equal(result.status, 'blocked');
+  assert.equal(transport.calls.some(call => call.method === 'turn/start'), false);
+});
+
+test('ordinary read-only delegation has network without granting filesystem write access', async t => {
+  const transport = new FakeTransport();
+  const { engine } = await engineFixture(t, transport);
+  const delegated = await engine.delegate({
+    project: 'routing-fixture', objective: 'Read an authorized remote source', idempotencyKey: 'read-only-network-default',
+    mode: 'read-only', checkIds: ['node-version'], qualification: qualifiedRouting,
+  });
+  assert.equal(delegated.job.status, 'completed');
+  const turn = transport.calls.find(call => call.method === 'turn/start')!.params;
+  assert.deepEqual(turn.sandboxPolicy, { type: 'readOnly', networkAccess: true });
+});
+
+test('local-file learning cannot acquire network through a task override', async () => {
+  const transport = new FakeTransport();
+  const result = await new CodexWorker({ clientFactory: () => transport, localFilesOnly: true }).run({ ...base, mode: 'workspace-write', networkAccess: true });
+  assert.equal(result.status, 'blocked');
+  assert.equal(transport.calls.length, 0);
 });
 
 test('approval refusal becomes blocked after interrupt and transport cleanup', async () => {

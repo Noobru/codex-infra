@@ -6,6 +6,7 @@ import {ObservationReader} from './observability.js';
 import {DashboardReader, DashboardViewSchema} from './dashboard.js';
 import {InteractionStatusSchema} from './interactions.js';
 import {EfficiencyHistoryInputSchema} from './efficiency-history.js';
+import {WorkPopulationSchema} from './work-population.js';
 
 /** Local human view: one read-only reader, no dispatch endpoints or second source of truth. */
 export class ObservationServer {
@@ -30,6 +31,7 @@ export class ObservationServer {
         let data:unknown;
         if(url.pathname==='/api/view')data=await this.dashboard.screen({
           view:DashboardViewSchema.parse(url.searchParams.get('view')??'overview'),
+          population:WorkPopulationSchema.parse(url.searchParams.get('population')??'all'),
           projectId:url.searchParams.get('project_id')||undefined,jobId:url.searchParams.get('job_id')||undefined,
           status:url.searchParams.get('status')||undefined,query:url.searchParams.get('query')||undefined,
           sort:url.searchParams.get('sort')==='oldest'?'oldest':'newest',limit:n('limit'),offset:n('offset'),afterEventId:n('after_event_id'),evaluationOffset:n('evaluation_offset'),

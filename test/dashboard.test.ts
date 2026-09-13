@@ -6,6 +6,26 @@ import {fileURLToPath} from 'node:url';
 import {DashboardFixture} from './fixtures/dashboard-fixture.js';
 import {DashboardReader} from '../src/dashboard.js';
 import {ObservationServer} from '../src/observation-server.js';
+import {WorkPopulations} from '../src/work-population.js';
+
+test('population filters keep fixture failures and measurements separate without guessing from names',async t=>{
+  const parent=fileURLToPath(new URL('../../artifacts/test-fixtures/',import.meta.url));
+  await fs.mkdir(parent,{recursive:true});const root=await fs.mkdtemp(path.join(parent,'population-'));
+  const fixture=await new DashboardFixture(root).seed(),reader=new DashboardReader(root);
+  t.after(async()=>{reader.close();await fixture.finish();await fs.rm(root,{recursive:true,force:true});});
+  await fs.writeFile(path.join(root,'profiles/observation.json'),JSON.stringify({version:1,projects:{'ui-completed':'fixture','ui-failed':'operational'}}));
+  const groups=await WorkPopulations.read(root);
+  assert.equal(groups.category('looks-like-a-fixture'),'unclassified');
+  const all=await reader.screen(),real=await reader.screen({view:'efficiency',population:'operational'}),synthetic=await reader.screen({view:'efficiency',population:'fixture'});
+  assert.equal(all.overview.scopeTotal,28);
+  assert.equal(real.overview.scopeTotal,1);assert.equal(real.overview.counts.byStatus.failed,1);
+  assert.equal(synthetic.overview.scopeTotal,23);assert.equal(synthetic.overview.counts.byStatus.failed,0);
+  assert.equal(real.evaluations.data!.total,0);assert.equal(synthetic.evaluations.data!.total,1);
+  assert.equal(real.overview.populations.reduce((n,p)=>n+p.total,0),all.overview.scopeTotal);
+  assert.ok(real.history!.data!.projects.every(p=>p.id==='ui-failed'));
+  assert.ok(synthetic.history!.data!.projects.every(p=>p.id==='ui-completed'));
+  const emptyPage=await reader.screen({population:'fixture',offset:23});assert.equal(emptyPage.overview.runs.length,0);
+});
 
 test('aggregate views use canonical records and never require registered product roots',async t=>{
   const parent=fileURLToPath(new URL('../../artifacts/test-fixtures/',import.meta.url));

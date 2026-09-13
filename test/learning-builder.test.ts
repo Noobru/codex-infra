@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test, { type TestContext } from 'node:test';
 import { TaskEngine } from '../src/engine.js';
 import { LearningBuilder, LearningBuildError, type LearningBuildInput } from '../src/learning-builder.js';
-import { LearningActivationPolicySchema } from '../src/learning-runtime.js';
+import { LearningActivationPolicySchema, LearningRuntimeStore } from '../src/learning-runtime.js';
 import { RoutingPolicy } from '../src/routing.js';
 import type { WorkerInput, WorkerResult } from '../src/codex-worker.js';
 import { StateStore } from '../src/state.js';
@@ -59,6 +59,18 @@ test('builder uses two queue jobs, independent owned workspaces, schema-only che
   assert.deepEqual(await f.builder.build(buildInput), result);
   assert.equal(f.calls.length, 2);
   await assert.rejects(f.builder.build({ ...buildInput, content: 'Different request under the same attempt.' }), /Immutable knowledge content/);
+});
+
+test('repair has its own bounded worker deadline while initial build and review retain their budget',async t=>{
+  const f=await fixture(t),file=path.join(f.root,'profiles/learning-policy.json');
+  const policy=JSON.parse(await fs.readFile(file,'utf8'));
+  assert.equal(LearningRuntimeStore.workerTimeout(policy,1),300000);
+  assert.equal(LearningRuntimeStore.workerTimeout(policy,2),600000);
+  assert.equal(LearningRuntimeStore.workerTimeout({...policy,workerTimeoutMs:400000},2),600000);
+  await fs.writeFile(file,JSON.stringify({...policy,workerTimeoutMs:300000,repairWorkerTimeoutMs:600000}));
+  await f.builder.build({...buildInput,attempt:2,feedback:'Review found a concrete mismatch.'});
+  assert.deepEqual(f.calls.map(call=>call.timeoutMs),[600000,300000]);
+  assert.equal(new RoutingPolicy().decide(f.calls[0]!.routing!).candidate!.model,'gpt-6-astra');
 });
 
 test('quota failure preserves waiting job identity and stops before review', async t => {

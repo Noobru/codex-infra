@@ -97,12 +97,13 @@ export class OperationalInsights {
     return result;
   }
 
-  async observations(raw:{projectId?:string;limit?:number}={}):Promise<InsightObservation> {
+  async observations(raw:{projectId?:string;limit?:number;includeProject?:(id:string)=>boolean}={}):Promise<InsightObservation> {
     const options=optionsSchema.parse(raw),inventory=await this.inventory(options.projectId);
     const result:InsightObservation={comparisons:[],signals:[],warnings:inventory.warnings,truncated:inventory.truncated};
     // Preserve manual evaluations. For automatic re-captures, only the latest receipt for each source attempt is current.
     const current=new Map<string,EvaluationReceipt>();
     for(const receipt of inventory.items) {
+      if(raw.includeProject&&!raw.includeProject(receipt.projectId))continue;
       const identity=receipt.source===policyVersion?`${receipt.jobId}/${receipt.attempt}/${receipt.source}`:receipt.id;
       if(!current.has(identity))current.set(identity,receipt);
     }

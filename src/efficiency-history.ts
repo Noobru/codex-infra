@@ -66,8 +66,10 @@ export class EfficiencyHistory {
   private readonly calendar:Intl.DateTimeFormat;
   private readonly limits:HistoryLimits;
   private readonly now:()=>Date;
+  private readonly includeProject:(id:string|null|undefined)=>boolean;
   readonly timeZone:string;
-  constructor(readonly root:string,options:{clock?:()=>Date;timeZone?:string;limits?:Partial<HistoryLimits>}={}) {
+  constructor(readonly root:string,options:{clock?:()=>Date;timeZone?:string;limits?:Partial<HistoryLimits>;includeProject?:(id:string|null|undefined)=>boolean}={}) {
+    this.includeProject=options.includeProject??(()=>true);
     this.files=new KnowledgeFiles(root);this.timeZone=options.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone;this.now=options.clock??(()=>new Date());
     this.calendar=new Intl.DateTimeFormat('en-CA',{timeZone:this.timeZone,year:'numeric',month:'2-digit',day:'2-digit'});
     this.limits={...defaultLimits,...options.limits};
@@ -109,7 +111,7 @@ export class EfficiencyHistory {
     try {
       const profiles=await new ProjectRegistry(path.join(this.root,'profiles/registry.json')).list();
       const languages=new Set(['javascript','typescript','python','go','rust','java','c','c++','c#','ruby','php','kotlin','swift','scala','elixir','erlang','dart','sql']);
-      result.projects=profiles.filter(profile=>!projectId||profile.id===projectId).map(profile=>({id:profile.id,name:EvidenceSanitizer.text(profile.name,240),declaredStack:profile.stack.map(value=>EvidenceSanitizer.text(value,100)),
+      result.projects=profiles.filter(profile=>this.includeProject(profile.id)&&(!projectId||profile.id===projectId)).map(profile=>({id:profile.id,name:EvidenceSanitizer.text(profile.name,240),declaredStack:profile.stack.map(value=>EvidenceSanitizer.text(value,100)),
         languages:profile.stack.filter(value=>languages.has(value.trim().toLowerCase())),source:'profiles/registry.json'}));
     }catch(error){this.warn(result,'Project metadata: '+this.error(error));}
   }
@@ -118,7 +120,7 @@ export class EfficiencyHistory {
     const kinds=new Map<string,Kind>(),snapshots:Snapshot[]=[];let state:StateStore|undefined,reader:ObservationReader|undefined,legacyKindOverrides=0;
     try {
       state=new StateStore(path.join(this.root,'state/jobs.sqlite'),{readOnly:true});reader=new ObservationReader(this.root);
-      const all=state.list().filter(job=>!projectId||job.projectId===projectId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
+      const all=state.list().filter(job=>this.includeProject(job.projectId)&&(!projectId||job.projectId===projectId)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
       const selected=all.slice(0,this.limits.jobs);Object.assign(result.coverage.jobs,{available:all.length,inspected:selected.length,truncated:all.length>selected.length});
       result.coverage.attempts.available=selected.reduce((sum,job)=>sum+job.attempts,0);
       for(const job of selected) {
@@ -210,7 +212,7 @@ export class EfficiencyHistory {
           try {record=revision===latest.revision?latest:await store.read(id,revision);result.coverage.interactionRevisions.inspected++;}
           catch(error){opened=undefined;previous=undefined;this.warn(result,`${id}/revision-${revision}: ${this.error(error)}`);continue;}
           if(record.change.kind==='import'||record.status==='imported')continue;
-          if(record.route!=='direct'||(projectId&&record.projectId!==projectId)){opened=undefined;previous=undefined;continue;}
+          if(record.route!=='direct'||!this.includeProject(record.projectId)||(projectId&&record.projectId!==projectId)){opened=undefined;previous=undefined;continue;}
           if(previous&&previous.projectId!==record.projectId){opened=undefined;previous=undefined;}
           if(record.status==='open'&&(!previous||['completed','cancelled'].includes(previous.status))) {
             opened=revision===1||record.change.kind==='begin'||previous?record:undefined;
@@ -241,7 +243,7 @@ export class EfficiencyHistory {
     Object.assign(result.coverage.learningCandidates,{available:names.length,inspected:selected.length,truncated:names.length>selected.length});
     for(const id of selected) {
       try {
-        const latest=await store.read(id);if(projectId&&latest.projectId!==projectId)continue;
+        const latest=await store.read(id);if(!this.includeProject(latest.projectId)||(projectId&&latest.projectId!==projectId))continue;
         const start=Math.max(1,latest.revision-this.limits.candidateRevisions+1);result.coverage.candidateRevisions.available!+=latest.revision;
         if(start>1)result.coverage.candidateRevisions.truncated=true;
         let prior:KnowledgeCandidate|undefined;
@@ -267,9 +269,10 @@ export class EfficiencyHistory {
     try {
       // Parsing, counter-reset detection and per-turn delta derivation stay in the canonical producer.
       const observed=await new InteractionTelemetry(this.root).read({projectId});
-      telemetry.enabled=observed.enabled;telemetry.inspected=observed.turnReceipts.length;telemetry.truncated=observed.truncated;
+      telemetry.enabled=observed.enabled;telemetry.inspected=observed.turnReceipts.filter(receipt=>this.includeProject(receipt.projectId)).length;telemetry.truncated=observed.truncated;
       telemetry.warnings.push(...observed.warnings);if(observed.truncated)this.warn(result,'Derived turn-token inventory is incomplete.',true);
       for(const receipt of observed.turnReceipts) {
+        if(!this.includeProject(receipt.projectId))continue;
         const at=receipt.finishedAt??receipt.startedAt;if(!this.inWindow(result,at))continue;
         const key=`${receipt.interactionId}/${receipt.turnId}`;if(seen.has(key))continue;seen.add(key);
         if(receipt.status!=='complete'||!receipt.finishedAt||!receipt.tokens||!receipt.coverage.baselineObserved||!receipt.coverage.terminalObserved||receipt.coverage.counterResets||receipt.coverage.limited){telemetry.incompleteTurns++;continue;}

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "packageVersion": "0.6.1",
-  "createdAt": "2026-09-13T01:49:40.416Z",
+  "createdAt": "2026-09-13T13:41:52.676Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -69,8 +69,8 @@
   "files": [
     {
       "path": ".gitignore",
-      "bytes": 239,
-      "sha256": "fa31a7b215d96bf5549cc743fdb38b08c000da10828b616bed09df013aca481d"
+      "bytes": 266,
+      "sha256": "c085df6765a43700521a012f1f238ac51a51b108921086fe20b35f7b5244af5d"
     },
     {
       "path": "docs/ADOPTION.md",
@@ -84,8 +84,8 @@
     },
     {
       "path": "docs/AUTONOMOUS-LEARNING.md",
-      "bytes": 10327,
-      "sha256": "b127626f781df213f889b6f0352a9070bb401dd8e1c8861df3fb5cdc05e5915d"
+      "bytes": 11361,
+      "sha256": "8a23acd6feb8b5f880d1bb5655312c0068529bb1b553847026fe5f4ebef5f881"
     },
     {
       "path": "docs/CONTEXT-CONTRACT.md",
@@ -114,8 +114,8 @@
     },
     {
       "path": "docs/USO.md",
-      "bytes": 19905,
-      "sha256": "31112de2bd94835e69228d9844b89f2af32e5c757bd5d8a3732df4d732b50147"
+      "bytes": 20854,
+      "sha256": "1c855054e0d421c9df56b0c62f4a84ed75584d970f2c3d2927f91a24a4380920"
     },
     {
       "path": "fixtures/model-routing/AGENTS.md",
@@ -259,13 +259,18 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 18293,
-      "sha256": "fa3f76e7e93c645ae511136195d9fd4d2ea39c891e39c66943c964eef161c2e0"
+      "bytes": 19430,
+      "sha256": "412fcec897ec191b47560bd19fdbd6adc149359be8c263bc432472c325b8c856"
     },
     {
       "path": "profiles/model-routing.json",
       "bytes": 499,
       "sha256": "0f490eaf4982da2a4d902a178a6e91dc3a120d0f96df16649043e6a79b9eb7e7"
+    },
+    {
+      "path": "profiles/observation.json",
+      "bytes": 67,
+      "sha256": "55fc0f12e31484aa4705204d569e1f2160d874dfcf1792994dae51e8af002aae"
     },
     {
       "path": "README.md",
@@ -294,13 +299,13 @@
     },
     {
       "path": "src/app-server.ts",
-      "bytes": 13734,
-      "sha256": "0fe2accd57b93793c3f02d349b0df4286fca0343ce83dcba3bc2f5b1ac0814e9"
+      "bytes": 14579,
+      "sha256": "e1d1136bfc483963c1d1d32b51ee771e792d27ee9d1f5e3c48a54c3ceedf02f2"
     },
     {
       "path": "src/autonomous-learning.ts",
-      "bytes": 23494,
-      "sha256": "64edfc0a3956474134012453a865d4efcde2785eafed1742172e5b025988525c"
+      "bytes": 25030,
+      "sha256": "232431bc1e5763e1f206ac453f27f2b4fc6f71c5796fecdb7ad4a731f2e9062e"
     },
     {
       "path": "src/capability-planner.ts",
@@ -314,8 +319,8 @@
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 20609,
-      "sha256": "5e791746fed2fe3687f394d3192e6445cb23b0edd2e384dbafeb164cb24d3564"
+      "bytes": 22283,
+      "sha256": "40a2efbe2f9e19848de53888d4e502bb0cab105ed9953f5d9ca6ad3f9cfd7467"
     },
     {
       "path": "src/context-pack.ts",
@@ -324,23 +329,23 @@
     },
     {
       "path": "src/dashboard.ts",
-      "bytes": 12001,
-      "sha256": "ab3270f46ec4c01e948ee426e9a6930cb80187f6b691c9e616857a5dc519e4eb"
+      "bytes": 12615,
+      "sha256": "66edae52a81498d83fac92de66b9061b3de9127d3b492c6be144a2b7bff46735"
     },
     {
       "path": "src/efficiency-history.ts",
-      "bytes": 33193,
-      "sha256": "d0617cceaad9570f4ebc920ca7e778225b46db9189391696498179d2b569e3fe"
+      "bytes": 33648,
+      "sha256": "dffec7de2405607878a2bd71ffda14a737e1cac6aae7652580129463bb1cac61"
     },
     {
       "path": "src/engine.ts",
-      "bytes": 26932,
-      "sha256": "6e0f02ea16061a0c39e4e1cf0b27219901eca01a46fd5e65ac1d99d75e0c2b0a"
+      "bytes": 27136,
+      "sha256": "cddb537a65a529f0106e09143d7c064054555b69fe016cd884fc0d0800c5f590"
     },
     {
       "path": "src/evaluation.ts",
-      "bytes": 14176,
-      "sha256": "94eec87545e0c8794882b942691f2002c18f222725a170037002ff22cf67b054"
+      "bytes": 14286,
+      "sha256": "fd94175f0ee051575986f27f97486137c280708be415f695214b9de52dbebb9a"
     },
     {
       "path": "src/evidence.ts",
@@ -369,8 +374,8 @@
     },
     {
       "path": "src/improvement-impact.ts",
-      "bytes": 12000,
-      "sha256": "cac5ff7970bc4afddf4e4c5c9899113b522ee320615936c856514121479dc812"
+      "bytes": 13252,
+      "sha256": "e75e5f733facd0a6d8f6950dd9760c34b84a233fe075a36507e2c595a9c22095"
     },
     {
       "path": "src/interaction-entry.ts",
@@ -409,8 +414,8 @@
     },
     {
       "path": "src/learning-builder.ts",
-      "bytes": 16883,
-      "sha256": "523f4092bb1db835ae8665a541732440d2de01cb7808ac6876f482941a29ac42"
+      "bytes": 17219,
+      "sha256": "46df8ec6c94c2121f90e82c1bdb286d767ce673adf6399e994c30efa01fe6a0b"
     },
     {
       "path": "src/learning-runtime-effects.ts",
@@ -419,8 +424,8 @@
     },
     {
       "path": "src/learning-runtime.ts",
-      "bytes": 28089,
-      "sha256": "5acf223e1f4dcd2767b29dcf4df69f19d5c3930c12a99adcdc2382aa878e4b2b"
+      "bytes": 28370,
+      "sha256": "eced3b487befafad6e5f1dd272b694a152f18753e49438c1ed0aa0c12d7111b2"
     },
     {
       "path": "src/learning-sandbox.ts",
@@ -444,18 +449,18 @@
     },
     {
       "path": "src/observability.ts",
-      "bytes": 19616,
-      "sha256": "070ab581443e8d2d9d3b8c870f95c1500dfb0358431b72f908a39d606763339b"
+      "bytes": 20315,
+      "sha256": "5bbc13a70421248bc99529b69e7a504cba8b1ca09ead77b97f84d92155d41a95"
     },
     {
       "path": "src/observation-server.ts",
-      "bytes": 5662,
-      "sha256": "31752de420af83675329054dfc4a3f377580cf4b421f62f56902f3fcbfafe3ef"
+      "bytes": 5813,
+      "sha256": "cf2a1a19be8c939e3e48ab8c67eddbba610c050309b0559afdc826c5e1506e57"
     },
     {
       "path": "src/operational-insights.ts",
-      "bytes": 16400,
-      "sha256": "2631bd273fae8bd8b9d0dec1776463da489687245b80057b826facadd1de7266"
+      "bytes": 16515,
+      "sha256": "c2d000286dac48b445f10a3a50dc834688dd2b24937d7873170bf2eb21d3e052"
     },
     {
       "path": "src/operations-observation.ts",
@@ -559,8 +564,13 @@
     },
     {
       "path": "src/task-contract.ts",
-      "bytes": 3395,
-      "sha256": "8abf35b91bb591c8e9d18ed897100903777890c217b8523c77d8a009eb50ec3c"
+      "bytes": 3545,
+      "sha256": "2b02cd34377a289a271417dc57b28402374db3b5d0fdbea7a969e298f039d198"
+    },
+    {
+      "path": "src/work-population.ts",
+      "bytes": 1964,
+      "sha256": "527264102104812d54562853496d49e6a9173ecef708eeac4081e381eb57123a"
     },
     {
       "path": "src/workflow.ts",
@@ -604,13 +614,13 @@
     },
     {
       "path": "test/app-server.test.ts",
-      "bytes": 7493,
-      "sha256": "ada8dd62123fdde7ab49aefc101ee96dd73989f8d57ccc8704fe959dea5a53ae"
+      "bytes": 8554,
+      "sha256": "5b4b30d0f78eb5fa9b3d15efc3b7fff8886b058006fb1f0e0b22363746ee9446"
     },
     {
       "path": "test/autonomous-learning.test.ts",
-      "bytes": 19419,
-      "sha256": "482ddeeff945d34dbdb3923e9565087b05d7afffa4df7cdfce8b98495bd74bad"
+      "bytes": 21898,
+      "sha256": "c9d503d6d6a586973f40edacd77235917d30ba63e5e44543c74e215559f14c6b"
     },
     {
       "path": "test/capability-planner.test.ts",
@@ -619,8 +629,8 @@
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 18006,
-      "sha256": "80203cf37f46589ce1c0505cfd5c4ab6c5776c9f93e98f688ffa5df4ca27dfb0"
+      "bytes": 21161,
+      "sha256": "9691ad832954926c0436e5e9c14d6ca187927b120a915289e730bd1a44863374"
     },
     {
       "path": "test/context-pack.test.ts",
@@ -629,8 +639,8 @@
     },
     {
       "path": "test/dashboard.test.ts",
-      "bytes": 4595,
-      "sha256": "1e2d814086894c78f786b5b4b32840019ac4e3e73897daef6aa65a1ba802cba6"
+      "bytes": 6332,
+      "sha256": "d9663f49d633b7ecadf1ae06451bb799c8ad5966048053d17ad4e65b0a244883"
     },
     {
       "path": "test/efficiency-history.test.ts",
@@ -639,8 +649,8 @@
     },
     {
       "path": "test/engine.test.ts",
-      "bytes": 18777,
-      "sha256": "4ee69279af0ea39b6ba27cb1a12be466494ef65e9cd813ca56203d01b331ee8a"
+      "bytes": 21603,
+      "sha256": "7d6277462a9ab204710251f8b0e600b4c49272cf86442cafe47270122e6699ee"
     },
     {
       "path": "test/evaluation.test.ts",
@@ -694,8 +704,8 @@
     },
     {
       "path": "test/learning-builder.test.ts",
-      "bytes": 8548,
-      "sha256": "8c4076a589184c3aa8094efca13c0621177eadfcc692ea50dbe9dbc63155b3fc"
+      "bytes": 9437,
+      "sha256": "5eb0e4284c7c1a06ff322be55e8c8163e969e9ce2346aaf09429462bdcf91e84"
     },
     {
       "path": "test/learning-runtime-effects.test.ts",
@@ -859,8 +869,8 @@
     },
     {
       "path": "ui/src/api.ts",
-      "bytes": 5073,
-      "sha256": "76048d2636710745bb34fdfd50c5d338557c77594145662ea4290c118fb55877"
+      "bytes": 5103,
+      "sha256": "346198877a53c66b553846ff1d87ddd2740bbb628c8359145be3fb5e00014edd"
     },
     {
       "path": "ui/src/components.tsx",
@@ -884,8 +894,8 @@
     },
     {
       "path": "ui/src/Home.tsx",
-      "bytes": 32776,
-      "sha256": "703c6c2884f4bf6413212ec86566a132b308e1c68e97bf92c2c45bae6cf9483a"
+      "bytes": 34381,
+      "sha256": "cde9c672d695efb955ef4e78b8cb29668fef46d0a0948b940a56c5359ce604ac"
     },
     {
       "path": "ui/src/improvement-effects.css",
@@ -894,8 +904,8 @@
     },
     {
       "path": "ui/src/ImprovementEffects.tsx",
-      "bytes": 4847,
-      "sha256": "b03a924cb9f1da96ded0b34919c39570c48f8c24719cf8b611c54cb4bd550efa"
+      "bytes": 5094,
+      "sha256": "89e171c2906f2e759e04d91ac2dfa96e92b603308c931af8dfce851252485bf7"
     },
     {
       "path": "ui/src/LearningCapabilities.tsx",
@@ -914,13 +924,13 @@
     },
     {
       "path": "ui/src/panels.tsx",
-      "bytes": 30073,
-      "sha256": "0f8525de19c4b5103db3b5caee58ba4fe1f344a05f3d33ac90c06d62634aea35"
+      "bytes": 30457,
+      "sha256": "69d898ce1777106f83e4081f8dbff6447a724d2adea8e234a4ec7d86cc035b97"
     },
     {
       "path": "ui/src/styles.css",
-      "bytes": 61169,
-      "sha256": "1b9431a95141a4d59d26e99e1cdf96baa78e8f54aba8747b19b83fc90992890c"
+      "bytes": 61670,
+      "sha256": "dea96e7aed00c9adbcafde2374eb21dbbf9af620df3908a175bb5ac6a8f7cbc1"
     },
     {
       "path": "ui/tsconfig.json",

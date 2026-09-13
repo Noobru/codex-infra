@@ -127,6 +127,20 @@ Os campos `explicitRequestedModel` e `explicitRequestedReasoningEffort` represen
 somente uma escolha expressa do owner, nunca herança implícita do modelo desta sessão.
 
 `delegate_task` seleciona a rota, fixa a política e executa pelo TaskEngine canônico.
+Delegações comuns têm rede disponível por padrão, inclusive revisão `read-only`.
+O contrato registra `taskDetails.networkAccess:true`; não exigir que o owner peça
+rede para cada subagente. Descreva as ações permitidas no objetivo e selecione o
+modo de escrita conforme o trabalho, independentemente da necessidade de rede.
+Não confunda revisão sem alterações com proibição de rede, nem faça consultas no
+coordenador só para compensar uma permissão ausente. Use `networkAccess:false`
+quando a tarefa for explicitamente offline; workers de aprendizado local conservam
+seu isolamento próprio. O campo fica no contrato/hash e não autoriza publicação.
+Quando a tarefa precisar do GitHub privado já autorizado, use
+`taskDetails.gitHubAuth:true`: o runtime reutiliza o login existente do `gh`
+somente no ambiente do processo filho. Não imprimir, copiar para arquivos nem
+pedir ao owner que envie tokens. O recibo registra o mecanismo, não a credencial.
+Após mudança do schema/build, MCP antigo deve usar a CLI compilada atual até ser
+recarregado; não afirmar que uma permissão foi aplicada sem recibo do runtime.
 Não exige um `route_task` anterior: esse comando é apenas preview. Antes do turno,
 o worker confere o catálogo e os valores efetivos; indisponibilidade bloqueia sem
 escalada automática para Ultra. Confira `execution`, `routingDecision` e artefatos

@@ -28,6 +28,9 @@ export const OpenDecisionSchema = z.object({
   if(decision.status==='defaulted'&&decision.material)ctx.addIssue({code:'custom',message:'A material decision cannot use an automatic default.'});
 });
 export const TaskDetailsSchema = z.object({
+  networkAccess: z.boolean().default(true),
+  gitHubAuth: z.boolean().optional(),
+  comparisonBaseSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
   performanceScope: PerformanceScopeSchema.optional(),
   acceptanceCriteria: statements.default([]),
   constraints: statements.default([]),
