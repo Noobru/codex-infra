@@ -8,25 +8,25 @@ export type View = 'overview' | 'live' | 'efficiency' | 'project' | 'evidence' |
 export type Status = ObservationSummary['status'];
 export type CopyProps = { copiedId: string | null; onCopy: (value: string) => void };
 export const states: Record<Status, { label: string; tone: Tone; icon: LucideIcon }> = {
-  ready: { label: 'ready', tone: 'neutral', icon: Clock3 }, running: { label: 'running', tone: 'cyan', icon: Play },
-  validating: { label: 'validating', tone: 'cyan', icon: FileCheck2 }, waiting_user: { label: 'waiting user', tone: 'amber', icon: Clock3 },
-  waiting_quota: { label: 'waiting quota', tone: 'amber', icon: Clock3 }, failed: { label: 'failed', tone: 'coral', icon: XCircle },
-  cancelled: { label: 'cancelled', tone: 'neutral', icon: XCircle }, completed: { label: 'completed', tone: 'green', icon: CheckCircle2 },
+  ready: { label: 'Na fila', tone: 'neutral', icon: Clock3 }, running: { label: 'Em execução', tone: 'cyan', icon: Play },
+  validating: { label: 'Em validação', tone: 'cyan', icon: FileCheck2 }, waiting_user: { label: 'Aguardando usuário', tone: 'amber', icon: Clock3 },
+  waiting_quota: { label: 'Aguardando cota', tone: 'amber', icon: Clock3 }, failed: { label: 'Falhou', tone: 'coral', icon: XCircle },
+  cancelled: { label: 'Cancelada', tone: 'neutral', icon: XCircle }, completed: { label: 'Concluída', tone: 'green', icon: CheckCircle2 },
 };
 export const views: { id: View; title: string; icon: LucideIcon; stage?: string; description: string }[] = [
-  { id: 'overview', title: 'Overview', icon: LayoutDashboard, description: 'Recorded work, current states, and the evidence available to inspect.' },
-  { id: 'live', title: 'Live Run', icon: Activity, description: 'Inspect one recorded run, its contract, routing, checks, and timeline.' },
-  { id: 'efficiency', title: 'Efficiency', icon: Zap, description: 'How our results change over time, and which skills, scripts and practices accompanied those changes.' },
-  { id: 'project', title: 'Project View', icon: Layers3, description: 'Registered projects and their recorded activity, ready to inspect.' },
-  { id: 'evidence', title: 'Evidence & Recovery', icon: ShieldCheck, description: 'Recorded evidence, backup manifests and dated recovery checks.' },
-  { id: 'learning', title: 'Learning Queue', icon: Sparkles, description: 'Review declared candidates and the signals that support a learning decision.' },
+  {id:'overview',title:'Visão geral',icon:LayoutDashboard,description:'O que está acontecendo no trabalho acompanhado pela Infra.'},
+  {id:'learning',title:'Aprendizados',icon:Sparkles,description:'O que virou uma capacidade, por que surgiu e se já foi usado.'},
+  {id:'efficiency',title:'Eficiência',icon:Zap,description:'Consumo, resultados e o que os dados permitem concluir.'},
+  {id:'project',title:'Projetos',icon:Layers3,description:'Encontre o trabalho registrado de cada projeto.'},
+  {id:'evidence',title:'Evidências e recuperação',icon:ShieldCheck,description:'Confira o que foi verificado e abra a prova quando precisar.'},
+  {id:'live',title:'Detalhes da execução',icon:Activity,description:'Uma tentativa, seu resultado e os registros que explicam o que aconteceu.'},
 ];
 export const activeStates = new Set<Status>(['ready', 'running', 'validating', 'waiting_user', 'waiting_quota']);
-export const numbers = new Intl.NumberFormat('en-US');
+export const numbers = new Intl.NumberFormat('pt-BR');
 export function measured(value: number | null | undefined): string { return value == null ? 'unknown' : numbers.format(value); }
 export function timestamp(value: string | null | undefined): string {
   if (!value || !Number.isFinite(Date.parse(value))) return 'unknown';
-  return new Date(value).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(value).toLocaleString('pt-BR', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 export function duration(value: number | null | undefined): string {
   if (value == null) return 'unknown';
@@ -40,7 +40,7 @@ export function StatusBadge({ status, compact = false }: { status: Status; compa
 }
 export function MetricCard({ label, value, note, tone, icon: Icon, onClick }: { label: string; value: string; note: string; tone: Tone; icon: LucideIcon; onClick?:()=>void }) {
   const Tag=onClick?'button':'article';
-  return <Tag onClick={onClick} {...(onClick?{type:'button' as const,'aria-label':`Inspect ${label} tasks`}:{})} className={`metric-card metric-${tone} ${onClick?'metric-interactive':''}`}><div className="metric-card-top"><span className="metric-icon"><Icon size={15} /></span><span className="metric-note">{note}</span></div><div className={`metric-value ${value === 'unknown' ? 'unknown-value' : ''}`}>{value}</div><div className="metric-label">{label}{onClick&&<ChevronRight size={15}/>}</div></Tag>;
+  return <Tag onClick={onClick} {...(onClick?{type:'button' as const,'aria-label':`Ver ${label}`}:{})} className={`metric-card metric-${tone} ${onClick?'metric-interactive':''}`}><div className="metric-card-top"><span className="metric-icon"><Icon size={15} /></span><span className="metric-note">{note}</span></div><div className={`metric-value ${value === 'unknown' ? 'unknown-value' : ''}`}>{value}</div><div className="metric-label">{label}{onClick&&<ChevronRight size={15}/>}</div></Tag>;
 }
 export function CopyId({ value, copiedId, onCopy }: { value: string } & CopyProps) {
   return <button className="copy-id" type="button" title={value} aria-label={`Copy ${value}`} onClick={() => onCopy(value)}><span>{value}</span>{copiedId === value ? <Check size={12} /> : <Copy size={12} />}</button>;

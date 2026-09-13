@@ -1,7 +1,7 @@
 {
   "version": 1,
   "packageVersion": "0.6.1",
-  "createdAt": "2026-09-13T13:41:52.676Z",
+  "createdAt": "2026-09-13T14:36:09.249Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -114,8 +114,8 @@
     },
     {
       "path": "docs/USO.md",
-      "bytes": 20854,
-      "sha256": "1c855054e0d421c9df56b0c62f4a84ed75584d970f2c3d2927f91a24a4380920"
+      "bytes": 22231,
+      "sha256": "f299e2fe29328e9ab92b64469a290069e7f3c6843b3c9ee19aa6fa42e71b7390"
     },
     {
       "path": "fixtures/model-routing/AGENTS.md",
@@ -329,8 +329,8 @@
     },
     {
       "path": "src/dashboard.ts",
-      "bytes": 12615,
-      "sha256": "66edae52a81498d83fac92de66b9061b3de9127d3b492c6be144a2b7bff46735"
+      "bytes": 13775,
+      "sha256": "c9d7ba3ae53fd0a8ed052a267d82b1bc72a78fee7bd12f4aec3e2946a8696472"
     },
     {
       "path": "src/efficiency-history.ts",
@@ -639,8 +639,8 @@
     },
     {
       "path": "test/dashboard.test.ts",
-      "bytes": 6332,
-      "sha256": "d9663f49d633b7ecadf1ae06451bb799c8ad5966048053d17ad4e65b0a244883"
+      "bytes": 8204,
+      "sha256": "1ec0971f2298d59118734cf47658c0140c3fdbd130c2c9b029da126370e3d2f0"
     },
     {
       "path": "test/efficiency-history.test.ts",
@@ -709,8 +709,8 @@
     },
     {
       "path": "test/learning-runtime-effects.test.ts",
-      "bytes": 6049,
-      "sha256": "d1a836d33275d1f15f1021899cfd139fee901ce0a74acffafe5e3a61b012ad44"
+      "bytes": 6704,
+      "sha256": "4c7160dbf962abe819b7430017cfb05cb51bc30a2979f89c9f27e67d91e81321"
     },
     {
       "path": "test/learning-runtime.test.ts",
@@ -854,8 +854,8 @@
     },
     {
       "path": "ui/index.html",
-      "bytes": 304,
-      "sha256": "dd0776e0d70d3c6c511cb518fbfbe45778be29ec55e035876efd903415c25d4a"
+      "bytes": 300,
+      "sha256": "c699aa784745a547768cba0305c09d15784536da2dd4f63e493a3d1bfae4e909"
     },
     {
       "path": "ui/package-lock.json",
@@ -873,9 +873,14 @@
       "sha256": "346198877a53c66b553846ff1d87ddd2740bbb628c8359145be3fb5e00014edd"
     },
     {
+      "path": "ui/src/clarity.css",
+      "bytes": 7646,
+      "sha256": "c8fcae00cc90e1364260afe2bfbd16ae7c766003058fdc508cb4865ef5dda5b8"
+    },
+    {
       "path": "ui/src/components.tsx",
-      "bytes": 5862,
-      "sha256": "da49fd53d94d868c3bafb12d8bd1599f59c1764e514206880112392cc3eb1001"
+      "bytes": 5752,
+      "sha256": "97564b5b408514a9135744e93eabae8a08ab7f43a11ca6de2e3facb3d7df675c"
     },
     {
       "path": "ui/src/efficiency-history.css",
@@ -884,8 +889,8 @@
     },
     {
       "path": "ui/src/EfficiencyHistory.tsx",
-      "bytes": 24817,
-      "sha256": "bfdb3ff9463e953557078c5d972797f1a30a017f856ef089e7c0124032a505be"
+      "bytes": 26102,
+      "sha256": "dc913c3259a0b8028794d74d82b1b6434fa8056b8ba9e3768aa2f25a531f35e9"
     },
     {
       "path": "ui/src/env.d.ts",
@@ -894,8 +899,8 @@
     },
     {
       "path": "ui/src/Home.tsx",
-      "bytes": 34381,
-      "sha256": "cde9c672d695efb955ef4e78b8cb29668fef46d0a0948b940a56c5359ce604ac"
+      "bytes": 33611,
+      "sha256": "78b99973e2bfc2053d77930a10acc39c146baa5dfa49f6af50f529c97eed69b3"
     },
     {
       "path": "ui/src/improvement-effects.css",
@@ -909,8 +914,8 @@
     },
     {
       "path": "ui/src/LearningCapabilities.tsx",
-      "bytes": 7514,
-      "sha256": "99cca70b90664af9a3c13211758e5cea935f618cfefcc3920aafc54fa7cc2a1f"
+      "bytes": 7750,
+      "sha256": "1841cc4d3e16e688c32aa1a64e56f7fc6552e0c91016d4bb3aca2dfa156fb979"
     },
     {
       "path": "ui/src/LearningRuntimeEffects.tsx",
@@ -919,13 +924,13 @@
     },
     {
       "path": "ui/src/main.tsx",
-      "bytes": 157,
-      "sha256": "9fb0dc5d1057a7982b9f7ca7e161ec389624fd379c34caec930c0ca4ce54aa92"
+      "bytes": 182,
+      "sha256": "be4dac1ea03df1ffb8ea8bdc970f7f7a2f8f013dc1ef6bfc0bbf5146cdd661ba"
     },
     {
       "path": "ui/src/panels.tsx",
-      "bytes": 30457,
-      "sha256": "69d898ce1777106f83e4081f8dbff6447a724d2adea8e234a4ec7d86cc035b97"
+      "bytes": 34024,
+      "sha256": "4755b7a7da521e3078907c4f03a2202d4f2aacf8c4f6ad6c26db37205c2c8242"
     },
     {
       "path": "ui/src/styles.css",

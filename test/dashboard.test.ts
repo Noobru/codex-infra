@@ -7,6 +7,7 @@ import {DashboardFixture} from './fixtures/dashboard-fixture.js';
 import {DashboardReader} from '../src/dashboard.js';
 import {ObservationServer} from '../src/observation-server.js';
 import {WorkPopulations} from '../src/work-population.js';
+import {LearningCaseSchema} from '../src/autonomous-learning.js';
 
 test('population filters keep fixture failures and measurements separate without guessing from names',async t=>{
   const parent=fileURLToPath(new URL('../../artifacts/test-fixtures/',import.meta.url));
@@ -25,6 +26,15 @@ test('population filters keep fixture failures and measurements separate without
   assert.ok(real.history!.data!.projects.every(p=>p.id==='ui-failed'));
   assert.ok(synthetic.history!.data!.projects.every(p=>p.id==='ui-completed'));
   const emptyPage=await reader.screen({population:'fixture',offset:23});assert.equal(emptyPage.overview.runs.length,0);
+  const registryPath=path.join(root,'profiles/registry.json');
+  const registry=JSON.parse(await fs.readFile(registryPath,'utf8'));
+  registry.projects.push({...registry.projects[0],id:'codex-infra',name:'CodexInfra'});
+  await fs.writeFile(registryPath,JSON.stringify(registry));
+  const projects=await reader.screen({view:'project'});
+  assert.equal(projects.projects.items.find(p=>p.id==='ui-completed')!.parentProjectId,'codex-infra');
+  assert.equal(projects.projects.items.find(p=>p.id==='ui-failed')!.parentProjectId,null);
+  assert.equal(projects.projects.items.find(p=>p.id==='ui-running')!.parentProjectId,null,'unclassified is not silently grouped');
+  assert.match(projects.projects.items.find(p=>p.id==='ui-completed')!.name,/Teste interno/);
 });
 
 test('aggregate views use canonical records and never require registered product roots',async t=>{
@@ -61,6 +71,17 @@ test('aggregate views use canonical records and never require registered product
   assert.equal(learning.learning!.candidates!.length,1);
   assert.equal(learning.learning!.signals.length,1);
   assert.equal(learning.learning!.promotions,null);
+  const id='learning_'+ 'a'.repeat(32),createdAt='2026-09-12T12:00:00.000Z';
+  const artifactPath=`artifacts/learning/cases/${id}/revision-000001.json`;
+  const pending=LearningCaseSchema.parse({version:1,id,projectId:'ui-completed',revision:1,title:'Count only current acceptance',
+    content:'Historical checklists distorted the count.',kind:'practice',origin:{jobId:fixture.ids.completed,attempt:1},
+    status:'queued',attempts:0,jobIds:[],evidence:['fixture-only'],ownerPid:null,lastError:null,createdAt,updatedAt:createdAt,artifactPath});
+  await fs.mkdir(path.dirname(path.join(root,artifactPath)),{recursive:true});
+  await fs.writeFile(path.join(root,artifactPath),JSON.stringify(pending));
+  const story=await reader.screen({view:'learning',projectId:'ui-completed'});
+  assert.equal(story.learningCycle?.data?.items[0]?.reason,pending.content);
+  assert.equal(story.learningCycle?.data?.items[0]?.createdAt,createdAt);
+  assert.equal(story.runtimeEffects?.data?.window,null,'learning usage is inventory-wide, not the efficiency window');
   const recovery=await reader.screen({view:'evidence',projectId:'ui-empty'});
   assert.equal(recovery.run,null);
   assert.equal(recovery.recovery!.state,'empty');

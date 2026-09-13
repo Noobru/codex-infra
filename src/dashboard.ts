@@ -67,11 +67,12 @@ export class DashboardReader {
           },
         })).sort((a,b)=>(b.state.disabled?.recordedAt??b.state.updatedAt).localeCompare(a.state.disabled?.recordedAt??a.state.updatedAt)||a.manifest.hash.localeCompare(b.manifest.hash))};
       },'Executable learning capabilities'):Promise.resolve(null),
-      view==='learning'||view==='overview'?this.source(async()=>{
-        const result=await new AutonomousLearning(this.root).list(options.projectId);
+      view==='learning'||view==='overview'||view==='project'?this.source(async()=>{
+        const result=await new AutonomousLearning(this.root).list(view==='project'?undefined:options.projectId);
         return {warnings:result.warnings.map(message=>EvidenceSanitizer.text(message,400)),items:result.items.map(item=>({
           id:item.id,projectId:item.projectId,status:item.status,title:EvidenceSanitizer.text(item.title,240),kind:item.kind,
           attempts:item.attempts,hash:item.hash,candidateId:item.candidateId,updatedAt:item.updatedAt,
+          createdAt:item.createdAt,reason:EvidenceSanitizer.text(item.content,2400),
           lastError:item.lastError?EvidenceSanitizer.text(item.lastError,1200):null,jobIds:item.jobIds,
           originJobId:'jobId' in item.origin?item.origin.jobId:null,
           evidence:item.evidence.map(ref=>EvidenceSanitizer.text(ref,600)),artifactPath:item.artifactPath,
@@ -81,9 +82,19 @@ export class DashboardReader {
     if(operations.data){operations.warnings=operations.data.warnings;operations.state=operations.warnings.length?'partial':'ready';}
     if(learningRuntime?.data){learningRuntime.warnings=learningRuntime.data.warnings;learningRuntime.state=learningRuntime.warnings.length?'partial':learningRuntime.data.items.length?'ready':'empty';}
     if(learningCycle?.data){learningCycle.warnings=learningCycle.data.warnings;learningCycle.state=learningCycle.warnings.length?'partial':learningCycle.data.items.length?'ready':'empty';}
-    const projects=profiles.data?.map(profile=>({id:profile.id,name:EvidenceSanitizer.text(profile.name,160),status:profile.status,
-      stack:profile.stack.map(item=>EvidenceSanitizer.text(item,80)),checks:profile.checks.map(item=>item.id),sourceCount:profile.sources.length,
-      activity:activity.find(item=>item.projectId===profile.id)??{projectId:profile.id,total:0,active:0,completed:0,latestId:null,updatedAt:null}}))??[];
+    const projects=profiles.data?.map(profile=>{
+      const projectActivity=activity.find(item=>item.projectId===profile.id)??{projectId:profile.id,total:0,active:0,completed:0,latestId:null,updatedAt:null};
+      const population=groups.category(profile.id);
+      const learningCase=population==='learning'?learningCycle?.data?.items.find(item=>projectActivity.latestId&&item.jobIds.includes(projectActivity.latestId)):undefined;
+      const registeredName=EvidenceSanitizer.text(profile.name,160);
+      const learningStage=profile.id.endsWith('-review')?'Revisão':profile.id.endsWith('-build')?'Geração':'Aprendizado';
+      const name=population==='learning'?(learningCase?`${learningStage} · ${groups.category(learningCase.projectId)==='fixture'?'capacidade de teste':learningCase.title}`:'Ambiente de geração de aprendizado'):
+        population==='fixture'?`Teste interno · ${profile.stack.join(' / ')||'validação da Infra'}`:registeredName;
+      return {id:profile.id,name:EvidenceSanitizer.text(name,240),registeredName,status:profile.status,population,
+        parentProjectId:profile.id!=='codex-infra'&&profiles.data?.some(p=>p.id==='codex-infra')&&['fixture','learning'].includes(population)?'codex-infra':null,
+        stack:profile.stack.map(item=>EvidenceSanitizer.text(item,80)),checks:profile.checks.map(item=>item.id),sourceCount:profile.sources.length,
+        activity:projectActivity};
+    })??[];
     const evaluations=await this.source(()=>this.evaluations.list({projectId:options.projectId,includeProject,limit:50,offset:options.evaluationOffset}),'Evaluation receipts');
     if(evaluations.data){evaluations.warnings=evaluations.data.warnings; evaluations.state=evaluations.warnings.length||evaluations.data.truncated?'partial':evaluations.data.total?'ready':'empty';}
     const needsRun=view==='live'||view==='evidence';
@@ -98,7 +109,7 @@ export class DashboardReader {
     if(history?.data){history.warnings=history.data.coverage.warnings;history.state=history.warnings.length||history.data.coverage.truncated?'partial':'ready';}
     const [improvements,runtimeEffects]=await Promise.all([
       history?.data?this.source(()=>new ImprovementImpactReader(this.root).read(history.data!,options.projectId),'Improvement effects'):Promise.resolve(null),
-      history?.data?this.source(()=>new LearningRuntimeEffects(this.root).read({projectId:options.projectId,history:history.data!}),'Capability execution effects'):Promise.resolve(null),
+      history?.data||view==='learning'?this.source(()=>new LearningRuntimeEffects(this.root).read({projectId:options.projectId,history:history?.data??undefined}),'Capability execution effects'):Promise.resolve(null),
     ]);
     if(improvements?.data){improvements.warnings=improvements.data.warnings;improvements.state=improvements.warnings.length||improvements.data.truncated?'partial':improvements.data.cases.length?'ready':'empty';}
     if(runtimeEffects?.data){runtimeEffects.warnings=runtimeEffects.data.warnings;runtimeEffects.state=runtimeEffects.warnings.length||runtimeEffects.data.coverage.truncated?'partial':runtimeEffects.data.items.length?'ready':'empty';}

@@ -176,3 +176,14 @@ Overview e Efficiency permitem selecionar trabalho operacional, fixtures de test
 O filtro afeta contagens de runs e medições de eficiência; a fila de aprendizado e os recibos operacionais mantêm seus próprios escopos de projeto. Falhas históricas permanecem consultáveis. Uma capacidade ativa pode ter zero execuções: ativação, uso observado e economia demonstrada são evidências diferentes.
 
 `npm run verify` executa build, a suíte completa do núcleo e typecheck/build da UI, preservando um recibo na área local de artefatos. Não gera uma tarefa de modelo e não publica no GitHub. Após alterações posteriores no candidato, revalide antes de um push.
+
+
+## Leitura do painel
+
+- **Visão geral:** acompanhe o estado atual e abra uma execução para investigar. “Falhas no histórico” conta tentativas encerradas; não significa que todos os problemas continuam abertos.
+- **Aprendizados:** consulte o motivo, a ativação e o uso na mesma ficha. Ativa significa disponível. Uso exige chamada registrada; o histórico mostra a versão exata, os recibos e o hash para pedir desativação.
+- **Eficiência:** escolha medida e período. Tokens por turno, total diário, duração e taxa de conclusão têm significados diferentes, explicados ao lado dos dados. Atribuir economia ao aprendizado exige uma comparação válida.
+- **Projetos:** pesquise pelo nome e selecione para abrir o resumo. Ambientes classificados como fixture ou learning pertencem à seção interna de CodexInfra, quando esse projeto está cadastrado. IDs e nomes de registro ficam nos detalhes.
+- **Evidências e recuperação:** veja a data e o alcance do último teste registrado. Abra históricos e provas conforme a investigação. Uma recuperação antiga não comprova a prontidão atual.
+
+A organização muda a apresentação, sem renomear IDs ou mover os registros. Fontes ausentes ou parciais continuam explícitas. Chamadas de capacidades na tela Aprendizados cobrem o inventário verificado; na tela Eficiência seguem o período selecionado.

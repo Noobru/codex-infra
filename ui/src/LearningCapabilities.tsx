@@ -1,79 +1,58 @@
-import {ArrowUpRight,Clipboard,FileCheck2,LockKeyhole,TerminalSquare,TriangleAlert,Workflow,Zap} from 'lucide-react';
+import {useState} from 'react';
 import type {DashboardObservation} from './api';
-import {CopyId,EmptyState,InfoCard,ScopeNote,SectionHeading,timestamp,type CopyProps} from './components';
+import {CopyId,EmptyState,timestamp,duration,type CopyProps} from './components';
 
-type Props={source:DashboardObservation['learningRuntime']}&CopyProps;
-const labels={packaged:'Packaged',reviewed:'Reviewed',rejected:'Review rejected','validation-passed':'Validation passed',
-  'validation-failed':'Validation failed',active:'Active',disabled:'Disabled'};
-const stages={queued:'Queued',building:'Building',reviewing:'Reviewing',validating:'Validating',active:'Active',attention:'Needs attention',disabled:'Disabled'};
+const statusNames:Record<string,string>={active:'Ativa',attention:'Precisa de atenção',queued:'Na fila',building:'Em construção',validating:'Em validação',reviewing:'Em revisão',disabled:'Desativada',rejected:'Revisão reprovada','validation-failed':'Teste reprovado',registered:'Pacote gerado',reviewed:'Revisada',validated:'Validada'};
+type Props={data:DashboardObservation;onOpenRun:(id:string)=>void}&CopyProps;
 
-export function LearningCycle({source,onOpenRun,...copy}:{source:DashboardObservation['learningCycle'];onOpenRun:(id:string)=>void}&CopyProps){
-  const items=source?.data?.items;
+/** One story per exact executable version; pending cases stay separate until a bundle exists. */
+export function LearningStories({data,onOpenRun,...copy}:Props){
+  const [filter,setFilter]=useState('active');
+  const cases=data.learningCycle?.data?.items??[];
+  const bundles=data.learningRuntime?.data?.items??[];
+  const stories=[...bundles.map(bundle=>({id:bundle.manifest.hash,title:bundle.manifest.title,projectId:bundle.manifest.projectId,status:bundle.state.status,
+    bundle,origin:cases.find(item=>item.hash===bundle.manifest.hash)??cases.find(item=>item.candidateId===bundle.manifest.candidateId),
+    usage:data.runtimeEffects?.data?.items.find(item=>item.hash===bundle.manifest.hash)})),
+    ...cases.filter(item=>!bundles.some(bundle=>bundle.manifest.hash===item.hash)).map(origin=>({id:origin.id,title:origin.title,projectId:origin.projectId,status:origin.status,bundle:undefined,origin,usage:undefined}))];
+  const bucket=(story:typeof stories[number])=>story.status==='disabled'||story.bundle&&bundles.some(bundle=>bundle.manifest.candidateId===story.bundle!.manifest.candidateId&&bundle.manifest.hash!==story.id&&bundle.state.status==='active')?'disabled':story.status==='active'?'active':['attention','rejected','validation-failed'].includes(story.status)?'attention':'progress';
+  const filters=[{id:'active',label:'Ativas'},{id:'progress',label:'Em preparação'},{id:'attention',label:'Precisam de atenção'},{id:'disabled',label:'Histórico'}];
+  const complete=Boolean(data.learningRuntime?.data&&data.learningCycle?.data);
+  const visible=stories.filter(item=>bucket(item)===filter);
   return <>
-    <SectionHeading label="Automatic learning" title="From a signal to an active improvement" count={source?.state??'unavailable'}/>
-    {!items&&<EmptyState title="Learning cycle unavailable" detail="Refresh to read the recorded cases. No progress was inferred."/>}
-    {items?.length===0&&<EmptyState title={source?.state==='partial'?'No learning cases could be verified':'No automatic learning cases recorded'} detail={source?.state==='partial'?'Some records could not be read. Review the source warnings before treating this scope as empty.':'Eligible recurring failures and recorded findings can enter the governed build and validation cycle.'}/>}
-    {!!source?.warnings.length&&<ScopeNote>{source.warnings.join(' ')}</ScopeNote>}
-    <div className="evaluation-list">{items?.map(item=><InfoCard key={item.id} icon={item.status==='attention'?TriangleAlert:item.status==='active'?Zap:item.status==='disabled'?LockKeyhole:Workflow}
-      title={item.title} meta={`${item.projectId} · ${stages[item.status]}`}>
-      <div className="card-list"><span>{item.kind} · build attempts: {item.attempts} · updated {timestamp(item.updatedAt)}</span>
-        {item.lastError&&<span>Last recorded issue: {item.lastError}</span>}
-      </div>
-      {item.hash&&<div className="hash-line"><span>Bundle hash</span><CopyId value={item.hash} {...copy}/></div>}
-      {item.originJobId&&<button className="subtle-link" type="button" onClick={()=>onOpenRun(item.originJobId!)}>Inspect origin run<ArrowUpRight size={15}/></button>}
-      <details className="receipt-details"><summary>Case evidence and execution runs ({item.jobIds.length})</summary>
-        <div className="hash-line"><CopyId value={item.id} {...copy}/></div>
-        {item.candidateId&&<div className="hash-line"><span>Candidate</span><CopyId value={item.candidateId} {...copy}/></div>}
-        {item.jobIds.map(id=><button key={id} className="subtle-link" type="button" onClick={()=>onOpenRun(id)}>Inspect execution run {id.slice(0,8)}<ArrowUpRight size={15}/></button>)}
-        {[...new Set([item.artifactPath,...item.evidence])].map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}
-      </details>
-    </InfoCard>)}</div>
-  </>;
-}
-
-export function LearningCapabilities({source,...copy}:Props){
-  const items=source?.data?.items;
-  const updates=items?.filter(item=>['active','disabled','rejected','validation-failed'].includes(item.state.status))??[];
-  return <>
-    <SectionHeading label="Executable learning" title="Skills and scripts" count={source?.state??'unavailable'}/>
-    {!items&&<EmptyState title="Capability inventory unavailable" detail="Refresh to read the local bundle records. No active or empty result was inferred."/>}
-    {items?.length===0&&<EmptyState title={source?.state==='partial'?'No executable bundles could be verified':'No executable bundles in this scope'} detail={source?.state==='partial'?'Some bundle records failed to load or verify. Review the source warnings before treating this scope as empty.':'A candidate becomes executable after a bundle has been built, reviewed and tested. Activation is recorded separately.'}/>}
-    {!!source?.warnings.length&&<ScopeNote>{source.warnings.join(' ')}</ScopeNote>}
-    {updates.length>0&&<details className="receipt-details"><summary>Activation and blocked updates ({updates.length})</summary>
-      <div className="card-list">{updates.map(({manifest,state})=><div key={manifest.hash}>
-        <strong>{labels[state.status]} · {manifest.title}</strong>
-        <span> · {timestamp(state.disabled?.recordedAt??state.activation?.recordedAt??state.updatedAt)}</span>
-        <div className="hash-line"><CopyId value={manifest.hash} {...copy}/></div>
-      </div>)}</div>
-    </details>}
-    <div className="evaluation-list">{items?.map(({manifest,state})=>{
-      const disabled=state.status==='disabled';
-      const blocked=disabled||state.status==='rejected'||state.status==='validation-failed';
-      const request=`Disable the CodexInfra capability with hash ${manifest.hash} in project ${manifest.projectId}. Preserve its history and prevent further use of this version.`;
-      const evidence=[manifest.artifactPath,state.artifactPath,state.validation?.path,...(state.activation?.evidence??[]),...(state.disabled?.evidence??[])].filter((ref):ref is string=>Boolean(ref));
-      return <InfoCard key={manifest.hash} icon={disabled?LockKeyhole:blocked?TriangleAlert:state.status==='active'?Zap:TerminalSquare}
-        title={manifest.title} meta={`${manifest.projectId} · ${manifest.kind} ${manifest.capabilityVersion} · ${labels[state.status]}`}>
-        <div className="card-list">
-          <span>{state.activation?`Activated ${timestamp(state.activation.recordedAt)}`:'No activation recorded'} · updated {timestamp(state.updatedAt)}</span>
-          {state.activation&&<span>Activation source: {state.activation.source}</span>}
-          {state.disabled&&<span>Disabled {timestamp(state.disabled.recordedAt)} · {state.disabled.source}</span>}
-          {state.status==='validation-failed'&&<span>Validation failed. This version is not active; inspect the validation receipt below.</span>}
-          {state.status==='rejected'&&<span>Review rejected this version. Inspect the state receipt below.</span>}
-        </div>
-        <div className="hash-line"><span>Bundle hash</span><CopyId value={manifest.hash} {...copy}/></div>
-        <details className="receipt-details"><summary>Entrypoints ({manifest.entrypoints.length}) and evidence</summary>
-          <div className="card-list">{manifest.entrypoints.map(entry=><span key={entry.id}>{entry.id} · {entry.runtime} · {entry.path}</span>)}
-            <span><FileCheck2 size={13}/> {manifest.testCount} bundled tests · {state.validation?'validation receipt recorded':'not yet validated'}</span>
-          </div>
-          <div className="hash-line"><span>Candidate</span><CopyId value={manifest.candidateId} {...copy}/></div>
-          {[...new Set(evidence)].map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}
+    <div className="reading-intro"><p className="muted">Capacidades locais executáveis, disponíveis para os agentes. <strong>Ativa</strong> significa disponível; <strong>usada</strong> exige uma chamada registrada.</p></div>
+    {!complete&&<EmptyState title="Não foi possível ler todo o aprendizado" detail="Atualize o painel. Os registros disponíveis abaixo não representam o inventário completo."/>}
+    {[data.learningCycle?.state,data.learningRuntime?.state,data.runtimeEffects?.state].includes('partial')&&<p className="warning-text">Leitura parcial: as contagens cobrem apenas registros que puderam ser verificados.</p>}
+    <div className="view-switch" role="group" aria-label="Etapa do aprendizado">{filters.map(item=><button type="button" key={item.id} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{item.label}<span>{complete?stories.filter(story=>bucket(story)===item.id).length:'—'}</span></button>)}</div>
+    <div className="story-list">{visible.map(item=>{
+      const {bundle,origin,usage}=item;
+      const reason=origin?.reason??data.operations.data?.learning?.find(candidate=>candidate.id===bundle?.manifest.candidateId)?.contentExcerpt;
+      const shortReason=reason?.split(/(?<=\.)\s/)[0];
+      const reasonPreview=shortReason&&shortReason.length>420?shortReason.slice(0,420)+'…':shortReason;
+      const usageAvailable=Boolean(data.runtimeEffects?.data&&usage);
+      const project=data.projects.items.find(project=>project.id===item.projectId);
+      return <article className="learning-story" key={item.id}>
+        <header className="story-heading"><div><span className="story-project">{project?.name??item.projectId}{project?.population==='fixture'?' · ambiente de teste':''}</span><h2>{item.title}</h2></div><span className={`story-status ${item.status==='active'?'is-active':''}`}>{statusNames[item.status]??item.status}</span></header>
+        <div className="story-reason"><h3>Por que existe</h3><p>{reasonPreview??'O motivo não está disponível nesta fonte. Consulte os registros de origem.'}</p></div>
+        <dl className="story-facts"><div><dt>O que virou</dt><dd>{bundle?`${bundle.manifest.kind==='skill'?'Skill local':bundle.manifest.kind==='script'?'Script local':'Prática automatizada'} · v${bundle.manifest.capabilityVersion}`:'Pacote não disponível nesta leitura'}</dd></div><div><dt>Quando foi ativada</dt><dd>{bundle?.state.activation?timestamp(bundle.state.activation.recordedAt):bundle?'Sem ativação registrada':'Ativação não verificada'}</dd></div><div><dt>Já foi usada?</dt><dd>{usageAvailable?usage!.executions?`${usage!.executions} chamada${usage!.executions===1?'':'s'} registrada${usage!.executions===1?'':'s'}`:'Nenhuma chamada registrada':'Uso ainda não verificado'}</dd>{usageAvailable&&usage!.executions>0&&<small>{usage!.passed} com sucesso · {usage!.failed} com falha</small>}</div></dl>
+        {origin?.lastError&&item.status!=='active'&&<div className="story-warning"><strong>O que impediu o avanço</strong><p>{origin.lastError}</p><span>{origin.attempts} tentativa(s) · última atualização {timestamp(origin.updatedAt)}</span></div>}
+        <details className="story-details"><summary>Ver histórico e evidências</summary>
+          {reason&&<p className="receipt-text">{reason}</p>}
+          <ol className="story-timeline">
+            {origin&&<li><strong>Aprendizado identificado</strong><span>{timestamp(origin.createdAt)}</span></li>}
+            {bundle&&<li><strong>Pacote gerado</strong><span>{timestamp(bundle.manifest.createdAt)} · {bundle.manifest.testCount} testes incluídos</span></li>}
+            {bundle?.state.validation&&<li><strong>Validação registrada</strong><CopyId value={bundle.state.validation.path} {...copy}/></li>}
+            {bundle?.state.activation&&<li><strong>Ativação aprovada pela política local</strong><span>{timestamp(bundle.state.activation.recordedAt)}</span></li>}
+            {usage?.runs.map(run=><li key={run.id}><strong>Chamada {run.status==='passed'?'concluída':'com falha'} · {duration(run.durationMs)}</strong><span>{timestamp(run.recordedAt)} · {run.entrypoint}</span><CopyId value={run.artifactPath} {...copy}/></li>)}
+            {bundle?.state.disabled&&<li><strong>Desativada</strong><span>{timestamp(bundle.state.disabled.recordedAt)}</span></li>}
+          </ol>
+          <p className="muted">Uso conta chamadas verificadas no inventário de recibos, sem limite de período nesta tela. Uma chamada não comprova aplicação do resultado em um produto nem economia de tempo ou tokens.</p>
+          {data.runtimeEffects?.state==='partial'&&<p className="warning-text">A leitura de uso está incompleta; as contagens cobrem somente os recibos verificados.</p>}
+          {bundle&&<><h3>Versão exata</h3><CopyId value={bundle.manifest.hash} {...copy}/><p className="muted">Para desativar esta versão, peça ao agente usando este hash.</p></>}
+          {origin?.jobIds.map(id=><button className="subtle-link" type="button" key={id} onClick={()=>onOpenRun(id)}>Abrir tentativa {id.slice(0,8)}</button>)}
+          {[...new Set([origin?.artifactPath,...(origin?.evidence??[]),bundle?.manifest.artifactPath].filter((ref):ref is string=>Boolean(ref)))].map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}
         </details>
-        {disabled?<ScopeNote>This hash is disabled. Its records remain available for inspection.</ScopeNote>:<details className="receipt-details">
-          <summary>Ask the agent to disable by hash</summary>
-          <p className="receipt-text">{request}</p>
-          <button className="subtle-link" type="button" onClick={()=>copy.onCopy(request)}><Clipboard size={15}/>{copy.copiedId===request?'Request copied':'Copy disable request'}</button>
-        </details>}
-      </InfoCard>;
+      </article>;
     })}</div>
+    {complete&&!visible.length&&<EmptyState title="Nenhum aprendizado nesta etapa" detail="Escolha outra etapa ou outro projeto para consultar os registros."/>}
   </>;
 }

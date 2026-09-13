@@ -9,6 +9,8 @@ import {KnowledgeLearningStore} from '../src/knowledge-learning.js';
 import {KnowledgeFiles} from '../src/knowledge-store.js';
 import {LearningRuntimeStore,LearningRunReceiptSchema} from '../src/learning-runtime.js';
 import {LearningRuntimeEffects} from '../src/learning-runtime-effects.js';
+import {DashboardReader} from '../src/dashboard.js';
+import {StateStore} from '../src/state.js';
 
 const decision={author:{name:'Fixture agent',role:'model' as const},source:'reader fixture only',evidence:['synthetic receipt fixture; no execution or OS isolation claim']};
 const history={observedAt:'2026-09-12T23:59:59.000Z',timeZone:'America/Sao_Paulo',window:{days:7 as const,startDay:'2026-09-06',endDay:'2026-09-12'}};
@@ -55,6 +57,14 @@ test('runtime effects aggregate distinct receipts and local days, preserve attri
   assert.equal(JSON.stringify(result).includes('CORRECTED'),false);
   assert.deepEqual(await fs.readFile(path.join(f.root,a.artifactPath)),before);
   assert.deepEqual((await new LearningRuntimeEffects(f.root).read({projectId:'other-fixture',history})).items,[]);
+  new StateStore(path.join(f.root,'state/jobs.sqlite')).close();
+  const dashboard=new DashboardReader(f.root);
+  try {
+    const screen=await dashboard.screen({view:'learning',projectId:'effects-fixture'});
+    assert.equal(screen.runtimeEffects?.data?.items[0]?.executions,3,'learning includes verified use before the efficiency window');
+    assert.equal(screen.runtimeEffects?.data?.window,null);
+    assert.equal(screen.learningRuntime?.data?.items[0]?.state.activation,null,'recorded use never fabricates activation');
+  } finally {dashboard.close();}
 });
 
 test('missing durations remain unknown and mismatched outcome or output receipts do not become successful executions',async t=>{

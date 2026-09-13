@@ -24,27 +24,27 @@ type PlotPoint = {day: string; value: number | null; n: number; jobIds: string[]
 type Change = EfficiencyHistoryResult['changes'][number];
 const periods: HistoryDays[] = [7, 14, 30, 90];
 const sources: {id: Source; label: string}[] = [
-  {id: 'tokens', label: 'Token usage · measured'},
-  {id: 'checks', label: 'Check jobs'}, {id: 'codex', label: 'Codex jobs'}, {id: 'direct', label: 'Direct work · declared'},
+  {id: 'tokens', label: 'Tokens por turno'},
+  {id: 'checks', label: 'Testes e checks'}, {id: 'codex', label: 'Execuções com agente'}, {id: 'direct', label: 'Trabalho direto declarado'},
 ];
 const metrics: Record<Metric, {label: string; unit: string}> = {
-  firstPassRate: {label: 'Completed on first attempt', unit: '% of finished jobs'},
-  failedRate: {label: 'Failed jobs', unit: '% of finished jobs'},
-  retries: {label: 'Additional attempts', unit: 'attempts'},
-  completed: {label: 'Completed jobs', unit: 'jobs'},
-  duration: {label: 'Check duration · compatible cohort', unit: 'ms'},
-  cycles: {label: 'Completed work cycles', unit: 'declared cycles'},
-  wallClock: {label: 'Elapsed cycle time', unit: 'ms · declared wall-clock'},
-  totalTokens: {label: 'Total tokens', unit: 'tokens'},
-  inputTokens: {label: 'Input tokens', unit: 'tokens'},
-  uncachedInputTokens: {label: 'Uncached input tokens', unit: 'tokens'},
-  cachedInputTokens: {label: 'Cached input tokens', unit: 'tokens'},
-  outputTokens: {label: 'Output tokens', unit: 'tokens'},
-  reasoningOutputTokens: {label: 'Reasoning output tokens', unit: 'tokens'},
-  cacheWriteInputTokens: {label: 'Cache-write input tokens', unit: 'tokens'},
+  firstPassRate: {label: 'Concluídas na primeira tentativa', unit: '% das execuções encerradas'},
+  failedRate: {label: 'Execuções que falharam', unit: '% das execuções encerradas'},
+  retries: {label: 'Tentativas adicionais', unit: 'tentativas'},
+  completed: {label: 'Execuções concluídas', unit: 'jobs'},
+  duration: {label: 'Tempo de checks equivalentes', unit: 'ms'},
+  cycles: {label: 'Ciclos de trabalho concluídos', unit: 'ciclos declarados'},
+  wallClock: {label: 'Tempo decorrido do ciclo', unit: 'ms · tempo declarado'},
+  totalTokens: {label: 'Tokens totais', unit: 'tokens'},
+  inputTokens: {label: 'Tokens de entrada', unit: 'tokens'},
+  uncachedInputTokens: {label: 'Entrada sem cache', unit: 'tokens'},
+  cachedInputTokens: {label: 'Entrada em cache', unit: 'tokens'},
+  outputTokens: {label: 'Tokens de saída', unit: 'tokens'},
+  reasoningOutputTokens: {label: 'Saída de raciocínio', unit: 'tokens'},
+  cacheWriteInputTokens: {label: 'Gravação de cache', unit: 'tokens'},
 };
 const tokenMetrics: TokenHistoryMetric[] = ['totalTokens', 'inputTokens', 'uncachedInputTokens', 'cachedInputTokens', 'outputTokens', 'reasoningOutputTokens', 'cacheWriteInputTokens'];
-const dayLabel = new Intl.DateTimeFormat('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'});
+const dayLabel = new Intl.DateTimeFormat('pt-BR', {month: 'short', day: 'numeric', timeZone: 'UTC'});
 
 /** Read-only presentation of the shared history projection; missing samples remain gaps. */
 export function EfficiencyHistory({history, onDaysChange, onOpenRun, selection, onSelectionChange, pending = false, days = 14, error, ...copy}: EfficiencyHistoryProps) {
@@ -58,7 +58,7 @@ export function EfficiencyHistory({history, onDaysChange, onOpenRun, selection, 
   const tokenSeries = tokenSeriesOptions.find(item => item.id === tokenSeriesId) ?? tokenSeriesOptions[0];
   const availableMetrics: Metric[] = source === 'tokens' ? tokenMetrics : source === 'direct' ? ['cycles', 'wallClock'] : ['firstPassRate', 'retries', 'failedRate', 'completed', 'duration'];
   const selectedMetric = availableMetrics.includes(metric) ? metric : availableMetrics[0]!;
-  const metricInfo = source === 'tokens' ? {...metrics[selectedMetric], unit: tokenAggregation === 'mean' ? 'tokens / complete turn' : 'tokens / day'} : selectedMetric === 'duration' && series ? {label: series.metricLabel, unit: series.unit} : metrics[selectedMetric];
+  const metricInfo = source === 'tokens' ? {...metrics[selectedMetric], unit: tokenAggregation === 'mean' ? 'tokens / turno completo' : 'tokens / dia'} : selectedMetric === 'duration' && series ? {label: series.metricLabel, unit: series.unit} : metrics[selectedMetric];
   const points: PlotPoint[] = (history?.points ?? []).map(point => {
     if (source === 'tokens') {
       const tokenMetric = selectedMetric as TokenHistoryMetric;
@@ -86,9 +86,9 @@ export function EfficiencyHistory({history, onDaysChange, onOpenRun, selection, 
   const first = observedPoints[0];
   const last = observedPoints.at(-1);
   const delta = first && last && first.day !== last.day ? last.value - first.value : null;
-  const deltaUnit = selectedMetric === 'firstPassRate' || selectedMetric === 'failedRate' ? 'percentage points' : metricInfo.unit;
-  const sampleUnit = source === 'tokens' ? 'complete turns with this counter' : source === 'direct' ? 'declared cycles' : selectedMetric === 'duration' ? 'measured checks' : selectedMetric === 'retries' ? 'recorded jobs' : 'finished jobs';
-  const emptyDetail = source === 'tokens' ? history?.telemetry?.enabled === false ? 'Local token telemetry is off.' : (history?.telemetry?.unassignedTurns ?? 0) > 0 ? `${history!.telemetry.unassignedTurns} complete turns lack a recorded project or task scope at turn start.` : 'No complete turns with a declared project and performance scope for this selection.' : selectedMetric === 'duration' ? 'No compatible duration cohort in this period.' : 'A point appears when this source has a recorded sample.';
+  const deltaUnit = selectedMetric === 'firstPassRate' || selectedMetric === 'failedRate' ? 'pontos percentuais' : metricInfo.unit;
+  const sampleUnit = source === 'tokens' ? 'turnos completos com este contador' : source === 'direct' ? 'ciclos declarados' : selectedMetric === 'duration' ? 'checks medidos' : selectedMetric === 'retries' ? 'execuções registradas' : 'execuções encerradas';
+  const emptyDetail = source === 'tokens' ? history?.telemetry?.enabled === false ? 'A telemetria local de tokens está desligada.' : (history?.telemetry?.unassignedTurns ?? 0) > 0 ? `${history!.telemetry.unassignedTurns} complete turns lack a recorded project or task scope at turn start.` : 'Não há turnos completos com projeto e tipo de trabalho identificados nesta seleção.' : selectedMetric === 'duration' ? 'Não há checks equivalentes com duração medida neste período.' : 'Os pontos aparecem quando há amostra registrada.';
   const describeScope = (change: Change): {label: string; kind: string | null} => {
     const project = history?.projects.find(item => item.id === change.projectId)?.name ?? change.projectId;
     try {
@@ -133,23 +133,24 @@ export function EfficiencyHistory({history, onDaysChange, onOpenRun, selection, 
     <strong>{change.label}</strong><span>{describeScope(change).label}</span>
   </button>;
 
-  return <section className="efficiency-history" aria-label="Performance history" aria-busy={pending}>
-    <InfoCard icon={Activity} title="Performance history" meta={pending ? 'Updating…' : history ? `Through ${history.window.endDay}` : 'Recorded evidence'}>
+  return <section className="efficiency-history" aria-label="Histórico das medidas" aria-busy={pending}>
+    <InfoCard icon={Activity} title="Histórico das medidas" meta={pending ? 'Atualizando…' : history ? `Até ${history.window.endDay}` : 'Evidência registrada'}>
       <div className="eh-content">
-        <div className="eh-intro"><p>Follow recorded outcomes alongside changes to how work is done.</p><div className="eh-periods" role="group" aria-label="History period">
-          {periods.map(period => <button key={period} type="button" aria-pressed={(history?.window.days ?? days) === period} onClick={() => onDaysChange(period)} disabled={pending}>{period} days</button>)}
+        <div className="eh-intro"><p>Escolha a medida e o período para explorar os registros.</p><div className="eh-periods" role="group" aria-label="History period">
+          {periods.map(period => <button key={period} type="button" aria-pressed={(history?.window.days ?? days) === period} onClick={() => onDaysChange(period)} disabled={pending}>{period} dias</button>)}
         </div></div>
-        {!history ? <EmptyState title={pending ? 'Loading history' : 'History unavailable'} detail={error ?? 'Recorded history could not be read. No values are inferred.'}/> : <>
+        {!history ? <EmptyState title={pending ? 'Carregando histórico' : 'Histórico indisponível'} detail={error ?? 'Recorded history could not be read. No values are inferred.'}/> : <>
           <div className="eh-controls">
             <div className="eh-sources" role="group" aria-label="Evidence source">{sources.map(item => <button key={item.id} type="button" aria-pressed={source === item.id} onClick={() => updateSelection({source: item.id})}>{item.label}</button>)}</div>
-            <label className="eh-select">Metric<select value={selectedMetric} onChange={event => updateSelection({metric: event.target.value as Metric})}>{availableMetrics.map(item => <option key={item} value={item}>{metrics[item].label}</option>)}</select></label>
-            {source === 'tokens' && <label className="eh-select">Aggregation<select value={tokenAggregation} onChange={event => updateSelection({tokenAggregation: event.target.value as 'mean' | 'total'})}><option value="mean">Average per complete turn</option><option value="total">Daily total</option></select></label>}
-            {source === 'tokens' && tokenSeriesOptions.length > 0 && <label className="eh-select eh-cohort">Project and declared work scope<select value={tokenSeries?.id} onChange={event => updateSelection({tokenSeriesId: event.target.value})}>{tokenSeriesOptions.map(item => <option key={item.id} value={item.id}>{[item.projectId, item.performanceScope.taskClass, item.performanceScope.language, item.performanceScope.problemCategory].filter(Boolean).join(' · ')}</option>)}</select></label>}
-            {selectedMetric === 'duration' && seriesOptions.length > 0 && <label className="eh-select eh-cohort">Cohort<select value={series?.id} onChange={event => updateSelection({seriesId: event.target.value})}>{seriesOptions.map(item => <option key={item.id} value={item.id}>{item.projectId} · {item.metricLabel} · {item.cohort}</option>)}</select></label>}
+            <label className="eh-select">Medida<select value={selectedMetric} onChange={event => updateSelection({metric: event.target.value as Metric})}>{availableMetrics.map(item => <option key={item} value={item}>{metrics[item].label}</option>)}</select></label>
+            {source === 'tokens' && <label className="eh-select">Agrupamento<select value={tokenAggregation} onChange={event => updateSelection({tokenAggregation: event.target.value as 'mean' | 'total'})}><option value="mean">Média por turno completo</option><option value="total">Total por dia</option></select></label>}
+            {source === 'tokens' && tokenSeriesOptions.length > 0 && <label className="eh-select eh-cohort">Projeto e tipo de trabalho<select value={tokenSeries?.id} onChange={event => updateSelection({tokenSeriesId: event.target.value})}>{tokenSeriesOptions.map(item => <option key={item.id} value={item.id}>{[item.projectId, item.performanceScope.taskClass, item.performanceScope.language, item.performanceScope.problemCategory].filter(Boolean).join(' · ')}</option>)}</select></label>}
+            {selectedMetric === 'duration' && seriesOptions.length > 0 && <label className="eh-select eh-cohort">Grupo de checks equivalentes<select value={series?.id} onChange={event => updateSelection({seriesId: event.target.value})}>{seriesOptions.map(item => <option key={item.id} value={item.id}>{item.projectId} · {item.metricLabel} · {item.cohort}</option>)}</select></label>}
           </div>
+          <p className="muted">{source==='tokens'?(tokenAggregation==='mean'?'Cada ponto é a média de tokens por turno completo, no projeto e tipo de trabalho selecionados.':'Cada ponto soma os tokens observados no dia. Mais trabalho costuma aumentar o total.'):source==='direct'?'Ciclos são conclusões declaradas de trabalho direto. O tempo inclui esperas.':selectedMetric==='firstPassRate'?'Percentual das execuções encerradas no dia que concluíram na primeira tentativa. Cancelamentos e falhas também fazem parte do denominador.':selectedMetric==='failedRate'?'Percentual das execuções encerradas no dia cujo resultado final foi falha.':selectedMetric==='duration'?'Tempo médio dos checks do mesmo grupo compatível. O grupo define o que pode ser comparado.':selectedMetric==='retries'?'Soma das tentativas além da primeira nos registros do dia.':'Quantidade de execuções com conclusão técnica registrada no dia.'}</p>
           <div className="eh-summary" aria-live="polite">
-            <div><span className="eh-summary-label">{metricInfo.label}</span><strong>{last ? `${numbers.format(last.value)} ${metricInfo.unit}` : 'No observations yet'}</strong><span>{last ? `Latest observed day: ${last.day} · ${numbers.format(last.n)} ${sampleUnit}` : emptyDetail}</span></div>
-            <div><span className="eh-summary-label">Observed change</span><strong>{delta === null ? 'Needs another observed day' : `${delta > 0 ? '+' : ''}${numbers.format(delta)} ${deltaUnit}`}</strong><span>{delta === null ? 'No better / worse conclusion yet.' : `${first!.day} → ${last!.day} · descriptive change`}</span></div>
+            <div><span className="eh-summary-label">{metricInfo.label}</span><strong>{last ? `${numbers.format(last.value)} ${metricInfo.unit}` : 'Sem amostra nesta seleção'}</strong><span>{last ? `Último dia observado: ${last.day} · ${numbers.format(last.n)} ${sampleUnit}` : emptyDetail}</span></div>
+            <div><span className="eh-summary-label">Variação entre dias observados</span><strong>{delta === null ? 'Precisa de mais um dia com amostra' : `${delta > 0 ? '+' : ''}${numbers.format(delta)} ${deltaUnit}`}</strong><span>{delta === null ? 'Ainda não permite concluir melhora ou piora.' : `${first!.day} → ${last!.day} · variação descritiva`}</span></div>
           </div>
           <div className="eh-chart-scroll">
             <svg className="eh-chart" viewBox="0 0 900 306" role="group" aria-labelledby={`${chartId}-title ${chartId}-description`}>
@@ -160,7 +161,7 @@ export function EfficiencyHistory({history, onDaysChange, onOpenRun, selection, 
               {points.map((point, index) => point.value !== null && Number.isFinite(point.value) ? <g key={point.day} className={`eh-point ${selectedPoint?.day === point.day ? 'eh-point-selected' : ''}`} role="button" tabIndex={0} aria-label={`${point.day}: ${numbers.format(point.value)} ${metricInfo.unit}, sample ${point.n}. Inspect evidence.`} onClick={() => setDetailSelection({kind: 'point', id: point.day})} onKeyDown={event => {if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); setDetailSelection({kind: 'point', id: point.day});}}}>
                 <circle className="eh-point-hit" cx={x(index)} cy={y(point.value)} r={13}/><circle className="eh-point-dot" cx={x(index)} cy={y(point.value)} r={4.5}/><title>{point.day}: {numbers.format(point.value)} {metricInfo.unit} · sample {point.n}</title>
               </g> : null)}
-              {!observedPoints.length && <text x="468" y="126" textAnchor="middle" className="eh-chart-empty">No observed points for this selection</text>}
+              {!observedPoints.length && <text x="468" y="126" textAnchor="middle" className="eh-chart-empty">Sem amostra nesta seleção</text>}
               <line className="eh-marker-track" x1={plot.left} x2={plot.right} y1={plot.markerY} y2={plot.markerY} aria-hidden="true"/>
               <text className="eh-axis" x={plot.left - 12} y={plot.markerY + 4} textAnchor="end" aria-hidden="true">Changes</text>
               {[...chartChangesByDay.entries()].map(([day, items]) => {
@@ -174,8 +175,10 @@ export function EfficiencyHistory({history, onDaysChange, onOpenRun, selection, 
             </svg>
           </div>
           <div className="eh-caption"><span><i className="eh-dot-key"/> {source === 'tokens' ? 'Complete-turn counter deltas' : source === 'direct' ? 'Declared work cycles' : 'Observed job evidence'} · {metricInfo.unit}</span><span>Gaps = no sample · days in {history.timeZone}</span></div>
+          <details className="story-details"><summary>Mudanças registradas no período ({changes.length})</summary>
           <div className="eh-changes-heading"><GitBranch size={16}/><h4>{source === 'tokens' ? 'Other recorded changes (not token-attributed)' : source === 'direct' ? 'Other recorded changes (not cycle-attributed)' : 'Changes and context inclusion'}</h4><span>{changes.length} in this period</span></div>
-          {latestChanges.length ? <div className="eh-change-list">{latestChanges.map(changeButton)}</div> : <p className="eh-empty-copy">No recorded changes in this period.</p>}
+          {latestChanges.length ? <div className="eh-change-list">{latestChanges.map(changeButton)}</div> : <p className="eh-empty-copy">Sem mudanças registradas neste período.</p>}
+          </details>
           {selectedChange && <div className="eh-detail" aria-live="polite">
             <span className="eh-summary-label">Recorded change · {timestamp(selectedChange.at)}</span><h4>{selectedChange.label}</h4><p>{describeScope(selectedChange).label} · {selectedChange.kind === 'knowledge-use' ? 'context inclusion' : selectedChange.kind.replaceAll('-', ' ')}</p>
             {(changesByDay.get(selectedChange.day)?.length ?? 0) > 1 && <div className="eh-same-day">{changesByDay.get(selectedChange.day)!.map(change => <button key={change.id} type="button" aria-pressed={change.id === selectedChange.id} onClick={() => showChange(change)}>{change.label}</button>)}</div>}
@@ -190,9 +193,9 @@ export function EfficiencyHistory({history, onDaysChange, onOpenRun, selection, 
             <details><summary>{selectedMetric === 'duration' ? 'Evaluation receipts' : 'Evidence'} ({selectedPoint.evidence.length})</summary><div className="eh-references">{selectedPoint.evidence.map((ref, index) => <CopyId key={`${index}-${ref}`} value={ref} {...copy}/>)}</div></details>
           </div>}
           <div className="eh-details-grid">
-            <details><summary>Daily values and samples</summary><div className="eh-table-scroll"><table><caption>{metricInfo.label} · {metricInfo.unit}</caption><thead><tr><th scope="col">Day</th><th scope="col">Value</th><th scope="col">Sample</th><th scope="col">Evidence</th></tr></thead><tbody>{points.map(point => <tr key={point.day}><th scope="row">{point.day}</th><td>{point.value === null ? 'No sample' : numbers.format(point.value)}</td><td>{point.value === null ? '—' : numbers.format(point.n)}</td><td>{point.value !== null && <button type="button" onClick={() => setDetailSelection({kind: 'point', id: point.day})}>Inspect</button>}</td></tr>)}</tbody></table></div></details>
+            <details><summary>Valores diários e amostras</summary><div className="eh-table-scroll"><table><caption>{metricInfo.label} · {metricInfo.unit}</caption><thead><tr><th scope="col">Day</th><th scope="col">Value</th><th scope="col">Sample</th><th scope="col">Evidence</th></tr></thead><tbody>{points.map(point => <tr key={point.day}><th scope="row">{point.day}</th><td>{point.value === null ? 'No sample' : numbers.format(point.value)}</td><td>{point.value === null ? '—' : numbers.format(point.n)}</td><td>{point.value !== null && <button type="button" onClick={() => setDetailSelection({kind: 'point', id: point.day})}>Inspect</button>}</td></tr>)}</tbody></table></div></details>
             <details><summary>All changes ({changes.length})</summary><div className="eh-change-list eh-all-changes">{[...changes].sort((a, b) => b.at.localeCompare(a.at)).map(changeButton)}</div></details>
-            <details><summary>Method and coverage</summary><div className="eh-method"><p>{source === 'tokens' ? `${tokenAggregation === 'mean' ? 'Each point divides observed token deltas by the complete turns with that counter.' : 'Each point totals observed token deltas; workload volume affects the total.'} Project and declared work scope remain separate. N is specific to the selected counter; missing or partial turns and cumulative worker receipts are excluded.` : source === 'direct' ? 'Completed cycles are declared interaction transitions. Elapsed time is wall-clock time, not active labor or model cost.' : selectedMetric === 'duration' ? 'Each point is the mean of measured check durations within the selected compatible cohort.' : 'Daily outcomes and attempts describe this workload. A different task mix can change these values.'}</p>
+            <details><summary>Método e cobertura</summary><div className="eh-method"><p>{source === 'tokens' ? `${tokenAggregation === 'mean' ? 'Each point divides observed token deltas by the complete turns with that counter.' : 'Each point totals observed token deltas; workload volume affects the total.'} Project and declared work scope remain separate. N is specific to the selected counter; missing or partial turns and cumulative worker receipts are excluded.` : source === 'direct' ? 'Completed cycles are declared interaction transitions. Elapsed time is wall-clock time, not active labor or model cost.' : selectedMetric === 'duration' ? 'Each point is the mean of measured check durations within the selected compatible cohort.' : 'Daily outcomes and tentativas describe this workload. A different task mix can change these values.'}</p>
               {source === 'tokens' && history.telemetry && <><p>Telemetry: {history.telemetry.enabled ? 'enabled' : 'off'} · {history.telemetry.completeTurns} complete turns · {history.telemetry.incompleteTurns} incomplete · {history.telemetry.unassignedTurns} without a comparable assignment.</p>{history.telemetry.truncated && <p>The telemetry read limit was reached; coverage is partial.</p>}{history.telemetry.warnings.length > 0 && <ul>{history.telemetry.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}</>}
               {series && selectedMetric === 'duration' && <dl className="eh-change-values"><div><dt>Method</dt><dd>{series.method}</dd></div><div><dt>Cohort</dt><dd>{series.cohort}</dd></div></dl>}
               <p>Changes and later outcomes establish chronology. Their causal effect requires the linked improvement and comparable use evidence.</p>

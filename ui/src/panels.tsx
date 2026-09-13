@@ -3,7 +3,7 @@ import {Activity,ArrowUpRight,Clipboard,Database,FileCheck2,Layers3,LockKeyhole,
 import type {DashboardObservation,DashboardOptions} from './api';
 import {EfficiencyHistory,type HistoryDays,type HistorySelection} from './EfficiencyHistory';
 import {ImprovementEffects} from './ImprovementEffects';
-import {LearningCapabilities,LearningCycle} from './LearningCapabilities';
+import {LearningStories} from './LearningCapabilities';
 import {LearningRuntimeEffectsView} from './LearningRuntimeEffects';
 import type {EvaluationComparison,EvaluationReceipt} from '../../src/evaluation';
 import {CopyId,EmptyState,InfoCard,MetricCard,ScopeNote,SectionHeading,timestamp,type CopyProps} from './components';
@@ -72,13 +72,12 @@ export function EfficiencyView({data,onOpenRun,onCompare,onPage,selection,histor
       {!!item.evidence.length&&<details className="receipt-details"><summary>Comparison evidence ({item.evidence.length})</summary>{item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</details>}
     </InfoCard>);
   return <>
-    <LearningRuntimeEffectsView source={data.runtimeEffects} {...copy}/>
-    <details className="receipt-details"><summary>Context learning from the earlier workflow</summary>
-      <ScopeNote>This history tracks manual context promotions. Automatic executable skills and their actual calls are shown above; they do not require another manual promotion.</ScopeNote>
-      <ImprovementEffects source={data.improvements} tokenEffects={data.learningEffects} onOpenRun={onOpenRun} {...copy}/>
-    </details>
+    <section className="answer-panel"><span className="eyebrow">Como ler esta tela</span><h2>A economia de tokens ainda não está demonstrada</h2><p>Eficiência aqui reúne medidas de consumo e de execução. Ainda não existe uma comparação válida que atribua economia às capacidades aprendidas. O gráfico mostra o que foi observado no período e no tipo de trabalho selecionados.</p></section>
+    <details className="disclosure-panel"><summary>Entenda as medidas de eficiência</summary><div className="definition-grid"><article><h3>Consumo de tokens</h3><p>Quanto o modelo processou por turno ou por dia. Um total menor pode refletir menos trabalho; sozinho, não comprova melhoria.</p></article><article><h3>Resultado das execuções</h3><p>Conclusões, falhas e tentativas adicionais. Compare trabalhos equivalentes para interpretar a mudança.</p></article><article><h3>Tempo registrado</h3><p>Duração dos checks ou tempo decorrido de um ciclo. Tempo decorrido também inclui esperas; não representa horas poupadas.</p></article></div></details>
     <EfficiencyHistory history={data.history?.data} days={historyDays} onDaysChange={onDaysChange} selection={historySelection} onSelectionChange={onHistorySelectionChange} pending={pending} error={data.history?.state==='unavailable'?'History could not be read. Refresh to retry.':undefined} onOpenRun={onOpenRun} {...copy}/>
-    <details className="receipt-details"><summary>Detailed check comparisons and evaluations</summary>
+    <details className="disclosure-panel"><summary>Chamadas de capacidades no período</summary><LearningRuntimeEffectsView source={data.runtimeEffects} {...copy}/></details>
+    <details className="disclosure-panel"><summary>Promoções de contexto do fluxo anterior</summary><ImprovementEffects source={data.improvements} tokenEffects={data.learningEffects} onOpenRun={onOpenRun} {...copy}/></details>
+    <details className="disclosure-panel"><summary>Comparações de checks e avaliações detalhadas</summary>
     <SectionHeading label="Evaluation receipts" title="Automatic comparisons" count={data.insights?.data?String(automatic.length):data.insights?.state??'unavailable'}/>
     <ScopeNote>The four most recent compatible comparisons appear first. These are observed check durations; details and earlier comparisons remain available below.</ScopeNote>
     <div className="evaluation-list">{automaticCards.slice(0,4)}</div>
@@ -106,24 +105,52 @@ export function EfficiencyView({data,onOpenRun,onCompare,onPage,selection,histor
 }
 
 export function ProjectView({data,onChoose,onOpenRun}: {data:DashboardObservation;onChoose:(id:string)=>void;onOpenRun:(id:string)=>void}){
-  const projects=data.projects.items;
-  return <><ScopeNote>Registry metadata + complete recorded queue counts. Project directories and code are not opened by this screen. Registered status is separate from project health.</ScopeNote><SectionHeading label="Registered projects" title="Projects at a glance" count={`${projects.length} · ${data.projects.state}`}/>
-    <section className="project-grid">{projects.map(project=><article className="project-card" key={project.id}><div className="project-card-top"><div className="project-identity"><span className="project-code project-cyan">{project.name.slice(0,2).toUpperCase()}</span><div><h3>{project.name}</h3><span>{project.id}</span></div></div><span className="class-pill">{project.status}</span></div><div className="project-stats"><div><span>Recorded runs</span><strong>{project.activity.total}</strong></div><div><span>Active</span><strong>{project.activity.active}</strong></div><div><span>Completed</span><strong>{project.activity.completed}</strong></div></div><div className="card-list"><span>Stack: {project.stack.join(', ')||'not declared'}</span><span>{project.sourceCount} registered context sources · {project.checks.length} named checks</span><span>Latest update: {timestamp(project.activity.updatedAt)}</span></div><div className="project-actions"><button className="subtle-link" onClick={()=>onChoose(project.id)}>Inspect project records<ArrowUpRight size={15}/></button>{project.activity.latestId&&<button className="subtle-link" onClick={()=>onOpenRun(project.activity.latestId!)}>Latest run<ArrowUpRight size={15}/></button>}</div></article>)}</section>
-    {!projects.length&&<EmptyState title={data.projects.state==='unavailable'?'Registry unavailable':'Registry is empty'} detail="No project health or availability is inferred."/>}
+  const roots=data.projects.items.filter(project=>!project.parentProjectId);
+  const [selectedProject,setSelectedProject]=useState(data.overview.projectId??'codex-infra');
+  const [projectSearch,setProjectSearch]=useState('');
+  const choices=roots.filter(project=>project.name.toLocaleLowerCase('pt-BR').includes(projectSearch.toLocaleLowerCase('pt-BR')));
+  const selected=choices.find(project=>project.id===selectedProject)??choices[0];
+  const projects=selected?[selected]:[];
+  return <><div className="reading-intro"><p>Atividade acompanhada pela Infra em cada projeto.</p><p className="muted">Ambientes de teste e de geração de aprendizado ficam dentro de CodexInfra. Conclusão técnica de uma execução não equivale ao aceite do produto.</p></div>
+    <div className="project-browser"><nav className="project-index" aria-label="Projetos cadastrados"><label>Buscar projeto<input value={projectSearch} onChange={event=>setProjectSearch(event.target.value)} placeholder="Nome do projeto"/></label>{choices.map(project=><button type="button" key={project.id} aria-pressed={selected?.id===project.id} onClick={()=>setSelectedProject(project.id)}><strong>{project.name}</strong><span>{project.activity.active?`${project.activity.active} execuções ativas`:'Sem execuções ativas'}</span></button>)}</nav>
+    <section className="project-grid">{projects.map(project=><article className="project-card" key={project.id}>
+      <div className="project-card-top"><h2>{project.name}</h2><span className="class-pill">{project.population==='fixture'?'Teste':project.population==='learning'?'Aprendizado':project.population==='unclassified'?'Sem classificação':'Projeto'}</span></div>
+      <p className="muted">{project.activity.active?`${project.activity.active} execução(ões) em andamento ou na fila.`:project.activity.total?'Sem execuções ativas neste momento.':'Nenhuma execução registrada pela Infra.'}</p>
+      <div className="project-stats"><div><span>Execuções diretas</span><strong>{project.activity.total}</strong></div><div><span>Concluídas</span><strong>{project.activity.completed}</strong></div></div>
+      <p className="muted">Última atividade: {project.activity.updatedAt?timestamp(project.activity.updatedAt):'não registrada'}</p>
+      <div className="project-actions"><button className="subtle-link" type="button" onClick={()=>onChoose(project.id)}>Ver trabalho do projeto<ArrowUpRight size={15}/></button>{project.activity.latestId&&<button className="subtle-link" type="button" onClick={()=>onOpenRun(project.activity.latestId!)}>Última execução<ArrowUpRight size={15}/></button>}</div>
+      {data.projects.items.some(child=>child.parentProjectId===project.id)&&<details className="story-details project-children"><summary>Ambientes internos ({data.projects.items.filter(child=>child.parentProjectId===project.id).length})</summary><p className="muted">Testes e trabalhos de aprendizado pertencentes a este projeto. Cada ambiente preserva suas execuções para investigação.</p><div className="activity-list">{data.projects.items.filter(child=>child.parentProjectId===project.id).map(child=><div className="activity-row" key={child.id}><div><strong>{child.name}</strong><p>{child.population==='fixture'?'Teste da Infra':'Geração de aprendizado'} · {child.activity.total} execuções · {child.activity.active} ativas · {timestamp(child.activity.updatedAt)}</p><details><summary>Identificação do ambiente</summary><p className="muted">{child.registeredName}</p><code>{child.id}</code></details></div><button type="button" className="subtle-link" onClick={()=>onChoose(child.id)}>Ver execuções</button></div>)}</div></details>}
+      <details className="story-details"><summary>Cadastro técnico</summary><p className="muted">{project.id} · cadastro {project.status}</p><p className="muted">Stack: {project.stack.join(', ')||'não informada'}. {project.sourceCount} fontes de contexto · {project.checks.length} checks configurados.</p></details>
+    </article>)}</section>
+    </div>
+    {!projects.length&&<EmptyState title={data.projects.state==='unavailable'?'Cadastro indisponível':'Nenhum projeto neste recorte'} detail="Altere o filtro ou atualize a leitura."/>}
   </>;
 }
 
 export function EvidenceRecoveryView({data,...copy}:Omit<PanelProps,'onOpenRun'>){
+  const recovery=data.recovery?.data;
+  const latest=recovery?.verifications.slice().sort((a,b)=>b.capturedAt.localeCompare(a.capturedAt))[0];
+  return <>
+    <section className="answer-panel"><span className="eyebrow">Recuperação da instalação · todos os projetos</span><h2>{latest?'Existe um teste de recuperação registrado':recovery?'Ainda não há teste de recuperação registrado':'Não foi possível consultar a recuperação'}</h2><p>{latest?`O teste mais recente disponível é de ${timestamp(latest.capturedAt)}. Ele documenta uma recuperação feita naquela data. A possibilidade de recuperar a instalação atual ainda precisa de uma verificação atual.`:'Um manifesto de backup sozinho não comprova que a restauração funciona.'}</p></section>
+    {latest&&<article className="learning-story"><header className="story-heading"><h2>O que o último teste comprovou</h2><span className="story-status">Evidência histórica</span></header><dl className="story-facts"><div><dt>Arquivos recuperados</dt><dd>{latest.files}</dd></div><div><dt>Jobs recuperados</dt><dd>{latest.recoveredJobs}</dd></div><div><dt>Estado original preservado</dt><dd>{latest.sourceStatePreserved?'Sim, conforme o recibo':'Não confirmado'}</dd></div></dl><details className="story-details"><summary>Abrir a prova deste teste</summary><CopyId value={latest.evidence} {...copy}/><p className="muted">Manifesto verificado</p><CopyId value={latest.manifestSha256} {...copy}/></details></article>}
+    {recovery?.truncated&&<ScopeNote>O inventário atingiu o limite de leitura; este resumo cobre os registros disponíveis.</ScopeNote>}
+    <EvidenceRecoveryLedger data={data} {...copy}/>
+  </>;
+}
+
+function EvidenceRecoveryLedger({data,...copy}:Omit<PanelProps,'onOpenRun'>){
   const run=data.run?.data, recovery=data.recovery?.data;
-  return <><section className="evidence-summary-grid"><MetricCard label="Run references" value={run?String(run.evidence.length):'unknown'} note="inspected run" tone="cyan" icon={Database}/><MetricCard label="Backup manifests" value={recovery?String(recovery.snapshots.length):'unknown'} note="bounded metadata inventory" tone="neutral" icon={Layers3}/><MetricCard label="Recovery verifications" value={recovery?String(recovery.verifications.length):'unknown'} note="dated receipts" tone="green" icon={RefreshCw}/><MetricCard label="Readiness now" value="unknown" note="historical tests below" tone="amber" icon={ShieldCheck}/></section>
+  return <><details className="disclosure-panel"><summary>Histórico de recuperação e manifestos</summary>
       <SectionHeading label="Recovery ledger" title="Restoration evidence" count={data.recovery?.state??'unavailable'}/>
       <div className="evaluation-list">{recovery?.verifications.map(item=><InfoCard key={item.evidence} icon={RefreshCw} title={`Recovery verified ${timestamp(item.capturedAt)}`} meta={`${item.files} files · ${item.recoveredJobs} recovered jobs`}><div className="card-list"><span>Source state preserved: {String(item.sourceStatePreserved)} · own CLI: {String(item.copyUsesOwnCli)}</span><span>UI build: {item.uiBuild?.status??'not recorded'}</span><span>Activated scope: {item.activationValidation?.activatedProjectIds.join(', ')??'not recorded'}</span><span>Product checks executed: {item.activationValidation?String(item.activationValidation.externalProjectChecksExecuted):'unknown'}</span><span>Restored verification job: {item.restoredJobId}</span></div><div className="hash-line"><span>Manifest</span><CopyId value={item.manifestSha256} {...copy}/></div><CopyId value={item.evidence} {...copy}/></InfoCard>)}</div>
       {!recovery?.verifications.length&&<EmptyState title="No compatible recovery verification observed" detail="Backup metadata alone does not prove restoration. Refresh to retry an unavailable source."/>}
       <details className="receipt-details"><summary>Backup manifests ({recovery?.snapshots.length??'unknown'})</summary>{recovery?.snapshots.map(item=><div className="measurement-record" key={item.name}><strong>{item.name}</strong><span>{timestamp(item.createdAt)} · {item.files} files · {item.bytes.toLocaleString()} bytes</span><CopyId value={item.manifestSha256} {...copy}/><CopyId value={item.evidence} {...copy}/></div>)}</details>
       <ScopeNote>{recovery?.limitations.join(' ')??'Recovery metadata unavailable.'} {recovery?.truncated?'The inventory is bounded to 20 entries per source.':''}</ScopeNote>
+      </details><details className="disclosure-panel"><summary>Recibos de integrações de segurança</summary>
       <SectionHeading label="Security integrations" title="Feeds and publication receipts" count={data.operations.data?.security?String(data.operations.data.security.length):'unavailable'}/>
       <div className="evaluation-list">{data.operations.data?.security?.map(receipt=><InfoCard key={receipt.receiptId} icon={ShieldCheck} title={`${receipt.projectId} · ${receipt.decision}`} meta={`${receipt.stage} · exit ${receipt.effectiveExit??'unknown'}`}><div className="card-list"><span>Feeds: {receipt.feedStatus??'not requested'}</span><span>Publication: {receipt.publicationStatus??'not recorded'}</span></div>{receipt.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</InfoCard>)}</div>
       {!data.operations.data?.security?.length&&<EmptyState title="No security receipts in this scope" detail="Evaluate a registered report through the CLI or MCP to record the effective gate and feed provenance."/>}
+      </details><details className="disclosure-panel"><summary>Evidências da execução selecionada</summary><p className="muted">{run?.summary.objectiveExcerpt??'Escolha uma execução pela Visão geral para consultar suas evidências.'}</p>
       <SectionHeading label="Selected run" title="Receipt references and cleanup" count={run?run.summary.id:'none selected'}/>
       {run?<><section className="panel evidence-reference-list">{run.evidence.map(ref=><div className="evidence-reference" key={ref}><FileCheck2 size={16}/><CopyId value={ref} {...copy}/></div>)}</section><section className="panel"><table className="runs-table"><thead><tr><th>Attempt</th><th>Model worker</th><th>Cleanup</th><th>Worker finished</th></tr></thead><tbody>{run.attempts.map(attempt=>{
         const checksOnly=(attempt.taskContract?.kind??run.prepared.kind)==='checks'&&!attempt.worker;
@@ -133,18 +160,15 @@ export function EvidenceRecoveryView({data,...copy}:Omit<PanelProps,'onOpenRun'>
         return <tr key={attempt.attempt}><td>{attempt.attempt}</td><td>{checksOnly?'Not applicable':attempt.worker?.status??'unknown'}</td><td>{cleanup}</td><td>{checksOnly?'Not applicable':timestamp(attempt.worker?.finishedAt)}</td></tr>;
       })}</tbody></table></section></>:<EmptyState title="No run evidence selected" detail="Select a recorded run to inspect its receipts. Global recovery evidence remains available above."/>}
       <ScopeNote>References can be copied for local inspection. Full logs and arbitrary file contents are not served. Cleanup, restore and owner acceptance are separate observations.</ScopeNote>
-    </>;
+    </details></>;
 }
 
 export function LearningQueueView({data,onOpenRun,...copy}:PanelProps){
   const learning=data.learning,ledger=data.operations.data?.learning,signals=data.insights?.data?.signals??[];
   const signalCount=signals.length+(learning?.signals.length??0),hasSignals=signalCount>0;
   const signalsUnavailable=!data.insights?.data||!learning||['partial','unavailable'].includes(learning.signalsState);
-  return <><section className="learning-hero"><div><div className="section-kicker">Reusable knowledge · {data.operations.state}</div><h2>From recurring work to a tested improvement.</h2><p>Validated skills and scripts can activate under the authorized policy. Inspect the version and evidence, or ask the agent to disable its hash.</p></div><div className="learning-loop"><Clipboard size={24}/><strong>Build → validate → activate → apply</strong></div></section>
-    <LearningCycle source={data.learningCycle} onOpenRun={onOpenRun} {...copy}/>
-    <LearningCapabilities source={data.learningRuntime} {...copy}/>
-    <section className="learning-metrics"><MetricCard label="Learning cases" value={data.learningCycle?.data?String(data.learningCycle.data.items.length):'unknown'} note="selected project scope" tone="cyan" icon={Sparkles}/><MetricCard label="Active capabilities" value={data.learningRuntime?.data?String(data.learningRuntime.data.items.filter(c=>c.state.status==='active').length):'unknown'} note="exact validated versions" tone="green" icon={FileCheck2}/><MetricCard label="Cases needing attention" value={data.learningCycle?.data?String(data.learningCycle.data.items.filter(c=>c.status==='attention').length):'unknown'} note="inspect each recorded cause" tone="cyan" icon={Zap}/><MetricCard label="Disabled capabilities" value={data.learningRuntime?.data?String(data.learningRuntime.data.items.filter(c=>c.state.status==='disabled').length):'unknown'} note="history preserved" tone="neutral" icon={LockKeyhole}/></section>
-    <ScopeNote>Case progress and executable capability status are shown above. The candidate ledger below preserves its separate review and context-promotion decisions.</ScopeNote>
+  return <><LearningStories data={data} onOpenRun={onOpenRun} {...copy}/>
+    <details className="disclosure-panel"><summary>Arquivo de candidatos e sinais de origem</summary><p className="muted">Registros anteriores e sinais brutos. Um candidato neste arquivo pode já ter uma versão ativa na lista acima.</p>
     <SectionHeading label="Learning ledger" title="Candidates and decisions"/>
     <div className="evaluation-list">{ledger?.map(item=><InfoCard key={item.id} icon={Clipboard} title={item.title} meta={item.projectId+' · '+item.kind+' · '+item.status}>
       <div className="card-list">{item.contentExcerpt&&<p>{item.contentExcerpt}</p>}<span>Source: {item.source}</span><span>Review: {item.review??'not recorded'} · shadow: {item.shadow??'not recorded'}</span></div>
@@ -162,5 +186,6 @@ export function LearningQueueView({data,onOpenRun,...copy}:PanelProps){
       <details className="receipt-details"><summary>Signal evidence ({item.evidence.length})</summary>{item.evidence.map(ref=><div className="hash-line" key={ref}><CopyId value={ref} {...copy}/></div>)}</details>
     </InfoCard>)}{learning?.signals.map((item,i)=><InfoCard key={item.kind+'-'+item.projectId+'-'+i} icon={TerminalSquare} title={item.reason} meta={item.kind+' · '+item.projectId}><CopyId value={item.evidence} {...copy}/>{item.jobId&&<button className="subtle-link" type="button" onClick={()=>onOpenRun(item.jobId!)}>Inspect source run<ArrowUpRight size={15}/></button>}</InfoCard>)}</div>
     {!hasSignals&&<EmptyState title={signalsUnavailable?'Signal inventory unavailable or incomplete':'No failure or recovery signals observed'} detail={signalsUnavailable?'Refresh to retry reading recorded insights.':'Signals describe recorded outcomes; they do not establish a cause or promote a reusable practice.'}/>}
+    </details>
   </>;
 }
