@@ -6,6 +6,7 @@ import { InteractionIdSchema, InteractionStore } from './interactions.js';
 import { InteractionTelemetry, InteractionTelemetryReceiptSchema, InteractionTokenDeltaSchema, type InteractionTelemetryReceipt } from './interaction-telemetry.js';
 import { PerformanceScopeSchema } from './performance-scope.js';
 import { deterministicUuid } from './legacy/command-os-utils.js';
+import { TurnComparison } from './turn-comparison.js';
 
 export const LearningApplicationInputSchema = KnowledgeDecisionSchema.extend({ candidateId: z.uuid(), threadId: z.uuid(), turnId: z.uuid() }).strict();
 export const LearningApplicationReceiptSchema = LearningApplicationInputSchema.extend({
@@ -27,6 +28,7 @@ const limits = { applications: 2000, candidateRevisions: 1000 };
 
 export interface LearningTokenEffectGroup {
   id: string; status: 'pending' | 'observed'; projectId: string | null; performanceScope: Scope | null;
+  modelIdentity: InteractionTelemetryReceipt['modelIdentity'];
   promotion: LearningApplicationReceipt['promotion'] & { candidateRevision: number; candidateArtifactPath: string };
   baseline: { n: number; before: string; turnIds: string[]; evidence: string[] };
   treatment: { n: number; turnIds: string[]; applicationIds: string[]; pendingApplicationIds: string[]; evidence: string[] };
@@ -124,45 +126,42 @@ export class LearningApplications {
     telemetry: Awaited<ReturnType<InteractionTelemetry['read']>>) {
     const firstPromotion = history.find(item => item.status === 'promoted' && item.promotion !== null);
     const applications = declared.applications.filter(item => item.candidateId === candidateId), groups: LearningTokenEffectGroup[] = [];
-    const complete = telemetry.turnReceipts.filter(turn => turn.status === 'complete' && turn.finishedAt !== null
-      && turn.tokens !== null && metricKeys.some(metric => turn.tokens![metric] !== null)
-      && turn.coverage.baselineObserved && turn.coverage.terminalObserved && !turn.coverage.limited && turn.coverage.counterResets === 0);
+    const complete = TurnComparison.unique(telemetry.turnReceipts.filter(turn => TurnComparison.complete(turn)));
     const byTurn = new Map(complete.map(turn => [JSON.stringify([turn.threadId, turn.turnId]), turn]));
     const grouped = new Map<string, LearningApplicationReceipt[]>();
     for (const application of applications) {
-      const key = JSON.stringify([application.promotion.path, application.contentHash, application.projectId, application.performanceScope]);
+      const turn = byTurn.get(JSON.stringify([application.threadId, application.turnId]));
+      const key = JSON.stringify([application.promotion.path, application.contentHash, application.projectId, application.performanceScope, turn ? TurnComparison.cohort(turn) : null]);
       grouped.set(key, [...(grouped.get(key) ?? []), application]);
     }
     for (const [key, uses] of grouped) {
       const exemplar = uses[0]!, before = firstPromotion?.promotion?.recordedAt ?? exemplar.promotion.recordedAt;
-      const validScope = exemplar.projectId !== null && exemplar.performanceScope !== null;
+      const observedTurn = byTurn.get(JSON.stringify([exemplar.threadId, exemplar.turnId]));
+      const cohort = observedTurn ? TurnComparison.cohort(observedTurn) : null;
+      const validScope = exemplar.projectId !== null && exemplar.performanceScope !== null && cohort !== null;
       const baseline = validScope ? complete.filter(turn => turn.projectId === exemplar.projectId && this.sameScope(turn.performanceScope, exemplar.performanceScope)
+        && TurnComparison.cohort(turn) === cohort
         && Date.parse(turn.finishedAt!) < Date.parse(before)) : [];
       const measured: { application: LearningApplicationReceipt; turn: InteractionTelemetryReceipt }[] = [];
       const pending: string[] = [];
       for (const application of uses) {
         const turn = byTurn.get(JSON.stringify([application.threadId, application.turnId]));
         if (validScope && turn && turn.projectId === application.projectId && this.sameScope(turn.performanceScope, application.performanceScope)
+          && TurnComparison.cohort(turn) === cohort
           && turn.startedAt === application.turnStartedAt && Date.parse(turn.startedAt) >= Date.parse(application.promotion.recordedAt)) measured.push({ application, turn });
         else pending.push(application.id);
       }
-      const metrics = metricKeys.map(metric => {
-        const beforeValues = baseline.flatMap(turn => turn.tokens![metric] === null ? [] : [turn.tokens![metric]!]);
-        const afterValues = measured.flatMap(({ turn }) => turn.tokens![metric] === null ? [] : [turn.tokens![metric]!]);
-        const baselineMean = this.mean(beforeValues), treatmentMean = this.mean(afterValues);
-        const delta = baselineMean !== null && treatmentMean !== null ? treatmentMean - baselineMean : null;
-        return { metric, unit: 'tokens' as const, baselineN: beforeValues.length, treatmentN: afterValues.length,
-          baselineMean, treatmentMean, delta, deltaPercent: delta !== null && baselineMean !== null && baselineMean !== 0 ? delta / baselineMean * 100 : null };
-      });
+      const metrics = TurnComparison.compare(baseline, measured.map(item => item.turn));
       const comparableMetric = metrics.some(metric => metric.baselineN > 0 && metric.treatmentN > 0);
       groups.push({ id: KnowledgeFiles.hash(key), status: comparableMetric ? 'observed' : 'pending',
         projectId: exemplar.projectId, performanceScope: exemplar.performanceScope,
+        modelIdentity: observedTurn?.modelIdentity ?? null,
         promotion: { ...exemplar.promotion, candidateRevision: exemplar.candidateRevision, candidateArtifactPath: exemplar.candidateArtifactPath },
         baseline: { n: baseline.length, before, turnIds: baseline.map(turn => turn.turnId), evidence: baseline.map(turn => turn.artifactPath) },
         treatment: { n: measured.length, turnIds: measured.map(item => item.turn.turnId), applicationIds: uses.map(item => item.id),
           pendingApplicationIds: pending, evidence: [...new Set([...uses.flatMap(item => [item.artifactPath, item.candidateArtifactPath, item.promotion.path, ...item.evidence]),
             ...measured.map(item => item.turn.artifactPath)])] }, metrics,
-        warnings: [...(!validScope ? ['A project and declared performance scope are required for comparable token measurements.'] : []),
+        warnings: [...(!validScope ? ['A project, declared performance scope and observed model/effort are required for comparable token measurements.'] : []),
           ...(!baseline.length ? ['No complete comparable baseline turn was observed before the first promotion.'] : []),
           ...(!measured.length ? ['No complete comparable turn with an explicit application was observed.'] : []),
           ...(baseline.length && measured.length && !comparableMetric ? ['No token metric was observed in both baseline and treatment.'] : [])] });
@@ -184,7 +183,6 @@ export class LearningApplications {
   }
   private applicationPath(id: string) { return `artifacts/learning/applications/${id}.json`; }
   private sameScope(left: Scope | null, right: Scope | null) { return JSON.stringify(left) === JSON.stringify(right); }
-  private mean(values: number[]) { return values.length ? values.reduce((sum, value) => sum + value / values.length, 0) : null; }
   private async candidateHistory(candidateId: string): Promise<KnowledgeCandidate[]> {
     const latest = await this.learning.read(candidateId);
     if (latest.revision > limits.candidateRevisions) throw new Error('Candidate history exceeds the learning application read limit.');

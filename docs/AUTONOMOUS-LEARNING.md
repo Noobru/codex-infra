@@ -60,6 +60,41 @@ A configuração persistida fica em `profiles/learning-policy.json`, local e for
 
 ## Limites e retomada
 
+Casos substituídos por uma sucessora validada encerram seus jobs pendentes sem
+owner ativo. Reaplicar a mesma substituição com a revisão atual reconcilia casos
+históricos sem criar outra revisão; falhas terminais e execuções vivas são
+preservadas. Isso não retoma ou cancela trabalho alheio ao caso.
+
+Depois de integrar bundle e revisão em `result.json`, o construtor finaliza o uso
+dos dois workers por `DelegationLifecycle`. Delegações comuns usam
+`finish_delegation` / `finish-delegation JOB_ID --file DECISION.json`: a decisão
+identifica a tentativa, a thread real, `integrated:true`, autor, fonte e evidências.
+O app-server oficial confirma o arquivamento recuperável. O recibo `archived`
+torna repetição idempotente; falha gera `pending`, preservado para investigação
+e nova finalização. Conclusão do job não equivale a integração do seu resultado.
+
+## Medir uso e resultado
+
+`run_learning_capability` aceita `threadId` explícito para resolver o turno aberto
+pela telemetria opt-in, ou `attribution:{threadId,turnId}` quando os IDs reais já
+forem conhecidos. Contexto incluído, chamada executada e aplicação dos outputs
+são evidências diferentes. Ausência de atribuição histórica não é corrigida por
+inferência.
+
+O leitor de efeitos usa a ativação automática do hash, sem exigir promoção manual.
+Compara turnos completos do mesmo projeto, escopo declarado, modelo e esforço
+observados; diferentes hashes têm grupos próprios. O baseline termina antes da
+ativação e a chamada precisa pertencer ao intervalo do turno. Várias chamadas
+no mesmo turno contam uma vez nas médias, incluindo chamadas que falharam.
+Cada métrica informa seu denominador e mantém ausências como desconhecidas.
+O período selecionado limita as amostras. Recibos antigos sem modelo/esforço
+continuam válidos como contadores, mas não entram numa comparação compatível.
+Modelo é o identificador observado no contexto do turno, não prova de uma versão
+interna imutável do provedor. Diferenças são associações descritivas, não economia
+causal, monetária ou de cota.
+
+## Orçamento do ciclo
+
 A síntese inicial é uma tarefa delimitada, com verificação independente e risco baixo: a política de roteamento existente seleciona Luna. Uma tentativa de reparo após falha relevante volta ao coordenador forte, Astra. A revisão separável usa Sol. O catálogo real confirma a disponibilidade antes de gerar; o roteiro não cria uma cadeia obrigatória de modelos para outras tarefas.
 
 Os jobs compartilham os limites de `execution-policy`, os claims e a exclusividade de recursos do motor. O padrão da política de aprendizado é um caso por ciclo, até duas tentativas e cinco minutos por worker. Cada teste ou invocação tem seu limite próprio, inicialmente 30 segundos. Perfis internos usam o prefixo `learning-` para não gerar recursivamente novos casos a partir da manutenção.

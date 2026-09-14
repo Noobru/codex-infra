@@ -76,6 +76,19 @@ test('telemetry is disabled without opt-in and only explicitly entered thread id
   await assert.rejects(fs.access(path.join(fixture.root, 'artifacts/telemetry')), { code: 'ENOENT' });
 });
 
+test('model identity comes only from matching turn context and conflicting context stays unknown',async t=>{
+  const f=await TelemetryFixture.create(t);await f.enter();
+  await f.source([...f.baseline(),...f.turn(),event('turn_context',3,{turn_id:turnId,model:'fixture-model',effort:'high'}),count(160,4),f.complete()]);
+  // The first context was missing identity; an inconsistent turn is not repaired by a later guess.
+  assert.equal((await f.telemetry.capture(threadId)).turnReceipts[0]!.modelIdentity,null);
+  const g=await TelemetryFixture.create(t);await g.enter();
+  await g.source([...g.baseline(),event('task_started',3,{turn_id:turnId}),
+    event('turn_context',3,{turn_id:turnId,model:'fixture-model',effort:'high',developer_instructions:'PRIVATE-MODEL-CONTEXT'}),count(160,4),g.complete()]);
+  const receipt=(await g.telemetry.capture(threadId)).turnReceipts[0]!;
+  assert.deepEqual(receipt.modelIdentity,{model:'fixture-model',effort:'high'});
+  assert.doesNotMatch(await fs.readFile(path.join(g.root,receipt.artifactPath),'utf8'),/PRIVATE-MODEL-CONTEXT/);
+});
+
 test('closed turn delta uses the preceding cumulative snapshot, ignores duplicates and stores only approved fields', async t => {
   const fixture = await TelemetryFixture.create(t), entry = await fixture.enter({ projectId: 'fixture',
     performanceScope: { taskClass: 'implementation', language: 'TypeScript', problemCategory: 'observability' } });

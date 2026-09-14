@@ -11,6 +11,10 @@ import { LearningActivationPolicySchema, LearningRuntimeStore, type LearningBund
 import type { ProjectContext } from '../src/registry.js';
 import { ProfileSchema, ProjectRegistry } from '../src/registry.js';
 import { KnowledgeIndex } from '../src/knowledge-index.js';
+import { randomUUID } from 'node:crypto';
+import { InteractionTelemetryReceiptSchema } from '../src/interaction-telemetry.js';
+import { KnowledgeFiles } from '../src/knowledge-store.js';
+import { LearningRuntimeEffects } from '../src/learning-runtime-effects.js';
 
 const reviewer = { author: { name: 'Fixture reviewer', role: 'reviewer' as const }, source: 'internal fixture review', evidence: ['owned fixture behavior and code'] };
 const agent = { author: { name: 'Fixture agent', role: 'model' as const }, source: 'internal fixture agent decision', evidence: ['owned fixture validation receipt'] };
@@ -40,6 +44,39 @@ const bundle: LearningBundleInput = {
   entrypoints: [{ id: 'normalize', runtime: 'node', path: 'main.mjs' }],
   tests: [{ id: 'normalization', runtime: 'node', path: 'test.mjs', expectedStdout: 'verified\n' }],
 };
+
+test('autoactivated capability joins exact turn evidence without promotion and deduplicates multiple calls',async t=>{
+  const f=await fixture(t),hash=(await f.runtime.publish(f.candidate.id,bundle)).manifest.hash;
+  await f.runtime.review(hash,{...reviewer,decision:'approved'});await f.runtime.validate(hash,reviewer);
+  const activated=await f.runtime.activate(hash,agent),activation=activated.state.activation!.recordedAt;
+  const threadId=randomUUID(),turnId=randomUUID(),interactionId=InteractionStore.idFor({threadId});
+  const scope={taskClass:'bugfix',language:'TypeScript',problemCategory:'fixture-normalization'};
+  const files=new KnowledgeFiles(f.root);
+  const receipt=async(id:string,start:string,end:string,tokens:number,model:string|null='fixture-model')=>{
+    const record=InteractionTelemetryReceiptSchema.parse({version:1,interactionId,threadId,turnId:id,projectId:f.candidate.projectId,interactionRevision:1,
+      performanceScope:scope,modelIdentity:model?{model,effort:'medium'}:null,assignment:'interaction-revision',status:'complete',startedAt:start,finishedAt:end,
+      tokens:{inputTokens:tokens,outputTokens:0,totalTokens:tokens,cachedInputTokens:null,cacheWriteInputTokens:null,reasoningOutputTokens:null},
+      coverage:{baselineObserved:true,terminalObserved:true,tokenEvents:1,duplicateEvents:0,counterResets:0,limited:false},epoch:{start:0,end:0},
+      source:{kind:'codex-rollout-token-count/v1',fingerprint:'a'.repeat(64),startLine:1,endLine:4,cursor:100},capturedAt:end,
+      artifactPath:`artifacts/telemetry/${interactionId}/turn-${id}.json`,warnings:[]});
+    await files.writeJsonNew(record.artifactPath,record);return record;
+  };
+  const earlier=(ms:number)=>new Date(Date.parse(activation)-ms).toISOString();
+  await receipt(randomUUID(),earlier(60000),earlier(50000),200);
+  await receipt(randomUUID(),earlier(40000),earlier(30000),999,'different-model');
+  await receipt(randomUUID(),earlier(20000),earlier(10000),888,null);
+  for(let i=0;i<2;i++)await f.runtime.run(hash,{projectId:f.candidate.projectId,entrypoint:'normalize',args:['input.txt','output.txt'],
+    inputFiles:[{path:'input.txt',content:' abc '}],outputPaths:['output.txt'],attribution:{threadId,turnId},decision:agent});
+  const after=await receipt(turnId,activation,new Date().toISOString(),100);
+  const effects=(await new LearningRuntimeEffects(f.root).read()).items.find(item=>item.hash===hash)!;
+  assert.equal((await f.learning.read(f.candidate.id)).promotion,null);
+  assert.equal(effects.tokenEffects.status,'observed');assert.equal(effects.tokenEffects.pendingExecutions,0);
+  const group=effects.tokenEffects.groups[0]!;assert.equal(group.baselineTurns,1);assert.equal(group.treatmentTurns,1);assert.equal(group.executionIds.length,2);
+  assert.equal(group.metrics.find(metric=>metric.metric==='totalTokens')!.delta,-100);
+  await fs.writeFile(path.join(f.root,after.artifactPath),JSON.stringify({...after,modelIdentity:null}));
+  const unknown=(await new LearningRuntimeEffects(f.root).read()).items[0]!.tokenEffects;
+  assert.equal(unknown.status,'pending');assert.equal(unknown.pendingExecutions,2);assert.equal(unknown.groups.length,0);
+});
 
 async function fixture(t: TestContext, kind: 'script' | 'skill' = 'script') {
   const parent = fileURLToPath(new URL('../../artifacts/test-fixtures/', import.meta.url));

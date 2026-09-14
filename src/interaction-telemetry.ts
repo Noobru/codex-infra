@@ -13,10 +13,12 @@ export const InteractionTokenDeltaSchema = z.object({
   inputTokens: count, cachedInputTokens: count, cacheWriteInputTokens: count,
   outputTokens: count, reasoningOutputTokens: count, totalTokens: count,
 });
+export const TurnModelIdentitySchema = z.object({ model: z.string().min(1).max(200), effort: z.string().min(1).max(40).nullable() });
 export const InteractionTelemetryReceiptSchema = z.object({
   version: z.literal(1), interactionId: InteractionIdSchema, threadId: z.uuid(), turnId: z.uuid(),
   projectId: KnowledgeProjectSchema.nullable(), interactionRevision: z.number().int().positive().nullable(),
   performanceScope: PerformanceScopeSchema.nullable(),
+  modelIdentity: TurnModelIdentitySchema.nullable().default(null),
   assignment: z.enum(['interaction-revision', 'not-recorded-at-turn-time']),
   status: z.enum(['complete', 'partial', 'unknown']), startedAt: z.iso.datetime(), finishedAt: z.iso.datetime().nullable(),
   tokens: InteractionTokenDeltaSchema.nullable(),
@@ -30,11 +32,12 @@ export const InteractionTelemetryReceiptSchema = z.object({
 export type InteractionTelemetryReceipt = z.output<typeof InteractionTelemetryReceiptSchema>;
 type Tokens = z.output<typeof InteractionTokenDeltaSchema>;
 type Event = { type: 'session_meta' | 'turn_context' | 'task_started' | 'task_complete' | 'token_count';
-  timestamp: string; id?: string; tokens?: Tokens; line: number; cursor: number; invalid?: boolean };
+  timestamp: string; id?: string; tokens?: Tokens; modelIdentity?: z.output<typeof TurnModelIdentitySchema> | null; line: number; cursor: number; invalid?: boolean };
 type Snapshot = { tokens: Tokens; line: number; cursor: number };
 type TurnCapture = { id: string; startedAt: string; finishedAt: string | null; startLine: number;
   endLine: number; cursor: number; baseline: Snapshot | null; last: Snapshot | null; epoch: number; endEpoch: number;
-  tokenEvents: number; duplicateEvents: number; counterResets: number; limited: boolean; warnings: string[]; fingerprint: string };
+  tokenEvents: number; duplicateEvents: number; counterResets: number; limited: boolean; warnings: string[]; fingerprint: string;
+  modelIdentity: z.output<typeof TurnModelIdentitySchema> | null; modelObserved: boolean; modelAmbiguous: boolean };
 
 const limits = { fileBytes: 128 * 1024 * 1024, lineBytes: 2 * 1024 * 1024, lines: 200_000, filenames: 20_000, receipts: 2000 };
 const tokenKeys = { inputTokens: 'input_tokens', cachedInputTokens: 'cached_input_tokens', cacheWriteInputTokens: 'cache_write_input_tokens',
@@ -72,6 +75,7 @@ export class InteractionTelemetry {
       const record = InteractionTelemetryReceiptSchema.parse({
         version: 1, interactionId: interaction.id, threadId, turnId: turn.id, projectId: revision?.projectId ?? null,
         interactionRevision: revision?.revision ?? null, performanceScope: revision?.performanceScope ?? null,
+        modelIdentity: turn.modelAmbiguous ? null : turn.modelIdentity,
         assignment: revision ? 'interaction-revision' : 'not-recorded-at-turn-time', status, startedAt: turn.startedAt, finishedAt: turn.finishedAt,
         tokens, coverage: { baselineObserved: turn.baseline !== null, terminalObserved: turn.finishedAt !== null,
           tokenEvents: turn.tokenEvents, duplicateEvents: turn.duplicateEvents, counterResets: turn.counterResets, limited: turn.limited },
@@ -211,10 +215,17 @@ export class InteractionTelemetry {
         if (active) { active.limited = true; active.warnings.push('A new turn started before the preceding turn was closed.'); }
         active = { id: event.id, startedAt: event.timestamp, finishedAt: null, startLine: event.line,
           endLine: event.line, cursor: event.cursor, baseline: previous, last: null, epoch, endEpoch: epoch,
-          tokenEvents: 0, duplicateEvents: 0, counterResets: 0, limited: parseLimited, warnings: [], fingerprint };
+          tokenEvents: 0, duplicateEvents: 0, counterResets: 0, limited: parseLimited, warnings: [], fingerprint,
+          modelIdentity: null, modelObserved: false, modelAmbiguous: false };
         turns.push(active);
       } else if (event.type === 'turn_context' && active && event.id !== active.id) {
         active.limited = true; active.warnings.push('Turn context identity differs from the active turn.');
+      } else if (event.type === 'turn_context' && active) {
+        if (active.modelObserved && JSON.stringify(active.modelIdentity) !== JSON.stringify(event.modelIdentity ?? null)) {
+          active.modelAmbiguous = true;
+          active.warnings.push('Model identity changed within this turn; model-compatible comparison is unavailable.');
+        }
+        active.modelObserved = true; active.modelIdentity = event.modelIdentity ?? null;
       } else if (event.type === 'token_count') {
         if (!event.tokens || event.invalid) { if (active) active.limited = true; previous = null; return; }
         const reset = previous !== null && (Object.keys(tokenKeys) as (keyof Tokens)[]).some(key => event.tokens![key] !== null && previous!.tokens[key] !== null && event.tokens![key]! < previous!.tokens[key]!);
@@ -280,7 +291,9 @@ export class InteractionTelemetry {
       })) as Tokens;
       return { type, timestamp, tokens, line, cursor, invalid };
     }
-    return { type: type as Event['type'], timestamp, id: z.uuid().parse(type === 'session_meta' ? payload.id : payload.turn_id), line, cursor };
+    const model = type === 'turn_context' ? TurnModelIdentitySchema.safeParse({ model: payload.model, effort: payload.effort ?? null }) : null;
+    return { type: type as Event['type'], timestamp, id: z.uuid().parse(type === 'session_meta' ? payload.id : payload.turn_id), line, cursor,
+      ...(type === 'turn_context' ? { modelIdentity: model?.success ? model.data : null } : {}) };
   }
 
   private delta(before: Tokens, after: Tokens): Tokens {

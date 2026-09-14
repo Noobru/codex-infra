@@ -134,8 +134,11 @@ test('supersession requires a validated successor, preserves disabled state and 
   const b = builder([]), cycle = new AutonomousLearning(f.root,b,sandbox);
   const successor = await appendCase(f.root,f.item,{status:'disabled'});
   const id='learning_'+'f'.repeat(32), artifactPath=`artifacts/learning/cases/${id}/revision-000001.json`;
+  const pendingState=new StateStore(path.join(f.root,'state/jobs.sqlite'));
+  const pending=pendingState.create({projectId:'learning-obsolete-build',objective:'obsolete fixture',idempotencyKey:'obsolete',mode:'read-only',profileHash:'a'.repeat(64)});
+  pendingState.transition(pending.id,'waiting_user');pendingState.close();
   const old = LearningCaseSchema.parse({...successor,id,revision:1,artifactPath,status:'attention',hash:undefined,
-    candidateId:undefined,attempts:2,lastError:'old fixture startup failed'});
+    candidateId:undefined,attempts:2,jobIds:[pending.id],lastError:'old fixture startup failed'});
   await new KnowledgeFiles(f.root).writeJsonNew(artifactPath,old);
   const decision={...agent,action:'supersede',expectedRevision:1,successorId:successor.id};
   await assert.rejects(cycle.recover(id,{...decision,successorId:id}),/different successor/);
@@ -143,6 +146,10 @@ test('supersession requires a validated successor, preserves disabled state and 
   assert.equal(retired.status,'superseded'); assert.equal(retired.hash,undefined);
   assert.equal(retired.attempts,2); assert.equal(retired.lastError,old.lastError);
   assert.equal(retired.recovery?.successorId,successor.id);
+  const reconciledState=new StateStore(path.join(f.root,'state/jobs.sqlite'));
+  assert.equal(reconciledState.get(pending.id).status,'cancelled');const events=reconciledState.events(pending.id).length;
+  assert.equal((await cycle.recover(id,{...decision,expectedRevision:retired.revision})).revision,retired.revision);
+  assert.equal(reconciledState.events(pending.id).length,events);reconciledState.close();
   assert.equal((await f.runtime.read(f.hash)).state.status,'disabled');
   await cycle.reconcile(); await cycle.drain({maxJobs:1,totalTimeoutMs:10000});
   assert.equal(b.calls.length,0); assert.equal((await cycle.read(id)).status,'superseded');

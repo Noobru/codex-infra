@@ -60,6 +60,7 @@ class ApplicationFixture {
     const status = extra.status ?? 'complete';
     const receipt = InteractionTelemetryReceiptSchema.parse({ version: 1, interactionId, threadId, turnId: id,
       projectId: 'fixture', interactionRevision: 1, performanceScope: scope, assignment: 'interaction-revision',
+      modelIdentity: {model:'fixture-model',effort:'medium'},
       status, startedAt: at(start), finishedAt: status === 'complete' ? at(start + 1) : null,
       tokens: { totalTokens: total, inputTokens: total - 10, cachedInputTokens: Math.floor(total / 2), outputTokens: 10,
         reasoningOutputTokens: 5, cacheWriteInputTokens: null },

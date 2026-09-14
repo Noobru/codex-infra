@@ -85,7 +85,8 @@ export class AutonomousLearning {
     return this.withLock('drain', async () => {
       const item = await this.read(id);
       if (item.revision !== input.expectedRevision) throw new Error('Learning case revision changed; read current evidence first.');
-      if (item.status !== 'attention' || this.alive(item.ownerPid)) throw new Error('Recovery requires an unattended attention case.');
+      const replay = item.status === 'superseded' && input.action === 'supersede' && input.successorId === item.recovery?.successorId;
+      if ((!replay && item.status !== 'attention') || this.alive(item.ownerPid)) throw new Error('Recovery requires an unattended attention case.');
       const recovery = { ...input, recordedAt: new Date().toISOString() };
       const evidence = [...new Set([...item.evidence, ...input.evidence])];
       if (input.action === 'supersede') {
@@ -97,8 +98,12 @@ export class AutonomousLearning {
         if (record.manifest.candidateId !== successor.candidateId || record.manifest.projectId !== successor.projectId
           || !record.state.activation || !record.state.validation || !['active', 'disabled'].includes(record.state.status))
           throw new Error('Successor activation and validation evidence are required.');
-        return this.append(item, { status: 'superseded', recovery, evidence: [...new Set([...evidence, successor.artifactPath,
+        const reconciled = replay ? item : await this.append(item, { status: 'superseded', recovery, evidence: [...new Set([...evidence, successor.artifactPath,
           record.state.validation.path])], ownerPid: null, retryAfter: null, resumeAttempt: false });
+        const state = new StateStore(path.join(this.root,'state/jobs.sqlite'));
+        try { for (const jobId of reconciled.jobIds) state.cancelPending(jobId); }
+        finally { state.close(); }
+        return reconciled;
       }
       if (input.successorId || item.hash || !item.buildInput || !item.jobIds.length)
         throw new Error('Resume requires an interrupted build with its immutable input and job.');

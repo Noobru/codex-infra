@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { InteractionTelemetry } from './interaction-telemetry.js';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -105,6 +106,7 @@ export type LearningRuntimeState = z.output<typeof LearningRuntimeStateSchema>;
 export interface LearningRuntimeRecord { manifest: LearningBundleManifest; state: LearningRuntimeState }
 export const LearningRunInputSchema = z.object({
   projectId: KnowledgeProjectSchema, entrypoint: identifier, args,
+  threadId: z.uuid().optional(),
   attribution: z.object({ threadId: z.uuid(), turnId: z.uuid() }).strict().optional(),
   inputFiles: z.array(bundledFile).max(32).default([]), outputPaths: z.array(relativePath).max(32).default([]),
   decision: KnowledgeDecisionSchema,
@@ -247,6 +249,17 @@ export class LearningRuntimeStore {
   async run(hash: string, raw: z.input<typeof LearningRunInputSchema>, options: { signal?: AbortSignal } = {}): Promise<LearningRunReceipt> {
     const input = LearningRunInputSchema.parse(raw), current = await this.read(hash);
     await this.requireActive(current, input.projectId);
+    let attribution = input.attribution;
+    if (input.threadId) {
+      if (attribution && attribution.threadId !== input.threadId) throw new Error('Attribution thread differs from the explicitly supplied caller.');
+      if (!attribution) {
+        const observed = await new InteractionTelemetry(this.root).capture(input.threadId);
+        const latest = observed.turnReceipts.sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0];
+        if (!observed.enabled || observed.warnings.length || !latest || latest.finishedAt || latest.coverage.limited || latest.projectId !== input.projectId)
+          throw new Error('No unambiguous current turn for this project; inspect telemetry or supply an exact observed attribution.');
+        attribution = {threadId:input.threadId,turnId:latest.turnId};
+      }
+    }
     const selected = current.manifest.entrypoints.find(item => item.id === input.entrypoint);
     if (!selected) throw new Error('Capability entrypoint is not registered.');
     const policy = await this.requirePolicy(current.manifest, false), workspace = await this.materialize(current.manifest, input.inputFiles);
@@ -263,7 +276,7 @@ export class LearningRuntimeStore {
     }
     const id = randomUUID(), receipt = LearningRunReceiptSchema.parse({ version: 1 as const, id, hash, projectId: input.projectId, entrypoint: input.entrypoint,
       recordedAt: new Date().toISOString(), artifactPath: `artifacts/learning/runtime/runs/${id}.json`, decision: input.decision,
-      ...(input.attribution ? { attribution: input.attribution } : {}),
+      ...(attribution ? { attribution } : {}),
       status: execution.result.exitCode === 0 && !execution.result.error && !execution.result.cleanupFailed ? 'passed' : 'failed',
       ...execution, outputs, disabledDuringExecution: (await this.read(hash)).state.status === 'disabled' });
     await this.files.writeJsonNew(receipt.artifactPath, receipt);
@@ -293,6 +306,16 @@ export class LearningRuntimeStore {
       }
     }
     return sources;
+  }
+
+  /** Historical context bindings reuse the exact generated descriptor, including disabled releases. */
+  async releaseBindings(record: LearningRuntimeRecord) {
+    const base=this.base(record.manifest.hash), invocation=this.invocationContent(record.manifest);
+    const descriptors=[{path:`${base}/invocation.md`,sha256:KnowledgeFiles.hash(invocation)},
+      ...record.manifest.files.filter(file=>file.path==='SKILL.md').map(file=>({path:`${base}/files/${file.path}`,sha256:file.sha256}))];
+    for(const source of descriptors)if(KnowledgeFiles.hash(await fs.readFile(await this.files.file(source.path)))!==source.sha256)
+      throw new Error('Capability context descriptor integrity mismatch.');
+    return descriptors;
   }
 
   private async requireReview(record: LearningRuntimeRecord): Promise<void> {

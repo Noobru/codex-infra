@@ -1,7 +1,7 @@
 {
   "version": 1,
   "packageVersion": "0.6.1",
-  "createdAt": "2026-09-13T16:00:45.080Z",
+  "createdAt": "2026-09-14T20:32:13.248Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -84,8 +84,8 @@
     },
     {
       "path": "docs/AUTONOMOUS-LEARNING.md",
-      "bytes": 12644,
-      "sha256": "7c96948aced7d8234147de08df7a25ac5f95cd221cf3e0c2a864d2d711579f43"
+      "bytes": 14778,
+      "sha256": "aa57fdb6b77d4aec7701589ffcdf902c7fe9bdf0404d8e57774048eb0eff1ec8"
     },
     {
       "path": "docs/CONTEXT-CONTRACT.md",
@@ -96,6 +96,11 @@
       "path": "docs/DISTRIBUICAO.md",
       "bytes": 2894,
       "sha256": "511f9b71792f9a2f658632a86b471083f06d0827fa39c32ad1f179e060333dab"
+    },
+    {
+      "path": "docs/DOCKER-RECOVERY.md",
+      "bytes": 2883,
+      "sha256": "476d80d7a5d566639b5f109f125677e2a7e03b9175a2e83df3e3871143f1df10"
     },
     {
       "path": "docs/INTERACTIONS.md",
@@ -244,8 +249,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 680,
-      "sha256": "2d06ce3116e15b47567c1910979f98ba1a0aec77e78cf050d2a7acf675b16879"
+      "bytes": 701,
+      "sha256": "ecb7f5f140b9735c3c429785797e77dc4b57cbf12a8032020bf4f18927493cef"
     },
     {
       "path": "plugins/codex-infra/.codex-plugin/plugin.json",
@@ -259,8 +264,8 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 19430,
-      "sha256": "412fcec897ec191b47560bd19fdbd6adc149359be8c263bc432472c325b8c856"
+      "bytes": 20987,
+      "sha256": "264fb5135bff1c2565eab5f127ae7efdb359189d474677ee1bb422adb7b0d684"
     },
     {
       "path": "profiles/model-routing.json",
@@ -284,8 +289,13 @@
     },
     {
       "path": "scripts/Configure-Local.mjs",
-      "bytes": 2517,
-      "sha256": "1ea2691d0901859be3d5f0f2822e79b13cf3d959be0fe76a6e8eb746b3f895e9"
+      "bytes": 2638,
+      "sha256": "3219a4b6f53b836e78b566f3b13e6ab778c4412f928da3ed302dd7d26d2dff76"
+    },
+    {
+      "path": "scripts/Docker-SocketRecovery.ps1",
+      "bytes": 4312,
+      "sha256": "5879f5006f00b1eddd2d12ee9d982efc53b70916ae78bf0cc9110e8b75d7c549"
     },
     {
       "path": "scripts/Install-PersonalPlugin.ps1",
@@ -304,8 +314,8 @@
     },
     {
       "path": "src/autonomous-learning.ts",
-      "bytes": 28378,
-      "sha256": "e5130fe914f3c88ec02146cbe5581ca659968b69f4cc2c0cc6f8e954f2a0789c"
+      "bytes": 28785,
+      "sha256": "fdb1c1d42e8e9b35ea309261758749edc8f83994ef87889188eb6b3af63ac06b"
     },
     {
       "path": "src/capability-planner.ts",
@@ -314,8 +324,8 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 20013,
-      "sha256": "1ee482efb63654041c40e66447de9dbec449a841a6eb146502ed5a1b5226ee17"
+      "bytes": 20618,
+      "sha256": "18006584e47a61588258b30088e39a37ad1c27712d58cb89f0e3cd214aa70844"
     },
     {
       "path": "src/codex-worker.ts",
@@ -329,13 +339,23 @@
     },
     {
       "path": "src/dashboard.ts",
-      "bytes": 13994,
-      "sha256": "9e2c3a930e41f98723a07d2e86f9156621a795a9885f51d1ce471b40c5e2a751"
+      "bytes": 14032,
+      "sha256": "42e1fe84b8aede7dd3e6d033a07e13264437999cb7aedc8d778e18dcade19455"
+    },
+    {
+      "path": "src/delegation-lifecycle.ts",
+      "bytes": 4389,
+      "sha256": "3df2cfbc769cd2a6f9d5076d6bfd1d471442b942ecd76175df542e60b11553e9"
+    },
+    {
+      "path": "src/docker-recovery.ts",
+      "bytes": 5095,
+      "sha256": "b76507fcd7f4045122fb35e3e288fbcae4d2ae33169b8d32f6d1d73e56c8f3ec"
     },
     {
       "path": "src/efficiency-history.ts",
-      "bytes": 33648,
-      "sha256": "dffec7de2405607878a2bd71ffda14a737e1cac6aae7652580129463bb1cac61"
+      "bytes": 34780,
+      "sha256": "b313f2a289c3b9043a6f351eb817840cca7fe20c917cde513822939a464d4a7c"
     },
     {
       "path": "src/engine.ts",
@@ -374,8 +394,8 @@
     },
     {
       "path": "src/improvement-impact.ts",
-      "bytes": 13252,
-      "sha256": "e75e5f733facd0a6d8f6950dd9760c34b84a233fe075a36507e2c595a9c22095"
+      "bytes": 13681,
+      "sha256": "73e277b820eaab99752779ac62bf8705dcbb0edbcc8b891e5e30697bd318efcd"
     },
     {
       "path": "src/interaction-entry.ts",
@@ -384,8 +404,8 @@
     },
     {
       "path": "src/interaction-telemetry.ts",
-      "bytes": 22086,
-      "sha256": "079b05d71f4091c3385d76ec0cf56e25052301e1f9fd556f825d2aa4834a7609"
+      "bytes": 23299,
+      "sha256": "6c10c204a198df380d879203ff4fbc93e936bb911154f6db3f482376a21a824c"
     },
     {
       "path": "src/interactions.ts",
@@ -409,23 +429,23 @@
     },
     {
       "path": "src/learning-applications.ts",
-      "bytes": 16429,
-      "sha256": "876c73e60baf6a5b6e22deb456fde46d49845855f7beff71a6a8bb787dce1dea"
+      "bytes": 16012,
+      "sha256": "a2eb8a5d4578902d5a869bf87f08c80dec59dc4ee56b6cb2667683a1145ec985"
     },
     {
       "path": "src/learning-builder.ts",
-      "bytes": 17347,
-      "sha256": "9968ab3899345252459db551371cd5f09ced42097ac68811d334561609a59734"
+      "bytes": 18336,
+      "sha256": "c6334f9a8fb311ad9ecf53bc27cc52e5dd2f8b6d8f84deb945117b8e4e5a2348"
     },
     {
       "path": "src/learning-runtime-effects.ts",
-      "bytes": 8453,
-      "sha256": "1b2313521c7bab13c5a5b4e53f500a812f7da267598d511a7438c65080339cdf"
+      "bytes": 12001,
+      "sha256": "0b3d99ec4edd02f36bf0f3cf9d607a2e6e64942660c0c74fa0fe737dc083734e"
     },
     {
       "path": "src/learning-runtime.ts",
-      "bytes": 28370,
-      "sha256": "eced3b487befafad6e5f1dd272b694a152f18753e49438c1ed0aa0c12d7111b2"
+      "bytes": 29987,
+      "sha256": "5cbd4cd1792ca12a4a552d479bf7722fac521f17bb131137cae98cfadd027413"
     },
     {
       "path": "src/learning-sandbox.ts",
@@ -439,8 +459,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 24813,
-      "sha256": "65a901bc95d6a6a69621d4ddfe370647957268a4d2bf8c8064dde1e2a05a34b9"
+      "bytes": 26065,
+      "sha256": "ac7032d9caa7d9f1aceaa210acdbb2be7348b71c3f4af117055be0f805dfbb8e"
     },
     {
       "path": "src/model-catalog.ts",
@@ -554,8 +574,8 @@
     },
     {
       "path": "src/state.ts",
-      "bytes": 17479,
-      "sha256": "5c9802489eae3574a7a6096c4ec8cf984c3ff49df75dc6713c466858e38d145a"
+      "bytes": 18110,
+      "sha256": "b9140baf7603a46cb9e5358cd7111bab89890aa5d2f7a995d996368d762bbd16"
     },
     {
       "path": "src/supervisor.ts",
@@ -566,6 +586,11 @@
       "path": "src/task-contract.ts",
       "bytes": 3545,
       "sha256": "2b02cd34377a289a271417dc57b28402374db3b5d0fdbea7a969e298f039d198"
+    },
+    {
+      "path": "src/turn-comparison.ts",
+      "bytes": 2260,
+      "sha256": "71c4e7c1b70e1a42552570aa41a2150de416b1cb0db6b43e1e6597e448bd5966"
     },
     {
       "path": "src/work-population.ts",
@@ -619,8 +644,8 @@
     },
     {
       "path": "test/autonomous-learning.test.ts",
-      "bytes": 25478,
-      "sha256": "c47ac8c954c13706373d06a3b7449719a8171c186210e740a61c5092c0eaa582"
+      "bytes": 26233,
+      "sha256": "a354520fea08a3c88895b706791bd69d0ffc65ee7836f2a4093328d942c36c4b"
     },
     {
       "path": "test/capability-planner.test.ts",
@@ -641,6 +666,16 @@
       "path": "test/dashboard.test.ts",
       "bytes": 8939,
       "sha256": "453fe1aceb658d5caed2f50e958355c15b0db379d5d15e1b4e98b04d50c7a843"
+    },
+    {
+      "path": "test/delegation-lifecycle.test.ts",
+      "bytes": 3372,
+      "sha256": "b878280f5c8b099a580cd58f7b61497813906bfb9863b3d461ceddf768b5aa1f"
+    },
+    {
+      "path": "test/docker-recovery.test.ts",
+      "bytes": 5232,
+      "sha256": "2baa9e8728933ee20675009d3d0ab9f00733b683637d1c8533d56799a8bb98fd"
     },
     {
       "path": "test/efficiency-history.test.ts",
@@ -684,8 +719,8 @@
     },
     {
       "path": "test/interaction-telemetry.test.ts",
-      "bytes": 15042,
-      "sha256": "91b5287f01f5eb5c12300fad9cb498d92d1376e41c5fd21afafa4f34f2870d46"
+      "bytes": 16118,
+      "sha256": "35c824b452a3a79716408e2cbac94319f415af84a947be3306d13ad55fa408a4"
     },
     {
       "path": "test/interactions.test.ts",
@@ -699,13 +734,13 @@
     },
     {
       "path": "test/learning-applications.test.ts",
-      "bytes": 15305,
-      "sha256": "d2f6ef86a7917e4b7885f1ead0e7a0bf4a3b8ce0fd35f8bb3aeb1f8e00f07cd6"
+      "bytes": 15367,
+      "sha256": "2e8f820d3c3746ebb8e40230f67aabd75c339acf9260e8bb2c9d5b187da03148"
     },
     {
       "path": "test/learning-builder.test.ts",
-      "bytes": 9437,
-      "sha256": "5eb0e4284c7c1a06ff322be55e8c8163e969e9ce2346aaf09429462bdcf91e84"
+      "bytes": 9516,
+      "sha256": "d1a8611ef3dfac8f1a37cdf8326493bb169cc0358cc1c8445d33250799912f0b"
     },
     {
       "path": "test/learning-runtime-effects.test.ts",
@@ -714,8 +749,8 @@
     },
     {
       "path": "test/learning-runtime.test.ts",
-      "bytes": 13515,
-      "sha256": "4a89e5b9471ab8bfa07d50ed372b12b1a30c5cee8af770af576e61d25030833f"
+      "bytes": 16953,
+      "sha256": "bb94537ed303215e3199a91751c8aefc9ec022f1a289e911638d852b024b89ef"
     },
     {
       "path": "test/learning-sandbox.test.ts",
@@ -824,8 +859,8 @@
     },
     {
       "path": "test/supervisor.test.ts",
-      "bytes": 5130,
-      "sha256": "6c4c229e7a88bd3ddaae7aa718fb04f56a4d2ba525e07fceb832ae754d78dd46"
+      "bytes": 5622,
+      "sha256": "21f62298d839996eaae19f050d501392a15b8e2c9eea5d99831ce74648999a81"
     },
     {
       "path": "test/workflow.test.ts",
@@ -914,13 +949,13 @@
     },
     {
       "path": "ui/src/LearningCapabilities.tsx",
-      "bytes": 8397,
-      "sha256": "76cc6acb46bbdbcd48a6ae48c9d7abd4d61b9e2fb4a66e53b88494e6b2f00cfb"
+      "bytes": 8404,
+      "sha256": "204546b13c38a74c5b4c52d1d3ac9ffb598773ed652df601f3c25ccb1d4bca3a"
     },
     {
       "path": "ui/src/LearningRuntimeEffects.tsx",
-      "bytes": 4161,
-      "sha256": "381e04aca5ddc695e7bca66fa6e6ae7ec337d72c249f402f6edc4877875038b0"
+      "bytes": 5922,
+      "sha256": "34dd3eaa6696428ba597e84b4b77950fb6448789e24b7e65c0d1e7f2ef48563d"
     },
     {
       "path": "ui/src/main.tsx",
@@ -929,8 +964,8 @@
     },
     {
       "path": "ui/src/panels.tsx",
-      "bytes": 34024,
-      "sha256": "4755b7a7da521e3078907c4f03a2202d4f2aacf8c4f6ad6c26db37205c2c8242"
+      "bytes": 34152,
+      "sha256": "e47750e253f3629a13b0a531a557f8fffb4c270e6a76350782b72a67d1bca2d2"
     },
     {
       "path": "ui/src/styles.css",

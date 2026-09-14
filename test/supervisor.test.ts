@@ -26,7 +26,8 @@ async function fixture(t: TestContext) {
   await fs.writeFile(path.join(root, 'profiles/registry.json'), JSON.stringify({ version: 1, projects: [{
     id: 'fixture', name: 'Fixture', aliases: [], root, status: 'active', stack: ['node'], modes: ['read-only'],
     sourceRoots: [], sources: [{ path: 'context.md', label: 'Fixture context', kind: 'reference' }],
-    checks: [{ id: 'slow', executable: process.execPath, args: ['-e', "setTimeout(()=>console.log('fixture check completed'),2000)"], readOnly: true, timeoutMs: 5000 }],
+    checks: [{ id: 'slow', executable: process.execPath, args: ['-e',
+      "const fs=require('node:fs');const timer=setInterval(()=>{if(fs.existsSync('release-check')){clearInterval(timer);console.log('fixture check completed');}},50)"], readOnly: true, timeoutMs: 30000 }],
   }] }));
   const engine = new TaskEngine(root);
   const manager = new SupervisorManager(root);
@@ -34,11 +35,12 @@ async function fixture(t: TestContext) {
   t.after(async () => {
     for (const receipt of receipts) {
       await manager.cancel(receipt.id);
-      await until(() => manager.status(receipt.id), (value) => ['completed', 'stopped', 'failed', 'interrupted'].includes(value.state));
+      // A terminal receipt precedes process exit; Windows still holds the cwd/logs until then.
+      await until(() => manager.status(receipt.id), (value) => ['completed', 'stopped', 'failed', 'interrupted'].includes(value.state) && value.pidExists === false);
     }
     engine.close();
     assert.ok(path.resolve(root).startsWith(path.resolve(tmpdir()) + path.sep + 'codexinfra-supervisor-'));
-    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
   const prepare = (key: string) => engine.prepare({ project: 'fixture', objective: 'Run the authorized local fixture check',
     idempotencyKey: key, mode: 'read-only', kind: 'checks', checkIds: ['slow'] });
@@ -61,6 +63,7 @@ test('detached queue outlives its starting client and persists completed local e
   // execFile resolves only after the intermediate client has exited and closed its pipes.
   await until(async () => engine.state.get(job.id), (value) => value.status === 'validating');
   assert.equal((await manager.status(receipt.id)).state, 'running');
+  await fs.writeFile(path.join(root,'release-check'),'Starting client exited; allow the detached check to finish.');
   const final = await until(() => manager.status(receipt.id), (value) => value.state === 'completed');
   assert.equal(final.result?.jobs[0]?.id, job.id);
   assert.equal(engine.state.get(job.id).status, 'completed');
@@ -75,13 +78,13 @@ test('cooperative supervisor cancellation waits for active checks and leaves lat
   const { engine, manager, receipts, prepare } = await fixture(t);
   const first = await prepare('cancel-first');
   const later = await prepare('leave-later');
-  const receipt = await manager.start({ maxJobs: 2, totalTimeoutMs: 10000 });
+  const receipt = await manager.start({ maxJobs: 2, totalTimeoutMs: 60000 });
   receipts.push(receipt);
   await until(async () => engine.state.get(first.id), (value) => value.status === 'validating');
-  await delay(200);
   const requested = await manager.cancel(receipt.id);
   assert.equal(requested.cancelRequested, true);
   assert.equal(engine.state.get(first.id).status, 'validating');
+  await until(async () => fs.access(path.join(engine.artifactDir(first.id),'cancel.json')).then(()=>true,()=>false), value=>value);
   const final = await until(() => manager.status(receipt.id), (value) => value.state === 'stopped');
   assert.equal(final.result?.stopReason, 'aborted');
   assert.equal(engine.state.get(first.id).status, 'cancelled');

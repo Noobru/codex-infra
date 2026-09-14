@@ -9,7 +9,7 @@ export interface ImprovementSample {
   evaluationIds:string[];jobIds:string[];
 }
 export interface ImprovementImpact {
-  runtime?:Pick<LearningRuntimeUsage,'status'|'hash'|'activatedAt'|'disabledAt'|'executions'|'passed'|'failed'>;
+  runtime?:Pick<LearningRuntimeUsage,'status'|'hash'|'activatedAt'|'disabledAt'|'executions'|'passed'|'failed'|'tokenEffects'>;
   candidateId:string;projectId:string;title:string;kind:string;status:string;problem:string;proposedChange:string;language:string|null;
   expectedChange:string|null;introducedAt:string|null;reversedAt:string|null;contextInclusions:number;
   baseline:ImprovementSample;after:ImprovementSample;failureRateDelta:number|null;repeatAttemptDelta:number|null;
@@ -29,6 +29,7 @@ export class ImprovementImpactReader {
       const page=await store.list({projectId,limit:100,offset});receipts.push(...page.items);offset=page.nextOffset;inventoryWarnings.push(...page.warnings);inventoryTruncated ||= page.truncated;
     }
     const knowledge=await new KnowledgeLearningStore(this.root).list(projectId);
+    const runtime=await new LearningRuntimeEffects(this.root).read({projectId,history});
     const warnings=[...inventoryWarnings,...knowledge.warnings];let executionTruncated=false;
     const jobs=new Map<string,Promise<Awaited<ReturnType<OperationalInsights['executionEvidence']>>>>();
     const observed=new Map<string,AttemptExecutionEvidence>();
@@ -47,6 +48,9 @@ export class ImprovementImpactReader {
     };
     const cases:ImprovementImpact[]=[];
     for(const candidate of knowledge.items.slice(0,100)){
+      const versions=runtime.items.filter(cap=>cap.candidateId===candidate.id&&cap.activatedAt).sort((a,b)=>a.activatedAt!.localeCompare(b.activatedAt!));
+      const selectedVersion=versions.find(cap=>cap.status==='active')??versions.at(-1);
+      const introducedAt=candidate.promotion?.recordedAt??selectedVersion?.activatedAt??null;
       const requested=candidate.impact?.baselineEvaluationIds??[];
       const baselineIds=new Set(requested);
       if(!baselineIds.size&&'jobId' in candidate.origin) {
@@ -62,20 +66,21 @@ export class ImprovementImpactReader {
           if(receipt.projectId!==candidate.projectId)throw new Error('project');
           const attempt=await evidence(receipt);
           if(!this.outcomeKey(receipt,candidate,attempt))throw new Error('execution boundary or check cohort is unknown');
-          if(candidate.promotion&&Date.parse(attempt!.window!.end)>Date.parse(candidate.promotion.recordedAt))throw new Error('baseline follows introduction');
+          if(introducedAt&&Date.parse(attempt!.window!.end)>Date.parse(introducedAt))throw new Error('baseline follows introduction');
           baseline.push(receipt);
         } catch {warnings.push(candidate.id+': baseline '+id+' unavailable, lacks captured execution/scope/command evidence, or is outside its declared boundary.');}
       }
       const before=this.uniqueAttempts(baseline);
       const key=(receipt:EvaluationReceipt)=>this.outcomeKey(receipt,candidate,observed.get(receipt.jobId+'/'+receipt.attempt));
       const compatible=new Set(before.map(key));
-      const bindings=history.knowledgeBindings.filter(binding=>binding.candidateId===candidate.id);
+      const bindings=history.knowledgeBindings.filter(binding=>binding.candidateId===candidate.id
+        &&(!selectedVersion||binding.releasePath.includes(`/bundles/${selectedVersion.hash}/`)));
       const included=new Set(bindings.map(binding=>binding.jobId+'/'+binding.attempt));
       const later:EvaluationReceipt[]=[];
       for(const receipt of receipts.filter(receipt=>receipt.projectId===candidate.projectId&&included.has(receipt.jobId+'/'+receipt.attempt)
         &&!before.some(value=>value.jobId===receipt.jobId&&value.attempt===receipt.attempt))) {
         const attempt=await evidence(receipt),cohort=key(receipt);
-        if(cohort&&compatible.has(cohort)&&candidate.promotion&&Date.parse(attempt!.window!.end)>=Date.parse(candidate.promotion.recordedAt))later.push(receipt);
+        if(cohort&&compatible.has(cohort)&&introducedAt&&Date.parse(attempt!.window!.start)>=Date.parse(introducedAt))later.push(receipt);
       }
       const after=this.uniqueAttempts(later);
       const b=this.sample(before,candidate),a=this.sample(after,candidate);
@@ -84,25 +89,24 @@ export class ImprovementImpactReader {
       const nextEvidence=[];
       if(!candidate.impact)nextEvidence.push('Declare the recurring problem, language and the change expected from this candidate.');
       if(!before.length)nextEvidence.push('Link baseline evaluations for the affected work.');
-      if(!candidate.promotion)nextEvidence.push('Review and validate the candidate before an explicit promotion.');
+      if(!introducedAt)nextEvidence.push('Review and validate the candidate before activation.');
       else if(!bindings.length)nextEvidence.push('Await attempts whose context captures this exact promoted content.');
       if(bindings.length&&!after.length)nextEvidence.push('Await evaluations compatible with the declared baseline.');
       if(outcomeCohorts.size>1)nextEvidence.push('Baseline contains multiple execution cohorts; outcome deltas remain separate instead of pooling unlike workloads.');
       cases.push({candidateId:candidate.id,projectId:candidate.projectId,title:candidate.title,kind:candidate.kind,status:candidate.status,
         problem:candidate.impact?.problem??candidate.title,proposedChange:candidate.content,language:candidate.impact?.language??null,expectedChange:candidate.impact?.expectedChange??null,
-        introducedAt:candidate.promotion?.recordedAt??null,reversedAt:candidate.reversal?.recordedAt??null,contextInclusions:bindings.length,
+        introducedAt,reversedAt:candidate.reversal?.recordedAt??null,contextInclusions:new Set(bindings.map(binding=>binding.jobId+'/'+binding.attempt)).size,
         baseline:b,after:a,failureRateDelta:oneOutcomeCohort&&b.failureRate!==null&&a.failureRate!==null?a.failureRate-b.failureRate:null,
         repeatAttemptDelta:oneOutcomeCohort&&b.attempts&&a.attempts?a.repeatAttempts/a.attempts-b.repeatAttempts/b.attempts:null,
         comparisons:this.metricDifferences(before,after,key),evidence:[...new Set([candidate.artifactPath,...candidate.originEvidence.refs,
           ...before.map(r=>r.artifactPath),...after.map(r=>r.artifactPath),...[...before,...after].flatMap(receipt=>observed.get(receipt.jobId+'/'+receipt.attempt)?.evidence??[]),...bindings.flatMap(binding=>binding.evidence)])],nextEvidence});
     }
-    const runtime=await new LearningRuntimeEffects(this.root).read({projectId,history});
     warnings.push(...runtime.warnings);
     for(const item of cases){
       const capabilities=runtime.items.filter(cap=>cap.candidateId===item.candidateId).sort((a,b)=>(b.activatedAt??'').localeCompare(a.activatedAt??''));
       const cap=capabilities.find(cap=>cap.status==='active')??capabilities[0];
       if(cap){
-        item.runtime={status:cap.status,hash:cap.hash,activatedAt:cap.activatedAt,disabledAt:cap.disabledAt,executions:cap.executions,passed:cap.passed,failed:cap.failed};
+        item.runtime={status:cap.status,hash:cap.hash,activatedAt:cap.activatedAt,disabledAt:cap.disabledAt,executions:cap.executions,passed:cap.passed,failed:cap.failed,tokenEffects:cap.tokenEffects};
         item.nextEvidence=item.nextEvidence.filter(text=>!text.includes('before an explicit promotion'));
         item.nextEvidence.push(cap.status==='active'?(cap.executions?'Compare attributed executions with compatible baselines; savings are not established.':'Capability active; awaiting its first recorded execution.'):`Executable version is ${cap.status}; activation is separate from manual knowledge promotion.`);
       }

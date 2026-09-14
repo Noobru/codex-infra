@@ -15,7 +15,8 @@ try {
     modes:['read-only','workspace-write'],workspaces:['in-place','worktree'],sourceRoots:[],
     sources:[{path:'README.md',label:'Readme',kind:'reference',maxChars:12000},{path:'docs/USO.md',label:'Operation',kind:'reference',maxChars:12000}],
     checks:[check('build',['node_modules/typescript/bin/tsc','-p','tsconfig.json']),
-      check('tests',['--test','dist/test/*.test.js']),
+      // Each file owns subprocess fixtures; run files serially to avoid host startup contention.
+      check('tests',['--test','--test-concurrency=1','dist/test/*.test.js']),
       check('ui-typecheck',['../node_modules/typescript/bin/tsc','-p','tsconfig.json'],'ui'),
       check('ui-build',['build.mjs'],'ui')]});
   const policyPath=path.join(root,'profiles/execution-policy.json');

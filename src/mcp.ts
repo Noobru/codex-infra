@@ -28,7 +28,9 @@ import { InteractionTelemetry } from './interaction-telemetry.js';
 import { LearningApplications,LearningApplicationInputSchema } from './learning-applications.js';
 import { AutonomousLearning, LearningRecoverySchema } from './autonomous-learning.js';
 import { LearningRuntimeStore, LearningRunInputSchema } from './learning-runtime.js';
+import { DelegationLifecycle, DelegationFinishSchema } from './delegation-lifecycle.js';
 import { LearningSandbox } from './learning-sandbox.js';
+import { DockerRecovery } from './docker-recovery.js';
 
 const root = path.resolve(process.env.CODEX_INFRA_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'));
 const engine = new TaskEngine(root);
@@ -36,6 +38,9 @@ const workflows=new WorkflowManager(engine),learning=new KnowledgeLearningStore(
 const server = new McpServer({name:'codex-infra',version:'0.6.1'});
 const runtime = new RuntimeObservation(root);
 const result = (value: unknown) => ({content:[{type:'text' as const,text:JSON.stringify(value)}]});
+server.registerTool('inspect_docker_recovery',{description:'Read-only Windows Docker preflight. Detects the known inaccessible socket failure without starting Docker or changing files.',annotations:{readOnlyHint:true}},async()=>result(await new DockerRecovery(root).inspect()));
+server.registerTool('recover_docker_start',{description:'Only with explicit owner authorization: preserve known orphan Windows socket directories without deletion, then start Docker once. Refuses active Docker or unexpected files. Launch success is not engine health; inspect again to confirm.',inputSchema:{decision:KnowledgeOwnerDecisionSchema}},async({decision})=>result(await new DockerRecovery(root).recover(decision)));
+server.registerTool('finish_delegation',{description:'After integrating the exact stopped worker result/evidence, archive its recoverable Codex thread and record confirmation or a retryable pending receipt. Does not archive human tasks or active workers.',inputSchema:{jobId:z.uuid(),input:DelegationFinishSchema}},async({jobId,input})=>result(await new DelegationLifecycle(root).finish(jobId,input)));
 server.registerTool('recover_learning_case',{description:'Record an explicit evidence-backed recovery of an attention case. Resume only after the interrupted worker was explicitly retried and completed; supersede only with a validated successor. Preserves attempts, failures and disabled versions; does not dispatch work.',inputSchema:{caseId:z.string(),input:LearningRecoverySchema}},async({caseId,input})=>result(await new AutonomousLearning(root).recover(caseId,input)));
 server.registerTool('learning_cycle_status',{description:'Read autonomous rework cases and exact versioned callable capabilities. Includes queued, active and attention states; never dispatches work.',annotations:{readOnlyHint:true},inputSchema:{projectId:z.string().optional()}},async({projectId})=>result({cases:await new AutonomousLearning(root).list(projectId),capabilities:await new LearningRuntimeStore(root).list(projectId)}));
 server.registerTool('run_learning_capability',{description:'Invoke an active reviewed and tested skill/script by exact hash. Uses an offline isolated workspace, returns outputs and records actual execution. Input data and application to the project must remain within the current authorized task.',inputSchema:{hash:z.string().regex(/^[a-f0-9]{64}$/),input:LearningRunInputSchema}},async({hash,input})=>result(await new LearningRuntimeStore(root,new LearningSandbox(root)).run(hash,input)));

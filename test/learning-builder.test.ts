@@ -40,7 +40,7 @@ async function fixture(t: TestContext, behavior: 'pass' | 'quota' | 'mutate' | '
     }
     return { status: 'completed', summary: 'Fixture worker wrote the requested artifact.' };
   } };
-  const builder = new LearningBuilder(root, { engineFactory: ownedRoot => new TaskEngine(ownedRoot, worker) });
+  const builder = new LearningBuilder(root, { engineFactory: ownedRoot => new TaskEngine(ownedRoot, worker),archiveAdapter:{async archive(){/* synthetic worker, no Desktop operation */}} });
   return { root, calls, builder, setBehavior: (next: typeof behavior) => { behavior = next; } };
 }
 

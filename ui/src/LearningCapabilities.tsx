@@ -2,7 +2,7 @@ import {useState} from 'react';
 import type {DashboardObservation} from './api';
 import {CopyId,EmptyState,timestamp,duration,type CopyProps} from './components';
 
-const statusNames:Record<string,string>={active:'Ativa',attention:'Precisa de atenção',queued:'Na fila',building:'Em construção',validating:'Em validação',reviewing:'Em revisão',disabled:'Desativada',superseded:'Substituída por caso validado',rejected:'Revisão reprovada','validation-failed':'Teste reprovado',registered:'Pacote gerado',reviewed:'Revisada',validated:'Validada'};
+export const statusNames:Record<string,string>={active:'Ativa',attention:'Precisa de atenção',queued:'Na fila',building:'Em construção',validating:'Em validação',reviewing:'Em revisão',disabled:'Desativada',superseded:'Substituída por caso validado',rejected:'Revisão reprovada','validation-failed':'Teste reprovado',registered:'Pacote gerado',reviewed:'Revisada',validated:'Validada'};
 type Props={data:DashboardObservation;onOpenRun:(id:string)=>void}&CopyProps;
 
 /** One story per exact executable version; pending cases stay separate until a bundle exists. */

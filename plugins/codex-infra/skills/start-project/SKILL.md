@@ -146,6 +146,15 @@ o worker confere o catálogo e os valores efetivos; indisponibilidade bloqueia s
 escalada automática para Ultra. Confira `execution`, `routingDecision` e artefatos
 retornados, valide o resultado e integre a evidência à tarefa principal.
 
+Após integrar o resultado ou a falha e encerrar o uso do worker, chame
+`finish_delegation({jobId,input:{expectedAttempt,threadId,integrated:true,author,source,evidence}})`.
+Use a tentativa e a thread reais do recibo. A CLI equivalente é
+`finish-delegation JOB_ID --file DECISION.json`. O núcleo recusa worker ativo e
+arquiva pelo app-server oficial; confira `status:archived`. `pending` preserva a
+evidência e exige retomar essa finalização. Não arquive tarefa humana nem apague
+recibos. O construtor de aprendizado finaliza seus dois workers depois de salvar
+o resultado integrado; delegações comuns são finalizadas pelo coordenador.
+
 Para fila/DAG, `prepare_task` e cada task de `prepare_workflow` recebem essa mesma
 qualificação em `routing`; `run_task`/workflow executam o contrato salvo. Novos jobs
 de modelo sem qualificação completa são rejeitados. Jobs antigos sem política
@@ -177,6 +186,17 @@ Para fila preparada fora de DAG, limitar `drain_queue`/`start_queue` por jobIds,
 
 ## Aprendizado e segurança
 
+### Docker Desktop no Windows
+
+Antes de abrir Docker para validação autorizada, use `inspect_docker_recovery`
+(CLI `docker-recovery`) para detectar sockets órfãos conhecidos. Se houver o erro
+de socket inacessível e nenhum processo ativo, use `recover_docker_start` apenas
+com a autorização explícita já recebida para recuperar/iniciar. O fluxo preserva
+as pastas de sockets e não apaga dados. Confirme `healthy:true` em nova inspeção;
+lançamento não comprova funcionamento. Não repetir abertura ou limpeza em loop.
+Consulte `docs/DOCKER-RECOVERY.md`. A manutenção de aprendizado e o
+sandbox não ganham autorização para iniciar ou encerrar Docker/WSL.
+
 Declare `performanceScope` (taskClass, language e problemCategory quando pertinentes)
 na entrada/atualização da interação e nos taskDetails do job, antes do trabalho ao
 qual se aplica. Use classes estáveis e compatíveis; não deduza escopo histórico
@@ -196,6 +216,9 @@ mudança esperada e baselines/checks afetados quando houver evidência. Uma capa
 ativa pertinente ao objetivo deve ser usada por `run_learning_capability({hash,input})`,
 com hash completo, projectId exato, entrypoint e dados conforme o descriptor. Acrescente
 `input.attribution:{threadId,turnId}` quando as identidades reais forem conhecidas.
+Também pode fornecer `input.threadId` do próprio caller para capturar o turno
+atual explicitamente registrado; o runtime recusa identidade ambígua ou projeto
+diferente. Nunca use a identidade do processo MCP como se fosse a do caller.
 O runtime já registra a execução e os outputs; não invente aplicação nem economia de
 tokens. Use os outputs apenas dentro do trabalho autorizado. Se o owner fornecer um
 hash para desativar, chame `disable_learning_capability` com a decisão real dele.

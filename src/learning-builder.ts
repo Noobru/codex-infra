@@ -7,7 +7,8 @@ import { KnowledgeFiles, KnowledgeContentSchema, KnowledgeEvidenceSchema, Knowle
   KnowledgeProjectSchema, KnowledgeTextSchema } from './knowledge-store.js';
 import { LearningBundleInputSchema, LearningRuntimeStore, type LearningBundleInput } from './learning-runtime.js';
 import { EvidenceSanitizer } from './evidence.js';
-import type { Job } from './state.js';
+import { StateStore, type Job } from './state.js';
+import { DelegationLifecycle, type WorkerArchiveAdapter } from './delegation-lifecycle.js';
 
 export const LearningBuildInputSchema = z.object({
   caseId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,159}$/), projectId: KnowledgeProjectSchema, kind: KnowledgeKindSchema,
@@ -30,7 +31,7 @@ export class LearningBuildError extends Error {
     super(message); this.name = 'LearningBuildError';
   }
 }
-export interface LearningBuilderOptions { engineFactory?: (root: string) => TaskEngine }
+export interface LearningBuilderOptions { engineFactory?: (root: string) => TaskEngine; archiveAdapter?: WorkerArchiveAdapter }
 
 /** Named checks parse artifacts only. They never import, run, or install files inside a generated bundle. */
 export class LearningBuildArtifacts {
@@ -65,7 +66,9 @@ export class LearningBuilder {
     let stage: 'build' | 'review' = 'build', engine: TaskEngine | undefined;
     try {
       await this.files.writeVerified(`${base}/input.json`, JSON.stringify(input, null, 2) + '\n');
-      if ((await this.files.names(base)).includes('result.json')) return this.files.read(resultPath, LearningBuildResultSchema);
+      if ((await this.files.names(base)).includes('result.json')) {
+        const cached=await this.files.read(resultPath,LearningBuildResultSchema);await this.finishWorkers(cached);return cached;
+      }
       const policy = await LearningRuntimeStore.readPolicy(this.root);
       if (!policy?.enabled || !policy.allowedKinds.includes(input.kind) || (!policy.allowedProjectIds.includes('*') && !policy.allowedProjectIds.includes(input.projectId)))
         throw new LearningBuildError('Host standing learning policy does not authorize this build.', 'waiting_user', jobIds, stage);
@@ -118,12 +121,25 @@ export class LearningBuilder {
       if (review.bundleHash !== bundleHash) throw new Error('Review hash differs from the generated bundle.');
       const result = LearningBuildResultSchema.parse({ version: 1, artifactPath: resultPath, bundle, review, jobIds });
       await this.files.writeJsonNew(resultPath, result);
+      await this.finishWorkers(result);
       return result;
     } catch (error) {
       if (error instanceof LearningBuildError) throw error;
       throw new LearningBuildError(EvidenceSanitizer.text(error instanceof Error ? error.message : String(error), 2000),
         options.signal?.aborted ? 'cancelled' : 'failed', [...jobIds], stage);
     } finally { engine?.close(); }
+  }
+
+  private async finishWorkers(result:LearningBuildResult){
+    const state=new StateStore(path.join(this.root,'state/jobs.sqlite'),{readOnly:true});
+    try {
+      for(const jobId of result.jobIds){
+        const job=state.get(jobId);
+        if(!job.threadId||job.ownerPid!==null||!['completed','failed','cancelled'].includes(job.status))continue;
+        await new DelegationLifecycle(this.root,this.options.archiveAdapter).finish(jobId,{expectedAttempt:job.attempts,threadId:job.threadId,integrated:true,
+          author:{name:'Learning coordinator',role:'model'},source:'Build and independent review integrated into the immutable learning result.',evidence:[result.artifactPath]});
+      }
+    }finally{state.close();}
   }
 
   private async register(engine: TaskEngine, id: string, root: string, kind: 'bundle' | 'review', expectedHash?: string): Promise<void> {

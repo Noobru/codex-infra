@@ -11,6 +11,7 @@ import {ProjectRegistry} from './registry.js';
 import {OperationalInsights} from './operational-insights.js';
 import {EvidenceSanitizer} from './evidence.js';
 import {InteractionTelemetry,type InteractionTelemetryReceipt} from './interaction-telemetry.js';
+import {LearningRuntimeStore} from './learning-runtime.js';
 
 export const EfficiencyHistoryInputSchema=z.object({projectId:z.string().min(1).optional(),days:z.union([z.literal(7),z.literal(14),z.literal(30),z.literal(90)]).default(14)});
 type Kind='codex'|'checks';
@@ -260,6 +261,17 @@ export class EfficiencyHistory {
           }catch(error){prior=undefined;this.warn(result,`${id}/revision-${revision}: ${this.error(error)}`);}
         }
       }catch(error){this.warn(result,`${id}: ${this.error(error)}`);}
+    }
+    const runtime=await new LearningRuntimeStore(this.root).list(projectId);
+    for(const warning of runtime.warnings)this.warn(result,warning);
+    for(const {manifest,state} of runtime.items){
+      if(!state.activation||!this.includeProject(manifest.projectId))continue;
+      try{
+        for(const descriptor of await new LearningRuntimeStore(this.root).releaseBindings({manifest,state}))
+          releases.push({candidateId:manifest.candidateId,projectId:manifest.projectId,path:descriptor.path,contentHash:descriptor.sha256,at:state.activation.recordedAt,evidence:[manifest.artifactPath,state.artifactPath,descriptor.path]});
+      }catch{this.warn(result,`${manifest.candidateId}: activated descriptor unavailable for context attribution.`);}
+      this.change(result,{at:state.activation.recordedAt,kind:'promotion',scope:manifest.projectId,projectId:manifest.projectId,jobId:null,
+        label:'Executable capability activated after review and isolated validation',before:null,after:manifest.title,evidence:[manifest.artifactPath,state.artifactPath]});
     }
     return [...new Map(releases.map(release=>[JSON.stringify([release.candidateId,release.path,release.contentHash,release.at]),release])).values()];
   }

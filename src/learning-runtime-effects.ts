@@ -4,6 +4,8 @@ import {LearningRuntimeStore,LearningRunReceiptSchema,type LearningRunReceipt} f
 import {EvaluationMetricSchema,type EvaluationMetric} from './evaluation.js';
 import {EvidenceSanitizer} from './evidence.js';
 import type {EfficiencyHistoryResult} from './efficiency-history.js';
+import {InteractionTelemetry, type InteractionTelemetryReceipt} from './interaction-telemetry.js';
+import {TurnComparison} from './turn-comparison.js';
 
 type HistoryWindow=Pick<EfficiencyHistoryResult,'observedAt'|'timeZone'|'window'>;
 export interface LearningRuntimeEffectsInput {projectId?:string;history?:HistoryWindow}
@@ -18,11 +20,17 @@ export interface LearningRuntimeUsage {
   metrics:{totalDuration:EvaluationMetric;meanDuration:EvaluationMetric};
   days:{day:string;executions:number;passed:number;failed:number;totalDurationMs:number;meanDurationMs:number;runIds:string[]}[];
   attributedExecutions:number;runs:LearningRuntimeInvocation[];evidence:string[];
+  tokenEffects: RuntimeTokenEffects;
+}
+export interface RuntimeTokenEffects {
+  status:'pending'|'observed'; pendingExecutions:number; reasons:string[];
+  groups:{id:string;modelIdentity:InteractionTelemetryReceipt['modelIdentity'];performanceScope:InteractionTelemetryReceipt['performanceScope'];
+    baselineTurns:number;treatmentTurns:number;executionIds:string[];evidence:string[];metrics:ReturnType<typeof TurnComparison.compare>}[];
 }
 export interface LearningRuntimeEffectsResult {
   version:1;observedAt:string;timeZone:string;window:HistoryWindow['window']|null;items:LearningRuntimeUsage[];
   coverage:{available:number;inspected:number;included:number;limit:number;truncated:boolean};warnings:string[];
-  tokenComparison:{status:'not-established';reason:string;metrics:null};limitations:string[];
+  tokenComparison:{status:'not-established'|'observed';reason:string;metrics:null};limitations:string[];
 }
 
 /** Read-only execution evidence. It reads owned receipts, never runs a capability or opens a product root. */
@@ -35,10 +43,10 @@ export class LearningRuntimeEffects {
     const observedAt=input.history?.observedAt??new Date().toISOString(),timeZone=input.history?.timeZone??'UTC';
     const calendar=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'});
     const day=(at:string)=>calendar.format(new Date(at));
-    const [bundles,names]=await Promise.all([new LearningRuntimeStore(this.root).list(input.projectId),
-      this.files.names('artifacts/learning/runtime/runs')]);
+    const [bundles,names,telemetry]=await Promise.all([new LearningRuntimeStore(this.root).list(input.projectId),
+      this.files.names('artifacts/learning/runtime/runs'),new InteractionTelemetry(this.root).read({projectId:input.projectId})]);
     const files=names.filter(name=>name.endsWith('.json')&&z.uuid().safeParse(name.slice(0,-5)).success);
-    const limit=2000,selected=files.slice(0,limit),warnings=[...bundles.warnings],byHash=new Map<string,LearningRunReceipt[]>();
+    const limit=2000,selected=files.slice(0,limit),warnings=[...bundles.warnings,...telemetry.warnings],byHash=new Map<string,LearningRunReceipt[]>();
     let included=0;
     const registered=new Map(bundles.items.map(item=>[item.manifest.hash,item.manifest]));
     for(const name of selected){
@@ -72,14 +80,43 @@ export class LearningRuntimeEffects {
         days:[...grouped].map(([day,entries])=>{const totalDurationMs=entries.reduce((sum,run)=>sum+run.durationMs,0);return {day,executions:entries.length,
           passed:entries.filter(run=>run.status==='passed').length,failed:entries.filter(run=>run.status==='failed').length,totalDurationMs,
           meanDurationMs:totalDurationMs/entries.length,runIds:entries.map(run=>run.id)};}),
-        attributedExecutions:runs.filter(run=>run.attribution!==null).length,runs,evidence};
+        attributedExecutions:runs.filter(run=>run.attribution!==null).length,runs,evidence,
+        tokenEffects:this.compare(manifest.hash,manifest.projectId,state.activation?.recordedAt??null,runs,telemetry.turnReceipts,input.history)};
     }).sort((a,b)=>b.executions-a.executions||a.title.localeCompare(b.title)||a.hash.localeCompare(b.hash));
     return {version:1,observedAt,timeZone,window:input.history?.window??null,items,
       coverage:{available:files.length,inspected:selected.length,included,limit,truncated:selected.length<files.length},warnings:[...new Set(warnings)].map(warning=>EvidenceSanitizer.text(warning,600)),
-      tokenComparison:{status:'not-established',metrics:null,reason:'Turn attribution is retained, but model identity is not recorded in the current turn telemetry contract. A comparison requiring the same model is not established.'},
+      tokenComparison:{status:items.some(item=>item.tokenEffects.status==='observed')?'observed':'not-established',metrics:null,
+        reason:'Comparisons are per exact capability version, project, declared work scope and observed model/effort. Missing or incomplete evidence remains pending; global averages are not pooled.'},
       limitations:['Counts and durations describe verified execution receipts in the selected window; they are not measures of improvement or quality.',
         'Deterministic execution does not invoke a model. Interaction, synthesis and build costs are not zero and are not measured by these durations.',
         'Returned output hashes prove the recorded result, not that a caller applied it to another project. No causal or quota savings are inferred.']};
+  }
+
+  private compare(hash:string,projectId:string,activatedAt:string|null,runs:LearningRuntimeInvocation[],turns:InteractionTelemetryReceipt[],window?:HistoryWindow):RuntimeTokenEffects{
+    const complete=TurnComparison.unique(turns.filter(turn=>TurnComparison.complete(turn)&&turn.projectId===projectId
+      &&(!window||(Date.parse(turn.finishedAt!)<=Date.parse(window.observedAt)
+        &&new Intl.DateTimeFormat('en-CA',{timeZone:window.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(turn.finishedAt!))>=window.window.startDay))));
+    const byTurn=new Map(complete.map(turn=>[TurnComparison.id(turn),turn]));
+    const grouped=new Map<string,{turns:InteractionTelemetryReceipt[];runs:LearningRuntimeInvocation[]}>();
+    let pendingExecutions=0;
+    for(const run of runs){
+      const turn=run.attribution?byTurn.get(TurnComparison.id(run.attribution)):undefined;
+      const cohort=turn?TurnComparison.cohort(turn):null;
+      if(!activatedAt||!turn||!cohort||Date.parse(turn.startedAt)<Date.parse(activatedAt)
+        ||Date.parse(run.recordedAt)<Date.parse(turn.startedAt)||Date.parse(run.recordedAt)>Date.parse(turn.finishedAt!)) {pendingExecutions++;continue;}
+      const group=grouped.get(cohort)??{turns:[],runs:[]};group.turns.push(turn);group.runs.push(run);grouped.set(cohort,group);
+    }
+    const groups=[...grouped].map(([key,group])=>{
+      const treatment=TurnComparison.unique(group.turns),exemplar=treatment[0]!;
+      const baseline=complete.filter(turn=>TurnComparison.cohort(turn)===key&&Date.parse(turn.finishedAt!)<Date.parse(activatedAt!));
+      return {id:KnowledgeFiles.hash(hash+key),modelIdentity:exemplar.modelIdentity,performanceScope:exemplar.performanceScope,
+        baselineTurns:baseline.length,treatmentTurns:treatment.length,executionIds:group.runs.map(run=>run.id),
+        evidence:[...baseline,...treatment].map(turn=>turn.artifactPath).concat(group.runs.map(run=>run.artifactPath)),metrics:TurnComparison.compare(baseline,treatment)};
+    });
+    return {status:groups.some(group=>group.metrics.some(metric=>metric.delta!==null))?'observed':'pending',pendingExecutions,groups,
+      reasons:[...(!activatedAt?['Ativação desta versão ainda não registrada.']:[]),...(!runs.length?['Aguardando a primeira execução registrada desta versão.']:[]),
+        ...(pendingExecutions?['Há chamadas sem turno completo, escopo ou modelo/esforço observado compatível.']:[]),
+        ...(groups.some(group=>!group.baselineTurns)?['Aguardando turnos equivalentes anteriores à ativação, dentro do período selecionado.']:[])]};
   }
 
   private durationMetric(id:'totalDuration'|'meanDuration',runs:LearningRuntimeInvocation[],hash:string):EvaluationMetric{

@@ -282,6 +282,18 @@ export class StateStore {
     });
   }
 
+  /** Atomic queue reconciliation: never races a claim into cancelling a live owner. */
+  cancelPending(id: string): Job {
+    return this.transaction(() => {
+      const job = this.get(id);
+      if (job.ownerPid !== null || !['ready','waiting_user','waiting_quota'].includes(job.status)) return job;
+      const now = new Date().toISOString();
+      this.db.prepare("UPDATE jobs SET status = 'cancelled', updatedAt = ? WHERE id = ? AND status = ? AND ownerPid IS NULL").run(now,id,job.status);
+      this.event(id,job.status,'cancelled',{action:'superseded-learning-reconciliation'},now);
+      return this.get(id);
+    });
+  }
+
   events(id: string): JobEvent[] {
     this.get(id);
     return this.db.prepare('SELECT * FROM job_events WHERE jobId = ? ORDER BY id').all(id).map((row) => ({

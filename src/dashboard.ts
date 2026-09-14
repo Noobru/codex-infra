@@ -117,7 +117,7 @@ export class DashboardReader {
     if(runtimeEffects?.data){runtimeEffects.warnings=runtimeEffects.data.warnings;runtimeEffects.state=runtimeEffects.warnings.length||runtimeEffects.data.coverage.truncated?'partial':runtimeEffects.data.items.length?'ready':'empty';}
     if(runtimeEffects?.data)runtimeEffects.data.items=runtimeEffects.data.items.filter(item=>includeProject(item.projectId));
     if(improvements?.data)improvements.data.cases=improvements.data.cases.filter(item=>includeProject(item.projectId));
-    const learningEffects=improvements?.data?await this.source(()=>new LearningApplications(this.root).readEffects(improvements.data!.cases.map(candidate=>candidate.candidateId)),'Learning token effects'):null;
+    const learningEffects=improvements?.data?await this.source(()=>new LearningApplications(this.root).readEffects(improvements.data!.cases.filter(candidate=>!candidate.runtime).map(candidate=>candidate.candidateId)),'Learning token effects'):null;
     if(learningEffects?.data){learningEffects.warnings=learningEffects.data.warnings;learningEffects.state=learningEffects.warnings.length?'partial':'ready';}
     const learning=view==='learning'?{
       state:profiles.state,
