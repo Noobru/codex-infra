@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { DrainResult } from './queue.js';
 import { atomicWriteJson, errorMessage, makeId, readJson, resolveRealSubPath } from './legacy/command-os-utils.js';
 
-export interface SupervisorOptions { maxJobs: number; totalTimeoutMs: number; concurrency?:number; jobIds?:string[]; workflowId?:string; mode?:'queue'|'learning' }
+export interface SupervisorOptions { maxJobs: number; totalTimeoutMs: number; concurrency?:number; jobIds?:string[]; workflowId?:string; mode?:'queue'|'learning';continueIndependent?:boolean }
 export interface SupervisorReceipt { id: string; pid: number; path: string; createdAt: string }
 export interface SupervisorRequest extends SupervisorOptions {
   version: 1;
@@ -55,7 +55,7 @@ export class SupervisorManager {
     await fs.mkdir(directory);
     const createdAt = new Date().toISOString();
     const request: SupervisorRequest = { version: 1, id, root, path: directory, createdAt,
-      maxJobs: options.maxJobs, totalTimeoutMs: options.totalTimeoutMs, ...(options.mode?{mode:options.mode}:{}),
+      maxJobs: options.maxJobs, totalTimeoutMs: options.totalTimeoutMs, ...(options.mode?{mode:options.mode}:{}),...(options.continueIndependent!==undefined?{continueIndependent:options.continueIndependent}:{}),
       ...(options.concurrency?{concurrency:options.concurrency}:{}),...(options.jobIds?{jobIds:options.jobIds}:{}),...(options.workflowId?{workflowId:options.workflowId}:{}) };
     const starting: SupervisorRecord = { id, state: 'starting', pid: null, createdAt, startedAt: null,
       updatedAt: createdAt, finishedAt: null, result: null, error: null };
@@ -124,7 +124,8 @@ export class SupervisorManager {
 
   private validateOptions(options: SupervisorOptions): void {
     if(options.mode!==undefined && !['queue','learning'].includes(options.mode))throw new Error('Invalid supervisor mode');
-    if(options.mode==='learning' && (options.jobIds||options.workflowId||options.concurrency))throw new Error('Learning supervisor owns its bounded case scope');
+    if(options.mode==='learning' && (options.jobIds||options.workflowId||options.concurrency||options.continueIndependent))throw new Error('Learning supervisor owns its bounded case scope');
+    if(options.continueIndependent && !options.jobIds?.length)throw new Error('Independent continuation requires an explicit job scope');
     if (!Number.isSafeInteger(options.maxJobs) || options.maxJobs < 1 || options.maxJobs > 100) throw new Error('Supervisor maxJobs must be between 1 and 100');
     if (!Number.isSafeInteger(options.totalTimeoutMs) || options.totalTimeoutMs < 1000 || options.totalTimeoutMs > SupervisorManager.maxDurationMs) throw new Error('Supervisor duration must be between 1000 and 7200000 ms');
     if(options.concurrency!==undefined && (!Number.isSafeInteger(options.concurrency)||options.concurrency<1||options.concurrency>4))throw new Error('Supervisor concurrency must be between 1 and 4');

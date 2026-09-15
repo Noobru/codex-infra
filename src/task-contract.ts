@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { JobMode } from './state.js';
 import {PerformanceScopeSchema} from './performance-scope.js';
+import {OutcomeCriterionSchema} from './outcome.js';
+import {IntentSchema,ResolutionPolicySchema} from './delegation-contract.js';
 
 const statements = z.array(z.string().trim().min(1).max(2000)).max(40);
 const identifier = z.string().trim().min(1).max(128);
@@ -28,6 +30,9 @@ export const OpenDecisionSchema = z.object({
   if(decision.status==='defaulted'&&decision.material)ctx.addIssue({code:'custom',message:'A material decision cannot use an automatic default.'});
 });
 export const TaskDetailsSchema = z.object({
+  intent: IntentSchema.optional(),
+  outcomeCriteria: z.array(OutcomeCriterionSchema).min(1).max(40).optional(),
+  resolution: ResolutionPolicySchema.optional(),
   networkAccess: z.boolean().default(true),
   gitHubAuth: z.boolean().optional(),
   comparisonBaseSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
@@ -55,6 +60,11 @@ export class TaskContractBuilder {
   build(input: {projectId:string; objective:string; mode:JobMode; kind:'checks'|'codex'; checkIds:string[]; requirementIds?:string[]; details?:TaskDetailsInput}): TaskContract {
     const objective = z.string().trim().min(1).max(20000).parse(input.objective);
     const details = TaskDetailsSchema.parse(input.details ?? {});
+    if(details.intent&&['question','example','pause'].includes(details.intent.kind))throw new Error('A question, example or pause cannot authorize an execution task');
+    if(details.outcomeCriteria) {
+      if(new Set(details.outcomeCriteria.map(c=>c.id)).size!==details.outcomeCriteria.length)throw new Error('Outcome criterion IDs must be unique');
+      for(const criterion of details.outcomeCriteria)if(criterion.kind==='check'&&!input.checkIds.includes(criterion.checkId))throw new Error('Outcome check must belong to the task acceptance checks');
+    }
     const body = {
       version: 1 as const, projectId: input.projectId, objective, mode: input.mode,
       kind: input.kind, checkIds: input.checkIds, requirementIds: [...new Set(input.requirementIds ?? [])].sort(), details,

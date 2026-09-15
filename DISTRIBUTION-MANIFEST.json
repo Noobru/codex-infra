@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "packageVersion": "0.6.1",
-  "createdAt": "2026-09-14T20:32:13.248Z",
+  "packageVersion": "0.7.0",
+  "createdAt": "2026-09-15T04:59:48.082Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -93,6 +93,11 @@
       "sha256": "fcbc86fa18ffce285dc964498d412415a8f7c2cce75195c57f74f275b4619071"
     },
     {
+      "path": "docs/DELEGATION.md",
+      "bytes": 5564,
+      "sha256": "ca5b18617bc1d8e3f67500f5a3c94f620aa83c150dd982596e803cdfc431c3f0"
+    },
+    {
       "path": "docs/DISTRIBUICAO.md",
       "bytes": 2894,
       "sha256": "511f9b71792f9a2f658632a86b471083f06d0827fa39c32ad1f179e060333dab"
@@ -119,8 +124,8 @@
     },
     {
       "path": "docs/USO.md",
-      "bytes": 22831,
-      "sha256": "fdcf64d8e3ff9da1153428c9462095dbbe16b0284ea77b42dd21e998871a9610"
+      "bytes": 23045,
+      "sha256": "203e3acbfe9ac701a0d04940bf97b366c83a18fcc53a58e4196742d463e0ab76"
     },
     {
       "path": "fixtures/model-routing/AGENTS.md",
@@ -245,17 +250,17 @@
     {
       "path": "package-lock.json",
       "bytes": 59475,
-      "sha256": "5bcca15ce600ac8178e22e0041951a788673c943a6be8060674abbe7151b5c34"
+      "sha256": "7ad2b2f4d2f98f9f9fa57c4893bbd7b83f1154b15484077a50e0dedaa9e57838"
     },
     {
       "path": "package.json",
       "bytes": 701,
-      "sha256": "ecb7f5f140b9735c3c429785797e77dc4b57cbf12a8032020bf4f18927493cef"
+      "sha256": "b7e3eedb9eaa93cad5e2220ee46cf1ca1646fff270f5c14f228421eae05691f9"
     },
     {
       "path": "plugins/codex-infra/.codex-plugin/plugin.json",
       "bytes": 735,
-      "sha256": "93c656fa715ca96a9285ecd108352eebe24b3bc1fefff6fe39a634c011745764"
+      "sha256": "3b001c27ceaf957effac20a1d934685078b9119d4cce3c88ab851e4f8e5991e3"
     },
     {
       "path": "plugins/codex-infra/skills/start-project/agents/openai.yaml",
@@ -264,8 +269,8 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 20987,
-      "sha256": "264fb5135bff1c2565eab5f127ae7efdb359189d474677ee1bb422adb7b0d684"
+      "bytes": 22755,
+      "sha256": "8e8cb1c42e0305f0c0511709840c5acc563a91d6be9ea9bea89f3cf3230e0e16"
     },
     {
       "path": "profiles/model-routing.json",
@@ -324,13 +329,13 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 20618,
-      "sha256": "18006584e47a61588258b30088e39a37ad1c27712d58cb89f0e3cd214aa70844"
+      "bytes": 20856,
+      "sha256": "09e625aa2dc7c4ce423a6f1c10b3f936da2cc605e308800ef090665fbe70e27e"
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 22283,
-      "sha256": "40a2efbe2f9e19848de53888d4e502bb0cab105ed9953f5d9ca6ad3f9cfd7467"
+      "bytes": 23635,
+      "sha256": "8bb42cfba8883c2e2bcf3b819b9c113043a15e93b96cce35ac29b4da4dbb8c2a"
     },
     {
       "path": "src/context-pack.ts",
@@ -341,6 +346,11 @@
       "path": "src/dashboard.ts",
       "bytes": 14032,
       "sha256": "42e1fe84b8aede7dd3e6d033a07e13264437999cb7aedc8d778e18dcade19455"
+    },
+    {
+      "path": "src/delegation-contract.ts",
+      "bytes": 1830,
+      "sha256": "ee34950c70101a3755fa8909f10f2c89efa418c34e441630ed894fd3fd250c55"
     },
     {
       "path": "src/delegation-lifecycle.ts",
@@ -359,13 +369,13 @@
     },
     {
       "path": "src/engine.ts",
-      "bytes": 27136,
-      "sha256": "cddb537a65a529f0106e09143d7c064054555b69fe016cd884fc0d0800c5f590"
+      "bytes": 32866,
+      "sha256": "f77100fba1b9660d7b999f586f45e2e48c01cd4bef4375dab31cc872103c27f3"
     },
     {
       "path": "src/evaluation.ts",
-      "bytes": 14286,
-      "sha256": "fd94175f0ee051575986f27f97486137c280708be415f695214b9de52dbebb9a"
+      "bytes": 15429,
+      "sha256": "fa33f3682b392ed83f1cbb3fe5a91e990448e6ba6fe8704dffc1ff5c4ea1b350"
     },
     {
       "path": "src/evidence.ts",
@@ -374,8 +384,8 @@
     },
     {
       "path": "src/execution-evidence.ts",
-      "bytes": 3768,
-      "sha256": "f4409847779f30121fc45311176b9d234332712af05edf100f04e90224305b2d"
+      "bytes": 4708,
+      "sha256": "230409bdc0e563b81f9f73c36b6fcd66743893c58160fe5af7975aca5a3c49d1"
     },
     {
       "path": "src/execution-policy.ts",
@@ -409,8 +419,8 @@
     },
     {
       "path": "src/interactions.ts",
-      "bytes": 16942,
-      "sha256": "95ff5e08f194aa109f256a3511ef666e8c22d5f9ff77afaaafa7ebaf088c45e7"
+      "bytes": 17628,
+      "sha256": "7ec0c5028ebc3dca52dac90d092198cdd329e68028776228abaa1ff5ffd8467e"
     },
     {
       "path": "src/knowledge-index.ts",
@@ -459,8 +469,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 26065,
-      "sha256": "ac7032d9caa7d9f1aceaa210acdbb2be7348b71c3f4af117055be0f805dfbb8e"
+      "bytes": 26571,
+      "sha256": "c99ffda6a852219dc919e35819c997c580e42f137f4d32ae24c0ffdc275f7581"
     },
     {
       "path": "src/model-catalog.ts",
@@ -468,9 +478,14 @@
       "sha256": "ef638e59f8bab464bc9da23bf7413880c7e09d21ccdd6e089e66f9a44f553dce"
     },
     {
+      "path": "src/objective-coordinator.ts",
+      "bytes": 5094,
+      "sha256": "7c6f8dbe239689068a2e1267052d24b90f7a598a3ddce81ff5eceb4e2830fcfe"
+    },
+    {
       "path": "src/observability.ts",
-      "bytes": 20315,
-      "sha256": "5bbc13a70421248bc99529b69e7a504cba8b1ca09ead77b97f84d92155d41a95"
+      "bytes": 20993,
+      "sha256": "66c527ad89dd0aa5d89e6947844a42d3c24bdd7feb00ef056f0ac6e7a3d70967"
     },
     {
       "path": "src/observation-server.ts",
@@ -479,13 +494,18 @@
     },
     {
       "path": "src/operational-insights.ts",
-      "bytes": 16515,
-      "sha256": "c2d000286dac48b445f10a3a50dc834688dd2b24937d7873170bf2eb21d3e052"
+      "bytes": 17001,
+      "sha256": "8f7bb09587673b638782a99004a93ae30c60d1ddfbd0b52260f420f5dcd05c37"
     },
     {
       "path": "src/operations-observation.ts",
       "bytes": 12587,
       "sha256": "2f0621c6fd1b22aa924b5a77977ae739c5652cf3a8da03b79753e8b428b909bd"
+    },
+    {
+      "path": "src/outcome.ts",
+      "bytes": 3706,
+      "sha256": "9e75a7137d5a457babca4a2d0c0ea054fe40fd3824b2d75cef7fad2af57d239d"
     },
     {
       "path": "src/performance-scope.ts",
@@ -504,13 +524,13 @@
     },
     {
       "path": "src/queue-worker.ts",
-      "bytes": 3703,
-      "sha256": "ed657875b7e916ebb881f9d3ea77054ebbd47a42b7ad46ed05bff6053c4bff30"
+      "bytes": 3751,
+      "sha256": "ad4def0bef9654cff323bc5ddcd538899c0cf35e11ea268b08be5d114720fc01"
     },
     {
       "path": "src/queue.ts",
-      "bytes": 4444,
-      "sha256": "dbfc6cee9bc1ab8bcd54e755a68a9b4aad20d252d2ea3844ee0eb4b39f628228"
+      "bytes": 4846,
+      "sha256": "f3fa25b0cfbe032271abde2ba03a689c7348b729a332c5ac4a5e12cebacbb90b"
     },
     {
       "path": "src/recovery.ts",
@@ -579,13 +599,13 @@
     },
     {
       "path": "src/supervisor.ts",
-      "bytes": 8474,
-      "sha256": "a12720cfb02f23dea47e3c35b9bab8757936ab3c2938b83172cae16c3f55d194"
+      "bytes": 8768,
+      "sha256": "7f8f818c1164aa5c462631cfac03cf7e4aa12f77f9d611a03d51df8363f87775"
     },
     {
       "path": "src/task-contract.ts",
-      "bytes": 3545,
-      "sha256": "2b02cd34377a289a271417dc57b28402374db3b5d0fdbea7a969e298f039d198"
+      "bytes": 4398,
+      "sha256": "7028fa25e62efa23348e8c9e694a3c2840638cb40b9ac240cb27bffce9f8d7fe"
     },
     {
       "path": "src/turn-comparison.ts",
@@ -599,8 +619,8 @@
     },
     {
       "path": "src/workflow.ts",
-      "bytes": 12677,
-      "sha256": "0c85ba6d102e724d8627b14ed3d567b6d587f7b529d83a220ecd01fbb7cda73c"
+      "bytes": 15525,
+      "sha256": "0df3ff80fc44d046aa1aa26de5f0e15e76c1b1d40ae32cbc42d3f822d74563c5"
     },
     {
       "path": "src/workspace.ts",
@@ -654,8 +674,8 @@
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 21161,
-      "sha256": "9691ad832954926c0436e5e9c14d6ca187927b120a915289e730bd1a44863374"
+      "bytes": 22149,
+      "sha256": "3a8c116f8dde6f58265e4c638c9cdc6a87ac78326a8f49fbb4811c64cd166430"
     },
     {
       "path": "test/context-pack.test.ts",
@@ -671,6 +691,11 @@
       "path": "test/delegation-lifecycle.test.ts",
       "bytes": 3372,
       "sha256": "b878280f5c8b099a580cd58f7b61497813906bfb9863b3d461ceddf768b5aa1f"
+    },
+    {
+      "path": "test/delegation.test.ts",
+      "bytes": 14226,
+      "sha256": "7a024ea05d989932fc8cb25e346a8ed8e26ea9ce7a04000f52c156649bd64ca7"
     },
     {
       "path": "test/docker-recovery.test.ts",
@@ -724,8 +749,8 @@
     },
     {
       "path": "test/interactions.test.ts",
-      "bytes": 10488,
-      "sha256": "c70030d8335df84961dae18033575dd76e0ac9e392917986c57eec1bb1495333"
+      "bytes": 12253,
+      "sha256": "02f5faf1ea84d300dfd27d7c9b357430c0d89a4c66b3441e773ae619671772ac"
     },
     {
       "path": "test/knowledge.test.ts",
@@ -759,8 +784,8 @@
     },
     {
       "path": "test/mcp.test.ts",
-      "bytes": 4150,
-      "sha256": "9a579325ab737c36850e05b28a2d28b9386b483b15ce23a584cdbe9662265699"
+      "bytes": 5187,
+      "sha256": "6491ca01cf10b02d619c09f9f9f500baaa642b5731a1c6cb16d1ac6eb020553d"
     },
     {
       "path": "test/observability.test.ts",

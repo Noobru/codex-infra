@@ -20,6 +20,22 @@ class InteractionFixture {
   }
 }
 
+test('conversation steering preserves approved objectives and keeps corrections scoped and sourced',async t=>{
+  const fixture=await InteractionFixture.create(t);
+  const first=await fixture.begin('steering',{projectId:'fixture',intent:'work',objective:'Improve delegation'});
+  const question={kind:'question' as const,source:'Owner asked about one framework',approvedPlanRefs:['approved-PRD'],interpretation:'Technical curiosity; continue the current goal'};
+  await assert.rejects(fixture.store.update(first.id,{expectedRevision:1,source:'Question',steering:question,objective:'Adopt that framework'}),/preserves/);
+  await assert.rejects(fixture.store.update(first.id,{expectedRevision:1,source:'Question',steering:question,status:'completed'}),/does not end/);
+  const asked=await fixture.store.update(first.id,{expectedRevision:1,source:'Question',steering:question,summary:'Answered technical question'});
+  assert.equal(asked.objective,first.objective);assert.equal(asked.status,'open');
+  const corrected=await fixture.store.update(first.id,{expectedRevision:2,source:'Explicit owner correction',steering:{...question,kind:'correction',interpretation:'Change only the intended deliverable'},objective:'Deliver approved delegation changes'});
+  assert.equal(corrected.objective,'Deliver approved delegation changes');
+  assert.deepEqual(corrected.steering!.approvedPlanRefs,['approved-PRD']);
+  assert.equal((await fixture.store.read(first.id,1)).objective,'Improve delegation');
+  const next=await fixture.store.update(first.id,{expectedRevision:3,source:'New technical question',steering:{...question,interpretation:'Compare the framework; the prior correction was not a permanent prohibition'}});
+  assert.equal(next.objective,corrected.objective);
+});
+
 test('begin is idempotent across stores and direct conversations create no execution state', async t => {
   const fixture = await InteractionFixture.create(t), peer = new InteractionStore(fixture.root);
   const input = { threadId: 'thread-one', title: 'Talk without a project', source: 'Fixture conversation' };

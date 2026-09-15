@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { EvidenceSanitizer } from './evidence.js';
 import { PerformanceScopeSchema } from './performance-scope.js';
+import {IntentSchema} from './delegation-contract.js';
 import { KnowledgeFiles, KnowledgeProjectSchema, KnowledgeTextSchema, KnowledgeEvidenceSchema,
   KnowledgeKindSchema, KnowledgeContentSchema, KnowledgeImpactSchema } from './knowledge-store.js';
 
@@ -41,6 +42,7 @@ export const InteractionBeginSchema = z.object({
 }).strict().refine(input => Boolean(input.threadId || input.idempotencyKey), 'threadId or idempotencyKey is required.');
 
 export const InteractionUpdateSchema = z.object({
+  steering: IntentSchema.optional(),
   expectedRevision: z.number().int().positive(), source: KnowledgeTextSchema,
   observedAt: timestamp.optional(), sourceRef: KnowledgeTextSchema.nullable().optional(),
   title: titleInput.optional(), projectId: KnowledgeProjectSchema.nullable().optional(), cwd: cwd.nullable().optional(),
@@ -67,6 +69,7 @@ export const InteractionListSchema = z.object({
 }).strict();
 
 export const InteractionRecordSchema = z.object({
+  steering: IntentSchema.optional(),
   version: z.literal(1), id: InteractionIdSchema, revision: z.number().int().positive(),
   threadId: identity.nullable(), idempotencyKey: KnowledgeTextSchema.nullable(), projectId: KnowledgeProjectSchema.nullable(),
   ...titleFields, cwd: cwd.nullable(), intent: InteractionIntentSchema, route: InteractionRouteSchema, status: InteractionStatusSchema,
@@ -157,6 +160,10 @@ export class InteractionStore {
   async update(id: string, raw: InteractionUpdateInput): Promise<InteractionRecord> {
     const input = InteractionUpdateSchema.parse(raw), existing = await this.read(id);
     if (input.expectedRevision !== existing.revision) throw new Error('Interaction revision conflict; re-read before updating.');
+    if(input.steering&&['question','example','continuation'].includes(input.steering.kind)) {
+      for(const key of ['projectId','objective'] as const)if(input[key]!==undefined&&input[key]!==existing[key])throw new Error('Question, example or continuation preserves the active project and objective; use a sourced request or correction for a change');
+      if(['question','example'].includes(input.steering.kind)&&input.status!==undefined&&input.status!==existing.status)throw new Error('A question or example does not end or suspend active work');
+    }
     const now = new Date().toISOString();
     const { expectedRevision: _revision, source: _source, observedAt: _observed, sourceRef: _ref,
       title: newTitle, evidence, findings, jobIds, workflowIds, ...fields } = input;

@@ -65,7 +65,7 @@ export class OperationalInsights {
     for(const attempt of run.attempts) {
       const window=windows.get(attempt.attempt);
       // A current validating/running attempt is not a final snapshot, even if checks.json already exists.
-      if(!window||!attempt.checks?.length)continue;
+      if(!window||(!attempt.checks?.length&&!attempt.outcome?.criteria.length))continue;
       if(attempt.checksTruncated){result.warnings.push(`${jobId}/attempt-${attempt.attempt}: checks truncated; automatic capture skipped.`);continue;}
       try {
         const input=await this.evaluationInput(run,attempt,window);
@@ -159,7 +159,7 @@ export class OperationalInsights {
     const contract=attempt.taskContract??run.prepared.taskContract;
     const captured=await this.commandContext(run,attempt);if(!captured)return null;
     const {signature,evidencePath}=captured,{kind,checkIds}=signature;
-    const rubricId='named-checks-'+KnowledgeFiles.hash(JSON.stringify(signature)).slice(0,24);
+    const rubricId=(contract?.outcomeCriterionIds?.length?'contracted-outcome-':'named-checks-')+KnowledgeFiles.hash(JSON.stringify(signature)).slice(0,24);
     const metrics:NonNullable<EvaluationInput['metrics']>=[];
     for(const checkId of checkIds) {
       const matches=attempt.checks!.filter(check=>check.checkId===checkId),check=matches.length===1?matches[0]:null;
@@ -172,15 +172,15 @@ export class OperationalInsights {
     }
     return {jobId:run.summary.id,attempt:attempt.attempt,taskClass:contract?.performanceScope?.taskClass??`named-checks-${kind}`,author:{name:'CodexInfra deterministic evidence processor',role:'reviewer'},
       source:policyVersion,evidence:[evidencePath,...run.evidence.filter(ref=>ref.endsWith('/task-contract.json')&&ref.includes(`/attempt-${attempt.attempt}/`)),
-        `state/jobs.sqlite:job_events:${window.eventIds.join(',')}`],rubric:{id:rubricId,version:'1',criteria:checkIds.map(checkId=>({id:checkId,checkId,critical:true}))},metrics};
+        `state/jobs.sqlite:job_events:${window.eventIds.join(',')}`,...(contract?.outcomeCriterionIds?.length?[`artifacts/jobs/${run.summary.id}/attempt-${attempt.attempt}/outcome.json`]:[])],rubric:{id:rubricId,version:'1',criteria:checkIds.map(checkId=>({id:checkId,checkId,critical:true})),...(contract?.outcomeCriterionIds?.length?{outcomeCriteria:contract.outcomeCriterionIds.map(id=>({id,critical:true}))}:{})},metrics};
   }
 
   private async commandContext(run:Run,attempt:Attempt) {
     const contract=attempt.taskContract??run.prepared.taskContract,checkIds=contract?.checkIds??run.prepared.checkIds,kind=contract?.kind??run.prepared.kind;
-    if(!kind||!checkIds?.length||new Set(checkIds).size!==checkIds.length)return null;
+    if(!kind||!checkIds||(!checkIds.length&&!contract?.outcomeCriterionIds?.length)||new Set(checkIds).size!==checkIds.length)return null;
     const evidencePath=`artifacts/jobs/${run.summary.id}/attempt-${attempt.attempt}/checks.json`,commands=await this.files.read(evidencePath,commandReceipts);
     // Keep the historical no-scope signature byte-for-byte stable; declared scopes add a new boundary.
-    const signature={projectId:run.summary.projectId,kind,mode:contract?.mode??run.summary.mode,checkIds,...(contract?.performanceScope?{performanceScope:contract.performanceScope}:{})};
+    const signature={projectId:run.summary.projectId,kind,mode:contract?.mode??run.summary.mode,checkIds,...(contract?.performanceScope?{performanceScope:contract.performanceScope}:{}),...(contract?.outcomeContractHash?{outcomeContractHash:contract.outcomeContractHash}:{})};
     const checks=checkIds.map(checkId=>{
       const matches=commands.filter(command=>command.checkId===checkId),command=matches.length===1?matches[0]:null;
       const identity=command?.executable&&command.args&&command.cwd?{executable:command.executable,args:command.args,cwd:command.cwd}:null;

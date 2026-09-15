@@ -70,6 +70,18 @@ class FakeTransport implements WorkerTransport {
 
 function worker(transport: FakeTransport) { return new CodexWorker({ clientFactory: () => transport, interruptGraceMs: 30 }); }
 
+test('structured blocker wire contract survives transport and rejects malformed recovery declarations',async()=>{
+  const transport=new FakeTransport();
+  const blocker={kind:'recoverable',reason:'Local artifact missing',evidence:['fixture result absent'],nextAction:'Regenerate fixture result',recoveryActionId:'repair'};
+  transport.finalMessage=JSON.stringify({status:'blocked',summary:'Prepared recovery',blocker});
+  const result=await worker(transport).run({...base,structuredBlockers:true});
+  assert.deepEqual(result.blocker,blocker);assert.equal(result.status,'blocked');
+  const schema=transport.calls.find(call=>call.method==='turn/start')!.params.outputSchema;
+  assert.deepEqual(schema.required,['status','summary','blocker']);
+  const malformed=new FakeTransport();malformed.finalMessage=JSON.stringify({status:'blocked',summary:'Invalid',blocker:{kind:'recoverable'}});
+  assert.equal((await worker(malformed).run({...base,structuredBlockers:true})).status,'failed');
+});
+
 async function engineFixture(t: TestContext, transport: FakeTransport) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'infra-routing-engine-'));
   await fs.mkdir(path.join(root, 'profiles'));

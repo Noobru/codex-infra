@@ -30,6 +30,15 @@ test('real MCP subprocess negotiates tools and resolves a project through the sh
   assert.equal(source.projects.length,2);
   const tools=(await client.listTools()).tools;
   assert.ok(tools.some(tool=>tool.name==='delegate_task'));
+  assert.ok(tools.some(tool=>tool.name==='delivery_status'));
+  await fs.writeFile(path.join(root,'research.txt'),'Verified fixture conclusion');
+  const prepared=await client.callTool({name:'prepare_task',arguments:{project:'fixture',objective:'Verify research artifact',idempotencyKey:'outcome-wire',mode:'read-only',kind:'checks',checkIds:[],taskDetails:{outcomeCriteria:[{id:'research',description:'Fixture conclusion',kind:'artifact',path:'research.txt',contains:'Verified fixture conclusion'}]}}});
+  assert.notEqual(prepared.isError,true);
+  const preparedJob=JSON.parse((prepared.content as {text:string}[])[0]!.text);
+  const ran=await client.callTool({name:'run_task',arguments:{jobId:preparedJob.id,timeoutMs:10000}});assert.notEqual(ran.isError,true);
+  const delivery=await client.callTool({name:'delivery_status',arguments:{jobId:preparedJob.id}});
+  const packet=JSON.parse((delivery.content as {text:string}[])[0]!.text);
+  assert.equal(packet.outcomeStatus,'passed');assert.equal(packet.humanAcceptance,'not-recorded');
   const missingQualification=await client.callTool({name:'delegate_task',arguments:{input:{
     project:'fixture',objective:'Read source',idempotencyKey:'missing-qualification',mode:'read-only',checkIds:['fixture'],
   }}});

@@ -9,13 +9,14 @@ import {QueueCoordinator,type DrainOptions,type DrainResult} from './queue.js';
 import {SupervisorManager} from './supervisor.js';
 import {atomicWriteJson,readJson,resolveRealSubPath} from './legacy/command-os-utils.js';
 
-export const WorkflowTaskSchema=z.object({project:z.string().min(1),objective:z.string().trim().min(1).max(20000),mode:z.enum(['read-only','workspace-write']),kind:z.enum(['checks','codex']),checkIds:z.array(z.string().min(1)).min(1).max(40),requirementIds:z.array(z.string()).max(40).default([]),workspace:z.enum(['in-place','worktree']).default('in-place'),baseRef:z.string().optional(),taskDetails:TaskDetailsSchema.optional(),routing:TaskQualificationSchema.optional()});
+export const WorkflowTaskSchema=z.object({project:z.string().min(1),objective:z.string().trim().min(1).max(20000),mode:z.enum(['read-only','workspace-write']),kind:z.enum(['checks','codex']),checkIds:z.array(z.string().min(1)).max(40),requirementIds:z.array(z.string()).max(40).default([]),workspace:z.enum(['in-place','worktree']).default('in-place'),baseRef:z.string().optional(),taskDetails:TaskDetailsSchema.optional(),routing:TaskQualificationSchema.optional()});
 const nodeId=z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/);
 export const WorkflowNodeSchema=z.object({id:nodeId,dependsOn:z.array(nodeId).max(40).default([]),task:WorkflowTaskSchema});
-export const WorkflowInputSchema=z.object({idempotencyKey:z.string().min(1).max(200),objective:z.string().trim().min(1).max(20000),nodes:z.array(WorkflowNodeSchema).min(1).max(40),maxRevisions:z.number().int().min(1).max(5).default(3)});
+const WorkflowAcceptanceSchema=z.array(z.object({id:nodeId,description:z.string().min(1).max(2000),nodeId,criterionId:z.string().min(1).max(128)})).min(1).max(40);
+export const WorkflowInputSchema=z.object({idempotencyKey:z.string().min(1).max(200),objective:z.string().trim().min(1).max(20000),nodes:z.array(WorkflowNodeSchema).min(1).max(40),maxRevisions:z.number().int().min(1).max(5).default(3),continueIndependent:z.boolean().optional(),acceptance:WorkflowAcceptanceSchema.optional()});
 export const WorkflowReplanSchema=z.object({reason:z.string().trim().min(1).max(4000),evidence:z.string().trim().min(1).max(4000),replacements:z.array(z.object({nodeId,task:WorkflowTaskSchema})).min(1).max(40)});
 type WorkflowInput=z.infer<typeof WorkflowInputSchema>;
-export interface WorkflowPlan {version:1;id:string;revision:number;requestHash:string;objective:string;maxRevisions:number;createdAt:string;state:'preparing'|'prepared'|'superseded';nodes:(z.infer<typeof WorkflowNodeSchema>&{jobId?:string})[];reason?:string;evidence?:string;replanHash?:string;replaces?:{nodeId:string;jobId:string}[]}
+export interface WorkflowPlan {version:1;id:string;revision:number;requestHash:string;objective:string;maxRevisions:number;createdAt:string;state:'preparing'|'prepared'|'superseded';nodes:(z.infer<typeof WorkflowNodeSchema>&{jobId?:string})[];continueIndependent?:boolean;acceptance?:z.infer<typeof WorkflowAcceptanceSchema>;reason?:string;evidence?:string;replanHash?:string;replaces?:{nodeId:string;jobId:string}[]}
 
 /** Durable plan revisions composed from the existing task engine and bounded queue. No second executor. */
 export class WorkflowStore {
@@ -57,6 +58,7 @@ export class WorkflowManager extends WorkflowStore {
   constructor(private readonly engine:TaskEngine){super(engine.root);}
   async prepare(raw:unknown):Promise<WorkflowPlan> {
     const input=WorkflowInputSchema.parse(raw),nodes=this.ordered(input.nodes);
+    this.validateAcceptance(input);
     const hash=createHash('sha256').update(input.idempotencyKey).digest('hex');
     const id='workflow_'+[hash.slice(0,8),hash.slice(8,12),hash.slice(12,16),hash.slice(16,20),hash.slice(20,32)].join('-');
     const requestHash=createHash('sha256').update(JSON.stringify(input)).digest('hex');
@@ -65,7 +67,7 @@ export class WorkflowManager extends WorkflowStore {
       const existing=await readJson(path.join(directory,'revision-1.json'),null) as WorkflowPlan|null;
       if(existing && existing.requestHash!==requestHash)throw new Error('Workflow key belongs to a different plan');
       if(existing?.state==='prepared'){const current=await this.read(id);await this.activate(current);return current;}
-      const plan:WorkflowPlan=existing??{version:1,id,revision:1,requestHash,objective:input.objective,maxRevisions:input.maxRevisions,createdAt:new Date().toISOString(),state:'preparing',nodes};
+      const plan:WorkflowPlan=existing??{version:1,id,revision:1,requestHash,objective:input.objective,maxRevisions:input.maxRevisions,createdAt:new Date().toISOString(),state:'preparing',nodes,...(input.continueIndependent!==undefined?{continueIndependent:input.continueIndependent}:{}),...(input.acceptance?{acceptance:input.acceptance}:{})};
       await atomicWriteJson(path.join(directory,'current.json'),{revision:1});
       await this.prepareRevision(directory,plan);
       return plan;
@@ -98,13 +100,13 @@ export class WorkflowManager extends WorkflowStore {
   async run(id:string,options:Pick<DrainOptions,'totalTimeoutMs'|'concurrency'|'signal'>) {
     const plan=await this.engine.profiles.withLock(async()=>{const plan=await this.read(id);await this.activate(plan);return plan;});
     const jobIds=this.jobIds(plan);
-    const drain=await new QueueCoordinator(this.engine).drain({...options,maxJobs:jobIds.length,jobIds});
+    const drain=await new QueueCoordinator(this.engine).drain({...options,maxJobs:jobIds.length,jobIds,continueIndependent:plan.continueIndependent});
     return this.consolidate(id,drain);
   }
   async start(id:string,options:{totalTimeoutMs:number;concurrency?:number}) {
     const plan=await this.engine.profiles.withLock(async()=>{const plan=await this.read(id);await this.activate(plan);return plan;});
     const jobIds=this.jobIds(plan);
-    return new SupervisorManager(this.engine.root).start({...options,maxJobs:jobIds.length,jobIds,workflowId:id});
+    return new SupervisorManager(this.engine.root).start({...options,maxJobs:jobIds.length,jobIds,workflowId:id,continueIndependent:plan.continueIndependent});
   }
   async cancel(id:string) {
     const directory=await this.directory(id),ids=new Set<string>();
@@ -117,11 +119,27 @@ export class WorkflowManager extends WorkflowStore {
   async consolidate(id:string,drain?:DrainResult) {
     const plan=await this.read(id);
     const nodes=plan.nodes.map(node=>({id:node.id,dependsOn:node.dependsOn,job:node.jobId?this.engine.state.get(node.jobId):null,evidence:node.jobId?this.engine.artifactDir(node.jobId):null}));
-    const completed=nodes.every(node=>node.job?.status==='completed');
+    const technicalCompleted=nodes.every(node=>node.job?.status==='completed');
+    const criteria=[];
+    for(const criterion of plan.acceptance??[]) {
+      const node=nodes.find(n=>n.id===criterion.nodeId);
+      const job=node?.job;
+      const receipt=job?await readJson(path.join(this.engine.artifactDir(job.id),`attempt-${job.attempts}`,'outcome.json'),null):null;
+      const manifest=job?await readJson(path.join(this.engine.artifactDir(job.id),'manifest.json'),null):null;
+      const passed=job?.status==='completed'&&receipt?.taskContractHash===manifest?.taskContract?.hash&&receipt?.criteria?.some((c:{id:string;status:string})=>c.id===criterion.criterionId&&c.status==='passed');
+      criteria.push({...criterion,status:passed?'passed':'unverified',evidence:job?`artifacts/jobs/${job.id}/attempt-${job.attempts}/outcome.json`:null});
+    }
+    const outcome={status:!criteria.length?'not-recorded':criteria.every(c=>c.status==='passed')?'passed':'unverified',criteria};
+    const completed=technicalCompleted&&outcome.status!=='unverified';
     const active=nodes.some(node=>['running','validating'].includes(node.job?.status??''));
     const failed=nodes.filter(node=>['failed','waiting_user','waiting_quota','cancelled'].includes(node.job?.status??''));
-    const summary={version:1,workflowId:id,revision:plan.revision,objective:plan.objective,capturedAt:new Date().toISOString(),status:completed?'completed':active?'running':failed.length?'blocked':'ready',nodes,
-      nextAction:completed?'Delivered':failed.length?(plan.revision<plan.maxRevisions?'Inspect failed nodes and submit a bounded replan or explicit retry':'Revision budget exhausted; inspect results before creating another plan'):'Run or resume prepared nodes',...(drain?{drain}:{})};
+    const decisions=[];
+    for(const node of nodes)if(node.job&&['waiting_user','failed'].includes(node.job.status)) {
+      const blocker=await readJson(path.join(this.engine.artifactDir(node.job.id),`attempt-${node.job.attempts}`,'blocker.json'),null);
+      if(blocker?.blocker)decisions.push({nodeId:node.id,...blocker.blocker});
+    }
+    const summary={version:1,workflowId:id,revision:plan.revision,objective:plan.objective,capturedAt:new Date().toISOString(),status:completed?'completed':active?'running':failed.length||technicalCompleted?'blocked':'ready',technicalCompleted,outcome,decisions,nodes,
+      nextAction:completed?(outcome.status==='passed'?'Contracted outcome verified; human acceptance remains separate':'Planned checks complete; objective coverage not recorded'):decisions.length?'Review prepared next actions and continue independent authorized work':failed.length?(plan.revision<plan.maxRevisions?'Inspect failed nodes and submit a bounded replan or explicit retry':'Revision budget exhausted; inspect results before creating another plan'):technicalCompleted?'Verify missing outcome criteria':'Run or resume prepared nodes',...(drain?{drain}:{})};
     await atomicWriteJson(path.join(await this.directory(id),`result-${plan.revision}.json`),summary);return summary;
   }
   async replan(id:string,raw:unknown) {
@@ -151,6 +169,7 @@ export class WorkflowManager extends WorkflowStore {
         const task=input.replacements.find(r=>r.nodeId===node.id)?.task??node.task;
         return {id:node.id,dependsOn:node.dependsOn,task};
       });
+      this.validateAcceptance({...old,nodes});
       if(draft?.state==='preparing') {
         for(const node of draft.nodes)if(node.jobId&&!old.nodes.some(n=>n.jobId===node.jobId))await this.engine.cancel(node.jobId);
         await atomicWriteJson(path.join(directory,`revision-${draft.revision}.json`),{...draft,state:'superseded'});
@@ -163,5 +182,9 @@ export class WorkflowManager extends WorkflowStore {
   }
   private async cancelReplaced(plan:WorkflowPlan) {
     for(const prior of plan.replaces??[])if(this.engine.state.get(prior.jobId).status==='ready')await this.engine.cancel(prior.jobId);
+  }
+  private validateAcceptance(plan:{nodes:z.infer<typeof WorkflowNodeSchema>[];acceptance?:z.infer<typeof WorkflowAcceptanceSchema>}) {
+    if(new Set(plan.acceptance?.map(c=>c.id)).size!==(plan.acceptance?.length??0))throw new Error('Workflow acceptance IDs must be unique');
+    for(const criterion of plan.acceptance??[])if(!plan.nodes.find(n=>n.id===criterion.nodeId)?.task.taskDetails?.outcomeCriteria?.some(c=>c.id===criterion.criterionId))throw new Error('Workflow acceptance must reference a contracted node criterion');
   }
 }

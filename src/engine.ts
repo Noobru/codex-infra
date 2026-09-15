@@ -20,6 +20,9 @@ import { ExecutionPolicyManager } from './execution-policy.js';
 import {WorkflowStore} from './workflow.js';
 import {OperationalInsights} from './operational-insights.js';
 import {EvidenceSanitizer} from './evidence.js';
+import {OutcomeVerifier} from './outcome.js';
+import {DelegationContract,type TaskBlocker} from './delegation-contract.js';
+import {ObjectiveCoordinator,type DispatchOptions,type BlockerReceipt} from './objective-coordinator.js';
 
 export interface PrepareInput {
   project: string; objective: string; idempotencyKey: string; mode: JobMode;
@@ -34,7 +37,7 @@ interface Manifest { version: 1; kind: PrepareInput['kind']; checkIds: string[];
 
 export const DelegationInputSchema = z.object({
   project: z.string().min(1), objective: z.string().trim().min(1).max(20000), idempotencyKey: z.string().min(1),
-  mode: z.enum(['read-only', 'workspace-write']), checkIds: z.array(z.string().min(1)).min(1),
+  mode: z.enum(['read-only', 'workspace-write']), checkIds: z.array(z.string().min(1)),
   requirementIds: z.array(z.string()).default([]), workspace: z.enum(['in-place', 'worktree']).default('in-place'),
   baseRef: z.string().min(1).optional(), taskDetails: TaskDetailsSchema.optional(),
   qualification: TaskQualificationSchema, timeoutMs: z.number().int().min(1000).max(300000).default(180000),
@@ -86,7 +89,7 @@ export class TaskEngine {
     this.registry.assertMode(profile, input.mode);
     if (!input.objective.trim() || input.objective.length > 20000) throw new Error('Objective must contain 1–20000 characters');
     if (!['checks', 'codex'].includes(input.kind)) throw new Error('Invalid execution kind');
-    if (input.checkIds.length === 0 || new Set(input.checkIds).size !== input.checkIds.length) throw new Error('Select distinct acceptance checks');
+    if ((input.checkIds.length === 0 && !input.taskDetails?.outcomeCriteria?.length) || new Set(input.checkIds).size !== input.checkIds.length) throw new Error('Select distinct acceptance checks or explicit outcome criteria');
     for (const id of input.checkIds) {
       const check = profile.checks.find(c => c.id === id);
       if (!check || (input.mode === 'read-only' && !check.readOnly)) throw new Error('Unavailable acceptance check: ' + id);
@@ -141,7 +144,7 @@ export class TaskEngine {
     return { job: completed, qualification: manifest.routing, routingDecision: worker?.receipt?.routingDecision ?? manifest.routingDecision,
       execution: worker ? { model: worker.receipt?.model ?? null, reasoningEffort: worker.receipt?.reasoningEffort ?? null,
         threadId: worker.threadId ?? null, turnId: worker.turnId ?? null, status: worker.status } : null,
-      artifactDirectory: this.artifactDir(job.id) };
+      artifactDirectory: this.artifactDir(job.id), delivery:await this.delivery(job.id) };
   }
   private async assertActivated(projectId:string):Promise<void>{
     const restore=await readJson(path.join(this.root,'recovery/RESTORE.json'),null) as {activatedProjectIds?:string[]}|null;
@@ -149,10 +152,34 @@ export class TaskEngine {
   }
   private async manifest(id: string): Promise<Manifest> {
     const data = await readJson(path.join(this.artifactDir(id), 'manifest.json'), null) as Manifest | null;
-    if (!data || data.version !== 1 || !['checks', 'codex'].includes(data.kind) || !Array.isArray(data.checkIds) || data.checkIds.length === 0 || !data.context) throw new Error('Job manifest is incomplete; prepare the task again before execution');
+    if (!data || data.version !== 1 || !['checks', 'codex'].includes(data.kind) || !Array.isArray(data.checkIds) || (!data.checkIds.length&&!data.taskContract?.details.outcomeCriteria?.length) || !data.context) throw new Error('Job manifest is incomplete; prepare the task again before execution');
     return data;
   }
-  async run(id: string, timeoutMs = 300000,dispatch:{signal?:AbortSignal;onClaimed?:(job:Job)=>void} = {}): Promise<Job> {
+  async run(id:string,timeoutMs=300000,dispatch:DispatchOptions={}):Promise<Job> {
+    if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>2_147_483_647)throw new Error('Invalid task timeout');
+    const controller=new AbortController(),abort=()=>controller.abort();
+    dispatch.signal?.addEventListener('abort',abort,{once:true});
+    if(dispatch.signal?.aborted)controller.abort();
+    const timer=setTimeout(abort,timeoutMs),options={...dispatch,signal:controller.signal};
+    try{return await new ObjectiveCoordinator(this).run(id,timeoutMs,options,remaining=>this.runAttempt(id,remaining,options));}
+    finally{clearTimeout(timer);dispatch.signal?.removeEventListener('abort',abort);}
+  }
+  async canContinueAfter(job:Job):Promise<boolean>{return new ObjectiveCoordinator(this).canContinueAfter(job);}
+  async delivery(id:string) {
+    const job=this.state.get(id),manifest=await this.manifest(id),contract=manifest.taskContract;
+    const directory=this.artifactDir(id),attempt=path.join(directory,`attempt-${job.attempts}`);
+    const outcome=job.attempts?await readJson(path.join(attempt,'outcome.json'),null):null;
+    const blocker=await new ObjectiveCoordinator(this).blocker(job);
+    const verified=job.status==='completed'&&Boolean(contract?.details.outcomeCriteria?.length)&&outcome?.status==='passed'&&outcome.taskContractHash===contract?.hash;
+    const decisions=(contract?.details.openDecisions??[]).filter(d=>d.material&&d.status==='open');
+    return {version:1,jobId:id,status:job.status,attempt:job.attempts,objective:job.objective,
+      technicalCompleted:job.status==='completed',outcomeStatus:verified?'passed':contract?.details.outcomeCriteria?.length?'unverified':'not-recorded',
+      humanAcceptance:'not-recorded',summary:job.result,criteria:outcome?.criteria??[],blocker:blocker?.blocker??null,
+      approvedPlanRefs:contract?.details.intent?.approvedPlanRefs??[],decisions,
+      nextAction:blocker?.blocker.nextAction??(decisions.length?'Review the prepared result and resolve the listed decision':verified?'Review the verified deliverable':job.status==='completed'?'Planned checks complete; objective coverage was not recorded':'Continue the authorized task'),
+      evidence:[path.join(directory,'manifest.json'),...(job.attempts?[path.join(attempt,'checks.json'),...(outcome?[path.join(attempt,'outcome.json')]:[])]:[])]};
+  }
+  private async runAttempt(id: string, timeoutMs = 300000,dispatch:DispatchOptions = {}): Promise<Job> {
     const restore = await readJson(path.join(this.root, 'recovery/RESTORE.json'), null) as {requiresReconciliation?: boolean;dispatchEnabled?:boolean} | null;
     if (restore?.dispatchEnabled === false) throw new Error('Restored copy is for inspection. Rebind project paths and explicitly activate it before dispatch; original project paths are preserved.');
     if (restore?.requiresReconciliation) throw new Error('Restored installation: run reconcile before dispatch');
@@ -185,8 +212,7 @@ export class TaskEngine {
     dispatch.signal?.addEventListener('abort',abort,{once:true});
     if(dispatch.signal?.aborted)controller.abort();
     const cancellationRequested = async () => {
-      const marker = await readJson(path.join(this.artifactDir(id), 'cancel.json'), null) as {attempt?: number} | null;
-      return marker !== null && (marker.attempt === undefined || marker.attempt === job.attempts);
+      return ExecutionEvidence.cancellationRequested(this.artifactDir(id),job.attempts);
     };
     let polling = false;
     const poll = setInterval(() => {
@@ -215,8 +241,9 @@ export class TaskEngine {
       const capabilityPlan=new CapabilityPlanner().plan(runtimeProfile,taskContract,contextPack);
       await atomicWriteJson(path.join(attempt,'capability-plan.json'),capabilityPlan);
       const executionGate=capabilityPlan.gates.find(gate=>gate.stage==='execution')!;
-      if(!executionGate.ready){await evidence.effect('execute','deny',executionGate.reasons.join(', '));return this.state.transition(id,'waiting_user',{error:'Execution capability gate: '+executionGate.reasons.join(', ')});}
+      if(!executionGate.ready){await evidence.effect('execute','deny',executionGate.reasons.join(', '));await this.recordGateBlocker(attempt,job,taskContract,'execution',executionGate.reasons);return this.state.transition(id,'waiting_user',{error:'Execution capability gate: '+executionGate.reasons.join(', ')});}
       const previousAttempt=await evidence.previousAttempt(job.attempts);
+      const recovery=job.attempts>1?await readJson(path.join(this.artifactDir(id),`attempt-${job.attempts-1}`,'recovery.json'),null):null;
       const dependencyHandoffs=await evidence.dependencies(this.state,id);
       await atomicWriteJson(path.join(attempt,'handoffs.json'),dependencyHandoffs);
       if(previousAttempt)await atomicWriteJson(path.join(attempt,'previous-attempt.json'),previousAttempt);
@@ -228,13 +255,19 @@ export class TaskEngine {
         const result = await this.worker.run({cwd: runtimeProfile.root, mode: job.mode, objective: job.objective,
           networkAccess: taskContract.details.networkAccess ?? false,
           gitHubAuth: taskContract.details.gitHubAuth ?? false,
-          context: JSON.stringify({taskContract,contextPack,capabilityPlan,previousAttempt,dependencyHandoffs}), ...(job.threadId ? {threadId: job.threadId} : {}), timeoutMs,
+          context: JSON.stringify({taskContract,contextPack,capabilityPlan,previousAttempt,dependencyHandoffs,recovery}), ...(job.threadId ? {threadId: job.threadId} : {}), timeoutMs,
+          structuredBlockers:Boolean(taskContract.details.resolution||taskContract.details.outcomeCriteria),
           ...(manifest.routing?{routing:manifest.routing}:{}),
           ...(manifest.routingPolicy?{routingPolicy:manifest.routingPolicy}:{}),
           signal: controller.signal, onProgress: update => { this.state.transition(id, 'running', update); }});
         await atomicWriteJson(path.join(attempt, 'worker.json'), result);
         await evidence.effect('worker-result',result.status==='blocked'?'deny':'allow','Runtime returned a terminal result',result.status);
         if (result.cleanupFailed) return this.state.transition(id, 'running', {error: 'Unconfirmed cleanup: worker process. Inspect attempt evidence and confirm shutdown before releasing this lock.'});
+        if(controller.signal.aborted)return this.state.transition(id,'cancelled');
+        if(result.status==='blocked'&&result.blocker) {
+          const blocker=DelegationContract.sanitizeBlocker(result.blocker);
+          if(blocker)await this.recordBlocker(attempt,job,taskContract,'worker-blocked',blocker);
+        }
         if (result.status !== 'completed') return this.state.transition(id,
           result.status === 'quota' ? 'waiting_quota' : result.status === 'blocked' ? 'waiting_user' : result.status === 'cancelled' ? 'cancelled' : 'failed',
           { error: result.summary });
@@ -242,11 +275,12 @@ export class TaskEngine {
       }
       // A successful model turn is only input to validation, never an automatic PASS.
       const validationGate=capabilityPlan.gates.find(gate=>gate.stage==='validation')!;
-      if(!validationGate.ready){await evidence.effect('validation','deny',validationGate.reasons.join(', '));return this.state.transition(id,'waiting_user',{error:'Validation capability gate: '+validationGate.reasons.join(', ')});}
+      if(!validationGate.ready){await evidence.effect('validation','deny',validationGate.reasons.join(', '));await this.recordGateBlocker(attempt,job,taskContract,'validation',validationGate.reasons);return this.state.transition(id,'waiting_user',{error:'Validation capability gate: '+validationGate.reasons.join(', ')});}
       this.state.transition(id, 'validating');
       const validationContext=manifest.kind==='codex' ? await this.registry.context(runtimeProfile) : currentContext;
       if(manifest.kind==='codex')await atomicWriteJson(path.join(attempt,'validation-context.json'),validationContext);
-      const checks = [];
+      const checks:Awaited<ReturnType<ProjectRegistry['check']>>[] = [];
+      if(manifest.checkIds.length===0)await atomicWriteJson(path.join(attempt,'checks.json'),checks);
       for (const checkId of manifest.checkIds) {
         if (controller.signal.aborted) return this.state.transition(id, 'cancelled');
         const logPrefix=path.join(attempt,'check-'+String(checks.length+1));
@@ -260,7 +294,16 @@ export class TaskEngine {
       await atomicWriteJson(path.join(attempt, 'after.json'), await this.registry.context(runtimeProfile));
       if (controller.signal.aborted) return this.state.transition(id, 'cancelled');
       const passed = checks.length === manifest.checkIds.length && checks.every(check => check.exitCode === 0);
-      if (!passed) return this.state.transition(id, 'failed', {error: 'Acceptance check failed; inspect attempt evidence'});
+      if (!passed) {
+        await this.recordValidationBlocker(attempt,job,taskContract,'check-failed','Acceptance check failed');
+        return this.state.transition(id, 'failed', {error: 'Acceptance check failed; inspect attempt evidence'});
+      }
+      const outcome=await new OutcomeVerifier().verify({root:runtimeProfile.root,criteria:taskContract.details.outcomeCriteria??[],checks,taskContractHash:taskContract.hash});
+      await atomicWriteJson(path.join(attempt,'outcome.json'),outcome);
+      if(outcome.status==='failed') {
+        await this.recordValidationBlocker(attempt,job,taskContract,'outcome-failed','Contracted outcome is not verified');
+        return this.state.transition(id,'failed',{error:'Contracted outcome failed; inspect outcome.json'});
+      }
       return this.state.transition(id, 'completed', {result: manifest.kind === 'checks'
         ? `Diagnostic checks completed: ${manifest.checkIds.join(', ')}. This does not certify a product build, runtime or feature.`
         : this.state.get(id).result});
@@ -276,6 +319,21 @@ export class TaskEngine {
         await new AutonomousLearning(this.root).onEvent(job.projectId);
       }
     }
+  }
+  private async recordBlocker(attempt:string,job:Job,contract:TaskContract,trigger:BlockerReceipt['trigger'],blocker:TaskBlocker) {
+    await atomicWriteJson(path.join(attempt,'blocker.json'),{version:1,attempt:job.attempts,taskContractHash:contract.hash,trigger,blocker});
+  }
+  private async recordGateBlocker(attempt:string,job:Job,contract:TaskContract,stage:'execution'|'validation',reasons:string[]) {
+    const decisions=contract.details.openDecisions.filter(d=>d.stage===stage&&d.material&&d.status==='open');
+    await this.recordBlocker(attempt,job,contract,'worker-blocked',{kind:decisions.length?'owner-decision':'missing-information',
+      reason:EvidenceSanitizer.text(reasons.join(', '),2000),evidence:[`attempt-${job.attempts}/capability-plan.json`],
+      nextAction:decisions.length?EvidenceSanitizer.text(decisions.map(d=>d.question).join('; '),2000):'Resolve the identified capability using the existing authorization and evidence',recoveryActionId:null});
+  }
+  private async recordValidationBlocker(attempt:string,job:Job,contract:TaskContract,trigger:'check-failed'|'outcome-failed',reason:string) {
+    const action=contract.details.resolution?.actions.find(a=>a.triggers.includes(trigger));
+    await this.recordBlocker(attempt,job,contract,trigger,{kind:'recoverable',reason,
+      evidence:[`attempt-${job.attempts}/${trigger==='check-failed'?'checks.json':'outcome.json'}`],
+      nextAction:action?.instruction??'Inspect failed criterion and prepare an authorized correction',recoveryActionId:action?.id??null});
   }
   private async recordInsights(jobId:string,attemptDirectory:string,attemptNumber:number):Promise<void> {
     let receipt;

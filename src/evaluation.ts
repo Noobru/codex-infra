@@ -38,8 +38,11 @@ export const EvaluationAcceptanceSchema = z.discriminatedUnion('status', [
 ]);
 export const EvaluationRubricSchema = z.object({
   id: identifier, version: text,
-  criteria: z.array(z.object({ id: identifier, checkId: identifier, critical: z.boolean() })).min(1).max(100),
-}).refine(value => new Set(value.criteria.map(item => item.id)).size === value.criteria.length, 'Rubric criterion IDs must be unique.');
+  criteria: z.array(z.object({ id: identifier, checkId: identifier, critical: z.boolean() })).max(100),
+  outcomeCriteria:z.array(z.object({id:identifier,critical:z.boolean()})).min(1).max(40).optional(),
+}).refine(value => new Set(value.criteria.map(item => item.id)).size === value.criteria.length, 'Rubric criterion IDs must be unique.')
+  .refine(value=>value.criteria.length>0||Boolean(value.outcomeCriteria?.length),'Rubric requires checks or outcome criteria')
+  .refine(value=>new Set(value.outcomeCriteria?.map(c=>c.id)).size===(value.outcomeCriteria?.length??0),'Outcome rubric IDs must be unique');
 const inputFields = {
   jobId: z.uuid(), attempt: z.number().int().positive(), taskClass: identifier,
   author, source: text, evidence, rubric: EvaluationRubricSchema,
@@ -56,6 +59,7 @@ export const EvaluationReceiptSchema = z.object({
     status: gateStatus, criticalGateStatus: gateStatus,
     jobStatusAtRecord: text, jobCompletedAtRecord: z.boolean(), observedAt: z.iso.datetime(),
     checksEvidence: text.nullable(), taskContractHash: text.nullable(),
+    outcomes:z.array(z.object({id:identifier,critical:z.boolean(),status:gateStatus})).optional(),
     criteria: z.array(z.object({
       id: identifier, checkId: identifier, critical: z.boolean(), status: gateStatus,
       exitCode: z.number().int().nullable(), cleanupFailed: z.boolean().nullable(),
@@ -133,15 +137,23 @@ export class EvaluationStore {
       };
     });
     const checksReference = `artifacts/jobs/${parsed.jobId}/attempt-${parsed.attempt}/checks.json`;
+    const expectedOutcomes=attempt.taskContract?.outcomeCriterionIds??[];
+    if(expectedOutcomes.some(id=>!parsed.rubric.outcomeCriteria?.some(c=>c.id===id)))throw new Error('Evaluation must cover every contracted outcome criterion');
+    const outcomes=parsed.rubric.outcomeCriteria?.map(criterion=>{
+      const matches=attempt.outcome?.criteria.filter(c=>c.id===criterion.id)??[];
+      const status=expectedOutcomes.includes(criterion.id)&&matches.length===1&&attempt.outcome?.taskContractHash===attempt.taskContract?.hash?matches[0]!.status:'unknown' as const;
+      return {...criterion,status};
+    });
+    const gates=[...criteria,...(outcomes??[])];
     const receipt = EvaluationReceiptSchema.parse({
       ...parsed, version: 1, id, recordedAt: new Date().toISOString(),
       artifactPath: `artifacts/evaluations/${id}.json`, projectId: observation.summary.projectId,
       technical: {
-        status: this.gateStatus(criteria), criticalGateStatus: this.gateStatus(criteria.filter(criterion => criterion.critical)),
+        status: this.gateStatus(gates), criticalGateStatus: this.gateStatus(gates.filter(criterion => criterion.critical)),
         jobStatusAtRecord: observation.summary.status, jobCompletedAtRecord: observation.summary.completedTechnical,
         observedAt: observation.observedAt,
         checksEvidence: observation.evidence.includes(checksReference) ? checksReference : null,
-        taskContractHash: attempt.taskContract?.hash ?? null, criteria, warnings: observation.warnings,
+        taskContractHash: attempt.taskContract?.hash ?? null, criteria,...(outcomes?{outcomes}:{}), warnings: observation.warnings,
       },
     });
     return receipt;

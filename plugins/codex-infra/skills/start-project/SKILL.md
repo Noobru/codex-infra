@@ -174,7 +174,35 @@ Use `prepare_task` com objetivo, projeto, modo, kind, checks e chave idempotente
 
 Se esta skill estiver dentro de um worker CodexInfra, cumpra o objetivo recebido; não prepare outro worker recursivo.
 
-## Workflow e concorrência
+## Contratar o resultado e fechar a entrega
+
+Em novos trabalhos pertinentes, preencha `taskDetails.intent` com a interpretação
+do pedido e as referências do PRD/PREVC já aprovados. Aprovação delegada mantém
+autoridade; não exija leitura linha a linha. Curiosidade técnica e exemplos não
+selecionam ferramenta/projeto. Registre correções materiais em `steering` de
+`record_interaction`, preservando objetivo e aprovações vigentes. Pausa expressa
+também exige cancelar/parar os jobs afetados pelas ferramentas próprias.
+
+Converta cada requisito material em evidência observável: `outcomeCriteria`
+aponta para check selecionado ou artefato com conteúdo/hash esperado. Não reduza
+qualidade de pesquisa a presença de títulos. Escolha validação proporcional ao
+conteúdo e não omita requisitos para obter aprovação. Pesquisa/documento pode
+ter `checkIds:[]` com critérios explícitos de artefato.
+
+Quando o pedido já autorizar correção local, registre `resolution` com fonte,
+ações concretas e limite total de tentativas. Um bloqueio recuperável deve ser
+resolvido antes de voltar ao owner; o núcleo só repete ações contratadas e para
+sem progresso novo. Use `continueIndependent:true` em workflows/fila com escopo
+explícito quando houver frentes independentes. Prepare pacote/recomendação antes
+de escalar decisão humana; assinatura final não impede preparar a entrega.
+
+Confira `delivery_status` e a cobertura `acceptance` do workflow antes de concluir.
+Apresente resultado, evidência, decisões restantes e ação mínima do owner.
+Checks, critérios de resultado e aceite humano são distintos. Contratos antigos
+sem critérios não ganham validação retroativa. Exemplos completos e limites:
+`docs/DELEGATION.md`.
+
+## Executar workflow e concorrência
 
 Use DAG quando partes independentes ou dependências justificarem. `prepare_workflow` recebe objetivo, chave, nós com task/dependsOn e maxRevisions; valide o plano contra o pedido. `run_workflow` aguarda; `start_workflow` usa supervisor limitado. Preparação não executa; drafts interrompidos não despacham. Repetir solicitação idêntica retoma a preparação.
 

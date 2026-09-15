@@ -1,5 +1,9 @@
 # Instalação e operação
 
+Para trabalhar do pedido ao resultado verificável, consulte
+[Delegação até a entrega](DELEGATION.md): intenção, recuperação limitada,
+frentes independentes, critérios de resultado e decisões preparadas.
+
 ## Configuração
 
 Execute os comandos de instalação do README dentro da cópia clonada. `Configure-Local.mjs` usa o `TaskEngine`, o `ProfileManager` e a política canônica para cadastrar somente `codex-infra`. A configuração contém caminhos desta instalação e fica fora do Git. Repetir configuração idêntica é seguro; definição existente diferente exige revisão explícita, não substituição silenciosa.
