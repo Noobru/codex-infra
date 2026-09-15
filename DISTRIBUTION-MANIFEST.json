@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "packageVersion": "0.7.0",
-  "createdAt": "2026-09-15T04:59:48.082Z",
+  "packageVersion": "0.8.0",
+  "createdAt": "2026-09-15T14:39:42.695Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -78,6 +78,11 @@
       "sha256": "1fb4edff54961d4954ddc80af383217e5338534179721e62da377c8fee6b157e"
     },
     {
+      "path": "docs/APPROVAL-DIAGNOSTICS.md",
+      "bytes": 1515,
+      "sha256": "a4dab048979d3999c982145e6098ecd7f9afab55010199891f745da4e12e2e84"
+    },
+    {
       "path": "docs/ARQUITETURA.md",
       "bytes": 2182,
       "sha256": "0d744f2b61ff5b6c79925460bdb8cb40c0c7cff24d4e6e03b9a04dbc92efb286"
@@ -126,6 +131,11 @@
       "path": "docs/USO.md",
       "bytes": 23045,
       "sha256": "203e3acbfe9ac701a0d04940bf97b366c83a18fcc53a58e4196742d463e0ab76"
+    },
+    {
+      "path": "docs/VM-ACCESS.md",
+      "bytes": 7688,
+      "sha256": "87a1ec73baad30625490b05b30730e401f0565e9ef9f96b09f10a5eb006a18b2"
     },
     {
       "path": "fixtures/model-routing/AGENTS.md",
@@ -250,17 +260,27 @@
     {
       "path": "package-lock.json",
       "bytes": 59475,
-      "sha256": "7ad2b2f4d2f98f9f9fa57c4893bbd7b83f1154b15484077a50e0dedaa9e57838"
+      "sha256": "ff2f096506d6eee19e3b32b37389005c53f2fb9f3ed3f7dfd43f9017e0782491"
     },
     {
       "path": "package.json",
       "bytes": 701,
-      "sha256": "b7e3eedb9eaa93cad5e2220ee46cf1ca1646fff270f5c14f228421eae05691f9"
+      "sha256": "0dc81a95229235e823c006581090c4d507523f755a24da73e577b5248562b13e"
     },
     {
       "path": "plugins/codex-infra/.codex-plugin/plugin.json",
       "bytes": 735,
-      "sha256": "3b001c27ceaf957effac20a1d934685078b9119d4cce3c88ab851e4f8e5991e3"
+      "sha256": "fd6e184566a1fc5082ee43254886a8059a24f8a79571255e40ec2cb25e44fafb"
+    },
+    {
+      "path": "plugins/codex-infra/skills/access-dedicated-host/SKILL.md",
+      "bytes": 2967,
+      "sha256": "5bdc1000e2622df2379a48c310d1c2a5e6f1dfc0e9e552f19ee3001092da0e31"
+    },
+    {
+      "path": "plugins/codex-infra/skills/prepare-audit-vm/SKILL.md",
+      "bytes": 1809,
+      "sha256": "2ab4bffd7875b537a4cc424955f4cbf9ef3bcc7635bf7c02e7ef08c808fb3a37"
     },
     {
       "path": "plugins/codex-infra/skills/start-project/agents/openai.yaml",
@@ -269,8 +289,8 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 22755,
-      "sha256": "8e8cb1c42e0305f0c0511709840c5acc563a91d6be9ea9bea89f3cf3230e0e16"
+      "bytes": 23900,
+      "sha256": "7fec6bdd41a3463ddf35aff6739a6c6d232d40382e74954dfd9c0e0779c4407c"
     },
     {
       "path": "profiles/model-routing.json",
@@ -284,8 +304,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 9656,
-      "sha256": "e4d3d9e390b8c751c15708a036508fd5f4e1578a92efd417c5c93adafba81e77"
+      "bytes": 10023,
+      "sha256": "5374a0fe7c69a0953b316a6026af37ed3edecf15ed2cb0bf3882da6994da1dbe"
     },
     {
       "path": "scripts/Bootstrap-GIdeia.mjs",
@@ -314,8 +334,8 @@
     },
     {
       "path": "src/app-server.ts",
-      "bytes": 14579,
-      "sha256": "e1d1136bfc483963c1d1d32b51ee771e792d27ee9d1f5e3c48a54c3ceedf02f2"
+      "bytes": 15402,
+      "sha256": "13b69fa80eabbbc15d49bd2f25150f229240efe330408e3a0d9ffbe6d4b53f9a"
     },
     {
       "path": "src/autonomous-learning.ts",
@@ -329,13 +349,13 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 20856,
-      "sha256": "09e625aa2dc7c4ce423a6f1c10b3f936da2cc605e308800ef090665fbe70e27e"
+      "bytes": 21847,
+      "sha256": "7fd6b9ae6fad195bb95043ad5ad28668cff51d259ab75562e184cdd351bfe10b"
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 23635,
-      "sha256": "8bb42cfba8883c2e2bcf3b819b9c113043a15e93b96cce35ac29b4da4dbb8c2a"
+      "bytes": 24426,
+      "sha256": "9c89c2bdb02f37093e48bec7280a367ea530cd970f1d3fc156d780d7d527e1b7"
     },
     {
       "path": "src/context-pack.ts",
@@ -469,8 +489,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 26571,
-      "sha256": "c99ffda6a852219dc919e35819c997c580e42f137f4d32ae24c0ffdc275f7581"
+      "bytes": 29326,
+      "sha256": "b3c07ef761691b0342b4e346ec330b2c1a46fc1bc7064aa9ad7a1834a2d4944d"
     },
     {
       "path": "src/model-catalog.ts",
@@ -613,6 +633,11 @@
       "sha256": "71c4e7c1b70e1a42552570aa41a2150de416b1cb0db6b43e1e6597e448bd5966"
     },
     {
+      "path": "src/vm-access.ts",
+      "bytes": 31441,
+      "sha256": "55dd4d6d061329d77f862f7f8cced54dd9a7a567e3570f114c824633b555172a"
+    },
+    {
       "path": "src/work-population.ts",
       "bytes": 1964,
       "sha256": "527264102104812d54562853496d49e6a9173ecef708eeac4081e381eb57123a"
@@ -659,8 +684,8 @@
     },
     {
       "path": "test/app-server.test.ts",
-      "bytes": 8554,
-      "sha256": "5b4b30d0f78eb5fa9b3d15efc3b7fff8886b058006fb1f0e0b22363746ee9446"
+      "bytes": 8933,
+      "sha256": "4b2eed16dae4a2eb2d98ef902dd9f428ed2894a3e9192a106506bf08d3068cb1"
     },
     {
       "path": "test/autonomous-learning.test.ts",
@@ -674,8 +699,8 @@
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 22149,
-      "sha256": "3a8c116f8dde6f58265e4c638c9cdc6a87ac78326a8f49fbb4811c64cd166430"
+      "bytes": 22539,
+      "sha256": "e7f0118114c21ae78900e71cf93428c94c6ac8ba5fcc0d7ea7cf81a7a84e4baa"
     },
     {
       "path": "test/context-pack.test.ts",
@@ -784,8 +809,8 @@
     },
     {
       "path": "test/mcp.test.ts",
-      "bytes": 5187,
-      "sha256": "6491ca01cf10b02d619c09f9f9f500baaa642b5731a1c6cb16d1ac6eb020553d"
+      "bytes": 5812,
+      "sha256": "bc4e094f7168349b25d75ea5cb878ccea3d57e90cacb5f748b69286a864e85ff"
     },
     {
       "path": "test/observability.test.ts",
@@ -886,6 +911,11 @@
       "path": "test/supervisor.test.ts",
       "bytes": 5622,
       "sha256": "21f62298d839996eaae19f050d501392a15b8e2c9eea5d99831ce74648999a81"
+    },
+    {
+      "path": "test/vm-access.test.ts",
+      "bytes": 15208,
+      "sha256": "b2336b1098dc7a856a4ac4a50892fc302c8470ef7bfbdd98d1516fdab262af56"
     },
     {
       "path": "test/workflow.test.ts",

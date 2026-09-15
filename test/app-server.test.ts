@@ -101,7 +101,7 @@ test('rejects server approval requests and reports the need for user input', asy
   const client = fixture(`
     if(message.method === 'approval') {
       global.replyId = message.id;
-      send({id:'approval-1',method:'item/commandExecution/requestApproval',params:{command:'sensitive command'}});
+      send({id:'approval-1',method:'item/commandExecution/requestApproval',params:{command:'sensitive command',threadId:'thread-1',turnId:'turn-1',itemId:'exec-1',reason:'private reason'}});
     } else if(message.id === 'approval-1') send({id:global.replyId,result:message});
   `);
   t.after(() => client.close());
@@ -114,6 +114,11 @@ test('rejects server approval requests and reports the need for user input', asy
   assert.equal(response.result, undefined);
   assert.equal(notices.length, 1);
   assert.ok(!JSON.stringify(notices).includes('sensitive command'));
+  assert.ok(!JSON.stringify(notices).includes('private reason'));
+  assert.equal((notices[0] as any).source,'infra-client');
+  assert.equal((notices[0] as any).itemId,'exec-1');
+  assert.equal((notices[0] as any).threadId,'thread-1');
+  assert.match((notices[0] as any).commandSha256,/^[a-f0-9]{64}$/);
 });
 
 test('account probe returns only plan and sanitized quota fields', async t => {

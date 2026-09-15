@@ -1,6 +1,6 @@
 {
   "name": "codex-infra",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Contexto de projetos, execução persistente e evidências para Codex local.",
   "author": {
     "name": "CodexInfra"

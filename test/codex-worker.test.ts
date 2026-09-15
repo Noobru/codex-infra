@@ -59,7 +59,7 @@ class FakeTransport implements WorkerTransport {
       else if (this.behavior === 'completed') setImmediate(() => this.finish());
       else if (this.behavior === 'quota') setImmediate(() => this.finish('failed', { codexErrorInfo: 'usageLimitExceeded', message: 'private@example.com' }));
       else if (this.behavior === 'failed') setImmediate(() => this.finish('failed', { codexErrorInfo: 'sandboxError' }));
-      else if (this.behavior === 'blocked') setImmediate(() => this.emit('client/serverRequestRejected', { method: 'item/commandExecution/requestApproval' }));
+      else if (this.behavior === 'blocked') setImmediate(() => this.emit('client/serverRequestRejected', { method: 'item/commandExecution/requestApproval',source:'infra-client',threadId:'thread-1',turnId:'turn-1',itemId:'exec-1',commandSha256:'a'.repeat(64) }));
       return { turn: { id: 'turn-1', status: 'inProgress' } } as T;
     }
     if (method === 'turn/interrupt') { this.finish('interrupted'); return {} as T; }
@@ -304,6 +304,10 @@ test('approval refusal becomes blocked after interrupt and transport cleanup', a
   assert.equal((result.receipt as any).interruptionConfirmed, true);
   assert.equal((result.receipt as any).blocker.method,'item/commandExecution/requestApproval');
   assert.equal((result.receipt as any).blocker.rawRequestStored,false);
+  assert.equal((result.receipt as any).blocker.source,'infra-client');
+  assert.equal((result.receipt as any).blocker.itemId,'exec-1');
+  assert.equal((result.receipt as any).blocker.commandSha256,'a'.repeat(64));
+  assert.match(result.summary,/not an automatic-review policy verdict/);
 });
 
 test('cancellation interrupts the owned turn and waits for cleanup', async () => {

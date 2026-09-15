@@ -29,6 +29,14 @@ test('real MCP subprocess negotiates tools and resolves a project through the sh
   const source=JSON.parse(await fs.readFile(path.join(root,'profiles/registry.json'),'utf8'));
   assert.equal(source.projects.length,2);
   const tools=(await client.listTools()).tools;
+  const vmTools=['preview_vm_access','prepare_vm_access','inspect_vm_access','start_vm_access','validate_vm_access','close_vm_access','vm_access_session_command'];
+  for(const name of vmTools) {
+    assert.ok(tools.some(tool=>tool.name===name));
+    const invalid=await client.callTool({name,arguments:{input:{}}});
+    assert.equal(invalid.isError,true,`${name} must reject missing resource identity before effects`);
+  }
+  assert.equal(tools.find(tool=>tool.name==='preview_vm_access')?.annotations?.readOnlyHint,true);
+  assert.notEqual(tools.find(tool=>tool.name==='validate_vm_access')?.annotations?.readOnlyHint,true);
   assert.ok(tools.some(tool=>tool.name==='delegate_task'));
   assert.ok(tools.some(tool=>tool.name==='delivery_status'));
   await fs.writeFile(path.join(root,'research.txt'),'Verified fixture conclusion');

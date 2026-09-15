@@ -31,14 +31,25 @@ import { LearningRuntimeStore, LearningRunInputSchema } from './learning-runtime
 import { DelegationLifecycle, DelegationFinishSchema } from './delegation-lifecycle.js';
 import { LearningSandbox } from './learning-sandbox.js';
 import { DockerRecovery } from './docker-recovery.js';
+import { VmAccessService, VmAccessPreviewInputSchema, VmAccessPrepareInputSchema,
+  VmAccessInspectInputSchema, VmAccessStartInputSchema, VmAccessValidateInputSchema,
+  VmAccessCloseInputSchema, VmAccessSessionInputSchema } from './vm-access.js';
 
 const root = path.resolve(process.env.CODEX_INFRA_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'));
 const engine = new TaskEngine(root);
 const workflows=new WorkflowManager(engine),learning=new KnowledgeLearningStore(root),security=new SecurityIntegrationFacade(root,engine.registry);
-const server = new McpServer({name:'codex-infra',version:'0.7.0'});
+const server = new McpServer({name:'codex-infra',version:'0.8.0'});
 const runtime = new RuntimeObservation(root);
 server.registerTool('delivery_status',{description:'Read the contracted outcome, verified criteria, prepared decisions and next action for one job. Read-only; human acceptance is never inferred.',annotations:{readOnlyHint:true},inputSchema:{jobId:z.uuid()}},async({jobId})=>result(await engine.delivery(jobId)));
 const result = (value: unknown) => ({content:[{type:'text' as const,text:JSON.stringify(value)}]});
+const vmAccess=new VmAccessService(root);
+server.registerTool('vm_access_session_command',{description:'Return the executable and argument array for an interactive session through a validated owned bridge. This does not open the session; run validate_vm_access immediately before use and preserve the existing target/action authority.',annotations:{readOnlyHint:true},inputSchema:{input:VmAccessSessionInputSchema}},async({input})=>result(await vmAccess.sessionCommand(input)));
+server.registerTool('preview_vm_access',{description:'Inspect the explicit VM configuration and prerequisites without mutation. Select offline audit or a connected bridge; never infer a base, destination or authority from examples.',annotations:{readOnlyHint:true},inputSchema:{input:VmAccessPreviewInputSchema}},async({input})=>result(await vmAccess.preview(input)));
+server.registerTool('prepare_vm_access',{description:'Prepare or resume an owned clone from an explicitly selected base. Preserves the base, rejects conflicting resources and records actual progress. Use only within the authorized local VM scope.',inputSchema:{input:VmAccessPrepareInputSchema}},async({input})=>result(await vmAccess.prepare(input)));
+server.registerTool('inspect_vm_access',{description:'Read the recorded resource and current VirtualBox state. Inspection does not start a VM or authorize a remote connection.',annotations:{readOnlyHint:true},inputSchema:{input:VmAccessInspectInputSchema}},async({input})=>result(await vmAccess.inspect(input)));
+server.registerTool('start_vm_access',{description:'Start the owned prepared VM within the existing authorization. A successful start does not prove guest or SSH readiness; use validate_vm_access afterward.',inputSchema:{input:VmAccessStartInputSchema}},async({input})=>result(await vmAccess.start(input)));
+server.registerTool('validate_vm_access',{description:'Run the configured guest/SSH probes and record observed readiness. Bridge probes can contact the explicit target; require the target and connection scope already authorized. Never treat VM startup as guest validation.',inputSchema:{input:VmAccessValidateInputSchema}},async({input})=>result(await vmAccess.validate(input)));
+server.registerTool('close_vm_access',{description:'Close this owned VM resource with the configured bounded shutdown procedure. Preserve evidence and report incomplete cleanup; never target unrelated VMs.',inputSchema:{input:VmAccessCloseInputSchema}},async({input})=>result(await vmAccess.close(input)));
 server.registerTool('inspect_docker_recovery',{description:'Read-only Windows Docker preflight. Detects the known inaccessible socket failure without starting Docker or changing files.',annotations:{readOnlyHint:true}},async()=>result(await new DockerRecovery(root).inspect()));
 server.registerTool('recover_docker_start',{description:'Only with explicit owner authorization: preserve known orphan Windows socket directories without deletion, then start Docker once. Refuses active Docker or unexpected files. Launch success is not engine health; inspect again to confirm.',inputSchema:{decision:KnowledgeOwnerDecisionSchema}},async({decision})=>result(await new DockerRecovery(root).recover(decision)));
 server.registerTool('finish_delegation',{description:'After integrating the exact stopped worker result/evidence, archive its recoverable Codex thread and record confirmation or a retryable pending receipt. Does not archive human tasks or active workers.',inputSchema:{jobId:z.uuid(),input:DelegationFinishSchema}},async({jobId,input})=>result(await new DelegationLifecycle(root).finish(jobId,input)));

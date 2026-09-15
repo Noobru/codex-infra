@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import { createHash } from 'node:crypto';
 
 export interface AppServerOptions {
   /** Reuse the host's existing GitHub CLI login in this child only. Never persisted. */
@@ -19,6 +20,11 @@ export interface AppServerOptions {
 export interface ServerRequestNotice {
   method: string;
   message: string;
+  source: 'infra-client';
+  threadId: string | null;
+  turnId: string | null;
+  itemId: string | null;
+  commandSha256: string | null;
 }
 
 export class AppServerError extends Error {
@@ -267,7 +273,13 @@ export class AppServerClient {
       if (!message) { this.protocolFailure(); return; }
       if (typeof message.method === 'string') {
         if (typeof message.id === 'number' || typeof message.id === 'string') {
-          const notice = { method: message.method, message: 'Server request declined: explicit user input or authorization is required.' };
+          // Keep correlation evidence, never command text/arguments or a fabricated reviewer rationale.
+          const params=object(message.params);
+          const identifier=(key:string)=>typeof params?.[key]==='string'&&/^[a-zA-Z0-9_-]{1,160}$/.test(params[key] as string)?params[key] as string:null;
+          const command=typeof params?.command==='string'?params.command:null;
+          const notice:ServerRequestNotice = { method: message.method, message: 'CodexInfra client declined a server approval request; no human approval channel is connected.',
+            source:'infra-client',threadId:identifier('threadId'),turnId:identifier('turnId'),itemId:identifier('itemId'),
+            commandSha256:command===null?null:createHash('sha256').update(command).digest('hex') };
           this.send({ id: message.id, error: { code: -32004, message: notice.message } });
           for (const listener of this.serverRequests) this.callListener(() => listener(notice));
           this.emit('client/serverRequestRejected', notice);

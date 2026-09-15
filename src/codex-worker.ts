@@ -181,8 +181,15 @@ export class CodexWorker {
       unsubscribe = client.onNotification((method, params) => {
         const data = record(params);
         if (method === 'client/serverRequestRejected') {
-          receipt.blocker={kind:'runtime-authorization-required',method:EvidenceSanitizer.text(String(data?.method??'unknown'),160),decision:'declined',rawRequestStored:false};
-          requestStop('blocked', 'The turn requires user input or authorization; the request was declined.');
+          receipt.blocker={kind:'runtime-authorization-required',method:EvidenceSanitizer.text(String(data?.method??'unknown'),160),decision:'declined',rawRequestStored:false,
+            source:data?.source==='infra-client'?'infra-client':'unknown',
+            threadId:typeof data?.threadId==='string'&&/^[a-zA-Z0-9_-]{1,160}$/.test(data.threadId)?data.threadId:null,
+            turnId:typeof data?.turnId==='string'&&/^[a-zA-Z0-9_-]{1,160}$/.test(data.turnId)?data.turnId:null,
+            itemId:typeof data?.itemId==='string'&&/^[a-zA-Z0-9_-]{1,160}$/.test(data.itemId)?data.itemId:null,
+            commandSha256:typeof data?.commandSha256==='string'&&/^[a-f0-9]{64}$/.test(data.commandSha256)?data.commandSha256:null};
+          requestStop('blocked', data?.source==='infra-client'
+            ? 'CodexInfra declined a server approval request because no human approval channel is connected. Inspect the correlated item; this is not an automatic-review policy verdict.'
+            : 'The runtime reported a declined approval request; the decision source is unknown.');
           return;
         }
         if (method === 'client/disconnected') {

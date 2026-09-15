@@ -196,6 +196,14 @@ sem progresso novo. Use `continueIndependent:true` em workflows/fila com escopo
 explícito quando houver frentes independentes. Prepare pacote/recomendação antes
 de escalar decisão humana; assinatura final não impede preparar a entrega.
 
+Em recusas de aprovação, confira a origem do recibo. `source: infra-client`
+significa que o cliente não interativo recusou um pedido do servidor; não é um
+parecer do auto-review. Use `threadId`, `turnId`, `itemId` e `commandSha256`
+para correlacionar a operação, sem copiar comandos sensíveis. `blocked by policy`
+da ferramenta é outra camada e exige a justificativa disponível. Não repetir
+uma ação recusada por outro executor. Diagnóstico e limites:
+`docs/APPROVAL-DIAGNOSTICS.md`.
+
 Confira `delivery_status` e a cobertura `acceptance` do workflow antes de concluir.
 Apresente resultado, evidência, decisões restantes e ação mínima do owner.
 Checks, critérios de resultado e aceite humano são distintos. Contratos antigos
@@ -213,6 +221,17 @@ O workflow executa apenas seus jobs e entrega checks/hash das dependências conc
 Para fila preparada fora de DAG, limitar `drain_queue`/`start_queue` por jobIds, quantidade e duração. Guardar ID de supervisor e acompanhar `queue_status`; `stop_queue` solicita parada. Não despachar novos objetivos de produtos por iniciativa própria. A manutenção de aprendizado autorizada usa o mesmo supervisor e os limites compartilhados, acionada por atividade e resultados materiais; consultas não iniciam esse ciclo.
 
 ## Aprendizado e segurança
+
+### VMs de auditoria e acesso por ponte
+
+Para preparar ou retomar uma VM de auditoria, use a skill
+`../prepare-audit-vm/SKILL.md`. Para acesso autorizado a dedicada por uma VM
+intermediária, use `../access-dedicated-host/SKILL.md`. Ambas compartilham o
+serviço `VmAccessService` e as operações `*_vm_access` do MCP; a CLI canônica é
+`vm-access preview|prepare|inspect|start|validate|close --file INPUT.json`.
+Siga os schemas e o guia `docs/VM-ACCESS.md`; preserve a identidade
+do recurso e as autorizações já recebidas. O fluxo formal 706 só entra quando
+escolhido expressamente. Entrada ou preparo local não autorizam acesso remoto.
 
 ### Docker Desktop no Windows
 

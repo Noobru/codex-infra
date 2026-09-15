@@ -8,6 +8,8 @@ O fluxo começa na conversa e no discovery. Ao formalizar ou executar engenharia
 
 ## O que vem nesta distribuição
 
+A versão 0.8.0 acrescenta as skills `prepare-audit-vm` e `access-dedicated-host`, com ciclo de vida compartilhado para clones VirtualBox e pontes SSH autorizadas. Recibos de aprovação distinguem recusas do cliente não interativo de recusas da ferramenta. Consulte [VMs e pontes](docs/VM-ACCESS.md) e [diagnóstico de aprovações](docs/APPROVAL-DIAGNOSTICS.md).
+
 | Capacidade | Comportamento disponível |
 |---|---|
 | Contexto | Perfis explícitos, fontes com proveniência, seleção por tarefa e grafo de links locais. |
