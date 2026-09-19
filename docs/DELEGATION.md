@@ -36,6 +36,34 @@ O check citado precisa existir no perfil e estar selecionado em `checkIds`. Crit
 
 ## Recuperação e continuidade
 
+### Prazo, cancelamento e delegação longa
+
+Para pesquisa/review ou trabalho longo, use `delegate_task` com `background:true`
+e `timeoutMs` explícito, até `1800000` (30 minutos). O supervisor canônico recebe
+somente aquele job e devolve seu recibo imediatamente. Consulte `task_status`,
+`queue_status` e `delivery_status`; recibo/PID não é conclusão. Repetir a mesma
+delegação não abre outro supervisor. Após retry explícito do job, use
+`start_queue` com `jobIds:[jobId]` para executar a nova tentativa.
+
+O modo foreground de `delegate_task` e `run_task` via MCP é limitado a `240000`
+ms para reservar tempo ao encerramento antes do timeout do transporte MCP.
+A CLI `run --timeout` usa o mesmo núcleo e permite até `1800000` ms, pois seu
+processo pode ser acompanhado fora da espera MCP; para despacho desacoplado,
+prefira `delegate` com `background:true` ou `start-queue`.
+Timeout de execução registra `failed`, preserva a causa em `attempt-N/stop.json`
+e libera o lock somente após cleanup confirmado. Permite retry explícito com
+histórico da tentativa anterior. Cancelamento solicitado registra `cancelled`,
+terminal: para voltar ao objetivo, revise a evidência e prepare um novo job com
+nova chave. Cancelamentos históricos não são reclassificados automaticamente.
+Uma interrupção de runtime sem causa local confirmada permanece `failed`, sem
+atribuir cancelamento ao owner nem repetir o trabalho automaticamente.
+
+`acceptanceCriteria` descreve o aceite humano; não substitui `outcomeCriteria`
+verificável nem `checkIds` cadastrados. Não escolha `git-status` ou outro check
+sem relação com o resultado apenas para satisfazer o gate. A seleção de workspace
+vem do perfil: se ele permite apenas worktree, forneça uma base local explícita.
+Rota coordenador não é falha de execução: mantenha o trabalho acoplado na conversa.
+
 O worker devolve `blocker` com tipo, razão, evidências, próxima ação e `recoveryActionId` (ou `null`). Tipos: `recoverable`, `missing-information`, `external-dependency`, `owner-decision`, `platform`, `global`.
 
 Só `recoverable` com uma ação previamente registrada pode gerar tentativa automática. O coordenador usa o mesmo executor, perfil, recursos e contrato. O limite é de 1 a 4 tentativas totais; retomada não reinicia esse orçamento. O prazo total, cancelamento, cleanup e repetição sem evidência nova também encerram recuperação. Cada tentativa conserva seus recibos. Efeitos externos continuam sujeitos às autorizações do projeto.

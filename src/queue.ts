@@ -1,6 +1,7 @@
 import type { TaskEngine } from './engine.js';
 import type { Job } from './state.js';
 import { errorMessage } from './legacy/command-os-utils.js';
+import {ExecutionStop} from './execution-stop.js';
 
 export interface DrainOptions {
   maxJobs:number;
@@ -34,6 +35,7 @@ export class QueueCoordinator {
     let launched=0,stopReason:string|undefined,cancelError:unknown;
     let localBlockers=false;
     const cancelOwned=(id:string,entry:Entry)=>{
+      if(stopReason==='deadline'){entry.controller.abort(new ExecutionStop('deadline'));return;}
       if(!entry.owner){entry.controller.abort();return;}
       if(!entry.cancel)entry.cancel=this.engine.cancel(id,entry.owner).then(()=>{entry.controller.abort();},error=>{cancelError=error;entry.controller.abort();});
     };
@@ -41,12 +43,12 @@ export class QueueCoordinator {
       stopReason??=reason;
       for(const [id,entry] of active)cancelOwned(id,entry);
     };
-    const onAbort=()=>stop('aborted');
+    const onAbort=()=>stop(ExecutionStop.fromSignal(signal).kind==='deadline'?'deadline':'aborted');
     signal?.addEventListener('abort',onAbort,{once:true});
     const timer=setTimeout(()=>stop('deadline'),totalTimeoutMs);
     try {
       while(true) {
-        if(signal?.aborted)stop('aborted');
+        if(signal?.aborted)onAbort();
         const remaining=Math.floor(deadline-performance.now());
         if(remaining<1000)stop('deadline');
         while(!stopReason && active.size<concurrency && launched<maxJobs) {

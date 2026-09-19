@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {TaskEngine} from '../src/engine.js';
+import {TaskEngine,DelegationInputSchema} from '../src/engine.js';
+import {SupervisorManager} from '../src/supervisor.js';
 import {CodexWorker} from '../src/codex-worker.js';
 import {EvaluationStore} from '../src/evaluation.js';
 import {OperationalInsights} from '../src/operational-insights.js';
@@ -66,6 +67,42 @@ test('immediate delegation keeps coordinator tasks local without creating a job 
       qualification:{...fixtureQualification,...change}}),/current coordinator/);
   }
   assert.equal(engine.state.list().length,0);assert.equal(calls,0);
+});
+
+test('long delegation returns one scoped supervisor receipt and an idempotent call does not relaunch',async t=>{
+  const {engine}=await fixture(t,{run:async()=>{throw new Error('Foreground worker must not run');}});
+  let calls=0;
+  t.mock.method(SupervisorManager.prototype,'start',async(options:any)=>{
+    calls++;assert.equal(options.maxJobs,1);assert.equal(options.concurrency,1);
+    assert.equal(options.totalTimeoutMs,1200000);assert.equal(options.jobIds.length,1);
+    assert.equal(engine.state.get(options.jobIds[0]).objective,'Read bounded sources');
+    return {id:'supervisor-fixture',pid:1,path:'fixture',createdAt:new Date().toISOString()};
+  });
+  const input={project:'test',objective:'Read bounded sources',idempotencyKey:'background',mode:'read-only' as const,checkIds:['pass'],qualification:fixtureQualification,background:true,timeoutMs:1200000};
+  const first=await engine.delegate(input),second=await engine.delegate(input);
+  assert.equal(first.job.status,'ready');assert.equal(first.execution,null);
+  assert.equal(first.supervisor?.id,'supervisor-fixture');assert.deepEqual(second.supervisor,first.supervisor);
+  assert.equal(first.job.id,second.job.id);assert.equal(calls,1);
+  assert.match(first.guidance!,/not completion/);
+});
+
+test('foreground duration points callers to background mode before any dispatch',()=>{
+  const input={project:'test',objective:'Read sources',idempotencyKey:'budget',mode:'read-only',checkIds:['pass'],qualification:fixtureQualification,timeoutMs:1200000};
+  const invalid=DelegationInputSchema.safeParse(input);
+  assert.equal(invalid.success,false);
+  if(!invalid.success)assert.match(invalid.error.message,/background:true/);
+  assert.equal(DelegationInputSchema.safeParse({...input,background:true}).success,true);
+});
+
+test('acceptance and workspace errors explain the actual missing fields without creating jobs',async t=>{
+  const {root,engine}=await fixture(t);
+  const input={project:'test',objective:'Read sources',idempotencyKey:'preflight',mode:'read-only' as const,kind:'checks' as const,checkIds:[] as string[],taskDetails:{acceptanceCriteria:['Return an analysis']}};
+  await assert.rejects(engine.prepare(input),/outcomeCriteria.*acceptanceCriteria/);
+  await assert.rejects(engine.prepare({...input,checkIds:['pass','pass']}),/distinct.*duplicates/);
+  const registryPath=path.join(root,'profiles/registry.json'),registry=JSON.parse(await fs.readFile(registryPath,'utf8'));
+  registry.projects[0].workspaces=['worktree'];await fs.writeFile(registryPath,JSON.stringify(registry));
+  await assert.rejects(engine.prepare({...input,checkIds:['pass'],workspace:'in-place'}),/Allowed: worktree.*baseRef/);
+  assert.equal(engine.state.list().length,0);
 });
 
 test('deterministic checks remain available when model configuration is invalid', async t => {
@@ -216,6 +253,58 @@ test('cancellation keeps the active lock until the worker confirms shutdown',asy
   assert.equal(engine.state.get(job.id).ownerPid,process.pid);
   released(); assert.equal((await running).status,'cancelled');
   assert.equal(engine.state.get(job.id).ownerPid,null);
+});
+
+test('execution deadline preserves its cause, waits for cleanup and permits explicit retry',async t=>{
+  let started!:()=>void,release!:()=>void;
+  const ready=new Promise<void>(resolve=>{started=resolve;});
+  const cleanup=new Promise<void>(resolve=>{release=resolve;});
+  let calls=0;
+  const {engine}=await fixture(t,{run:async input=>{
+    calls++;
+    if(calls>1)return {status:'completed',summary:'Retried fixture completed'};
+    started();
+    await new Promise<void>(resolve=>input.signal!.addEventListener('abort',()=>resolve(),{once:true}));
+    await cleanup;
+    return {status:'cancelled',summary:'Legacy worker reported cancellation'};
+  }});
+  const job=await engine.prepare({project:'test',objective:'Inspect deadline recovery',idempotencyKey:'deadline-retry',mode:'read-only',kind:'codex',routing:fixtureQualification,checkIds:['pass']});
+  t.mock.timers.enable({apis:['setTimeout']});
+  const running=engine.run(job.id,5000);await ready;t.mock.timers.tick(5000);
+  assert.equal(engine.state.get(job.id).status,'running');
+  assert.equal(engine.state.get(job.id).ownerPid,process.pid);
+  release();const failed=await running;t.mock.timers.reset();
+  assert.equal(failed.status,'failed');assert.match(failed.error!,/deadline/i);
+  assert.equal(failed.ownerPid,null);
+  const stop=JSON.parse(await fs.readFile(path.join(engine.artifactDir(job.id),'attempt-1/stop.json'),'utf8'));
+  assert.equal(stop.kind,'deadline');
+  assert.equal(engine.retry(job.id).status,'ready');
+  assert.equal((await engine.run(job.id)).status,'completed');
+  assert.equal(engine.state.get(job.id).attempts,2);
+});
+
+test('explicitly cancelled jobs remain terminal and explain how to continue without rewriting history',async t=>{
+  const {engine}=await fixture(t);
+  const job=await engine.prepare({project:'test',objective:'Inspect cancelled task',idempotencyKey:'cancel-terminal',mode:'read-only',kind:'checks',checkIds:['pass']});
+  await engine.cancel(job.id);
+  assert.throws(()=>engine.retry(job.id),/cancelled.*terminal.*prepare a new task/i);
+  assert.equal(engine.state.get(job.id).status,'cancelled');
+});
+
+test('deadline during validation preserves the check receipt and never claims cancellation or PASS',async t=>{
+  const {engine}=await fixture(t);
+  let started!:()=>void;const ready=new Promise<void>(resolve=>{started=resolve;});
+  engine.registry.check=async(_profile,checkId,_mode,options)=>{
+    started();await new Promise<void>(resolve=>options!.signal!.addEventListener('abort',()=>resolve(),{once:true}));
+    return {checkId,executable:'fixture',args:[],cwd:engine.root,exitCode:null,stdout:'',stderr:'',durationMs:5000,error:'timeout'};
+  };
+  const job=await engine.prepare({project:'test',objective:'Check bounded validation',idempotencyKey:'validation-deadline',mode:'read-only',kind:'checks',checkIds:['pass']});
+  t.mock.timers.enable({apis:['setTimeout']});
+  const running=engine.run(job.id,5000);await ready;t.mock.timers.tick(5000);
+  const result=await running;t.mock.timers.reset();
+  assert.equal(result.status,'failed');assert.match(result.error!,/deadline/);assert.equal(result.ownerPid,null);
+  const checks=JSON.parse(await fs.readFile(path.join(engine.artifactDir(job.id),'attempt-1/checks.json'),'utf8'));
+  assert.equal(checks[0].error,'timeout');assert.equal(engine.retry(job.id).status,'ready');
 });
 
 test('unconfirmed worker shutdown retains the lock until an explicit evidenced confirmation',async t=>{

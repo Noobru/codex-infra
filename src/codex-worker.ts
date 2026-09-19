@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import {ExecutionStop} from './execution-stop.js';
 import path from 'node:path';
 import { AppServerClient, AppServerError, type AppServerOptions } from './app-server.js';
 import { ModelCatalog } from './model-catalog.js';
@@ -131,7 +132,7 @@ export class CodexWorker {
       stopped = new WorkerStop(status, message);
       stopReject(stopped);
     };
-    const abort = () => requestStop('cancelled', 'Worker cancelled by its owner.');
+    const abort = () => { const stop=ExecutionStop.fromSignal(input.signal);requestStop(stop.status,stop.message); };
     const progress = () => {
       // Failure to persist IDs must stop execution; continuing would lose recovery state.
       input.onProgress?.({ ...(threadId ? { threadId } : {}), ...(turnId ? { turnId } : {}) });
@@ -154,7 +155,7 @@ export class CodexWorker {
       receipt.gitHubAuth = input.gitHubAuth ? 'existing-cli-login-child-environment' : 'not-requested';
       const timeoutMs = input.timeoutMs ?? 15 * 60_000;
       if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new WorkerStop('blocked', 'Worker timeout must be positive.');
-      if (input.signal?.aborted) throw new WorkerStop('cancelled', 'Worker cancelled before startup.');
+      if (input.signal?.aborted) { const stop=ExecutionStop.fromSignal(input.signal);throw new WorkerStop(stop.status,stop.message); }
       input.signal?.addEventListener('abort', abort, { once: true });
       timer = setTimeout(() => requestStop('failed', 'Worker deadline exceeded; the turn was interrupted.'), timeoutMs);
       const cwd = await guarded(fs.realpath(input.cwd));
@@ -324,7 +325,7 @@ export class CodexWorker {
         const declaration = finalItem ? declaredResult(finalItem.text) : messages.get(turnId!);
         if (!declaration) result = { status: 'failed', summary: 'Codex ended the turn without a valid structured result; objective completion was not confirmed.' };
         else { receipt.declaredStatus = declaration.status; result = declaration; }
-      } else if (finished.status === 'interrupted') result = { status: 'cancelled', summary: 'Codex interrupted the turn.' };
+      } else if (finished.status === 'interrupted') result = { status: 'failed', summary: 'Codex interrupted the turn without a confirmed local cancellation cause; inspect attempt evidence before an explicit retry.' };
       else result = { status: 'failed', summary: 'Codex did not report a successful terminal status.' };
     } catch (error) {
       if (error instanceof WorkerStop) result = { status: error.status, summary: error.message };

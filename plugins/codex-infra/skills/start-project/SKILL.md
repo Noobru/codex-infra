@@ -127,6 +127,18 @@ Os campos `explicitRequestedModel` e `explicitRequestedReasoningEffort` represen
 somente uma escolha expressa do owner, nunca herança implícita do modelo desta sessão.
 
 `delegate_task` seleciona a rota, fixa a política e executa pelo TaskEngine canônico.
+Em pesquisa/review ou execução longa, forneça `background:true` e prazo explícito
+`timeoutMs` até `1800000` (30 minutos). O supervisor retorna imediatamente; acompanhe
+os IDs reais em `task_status`/`queue_status`, confira `delivery_status` e integre o
+resultado antes de finalizar a delegação. Foreground admite até `240000` ms.
+Não interprete o recibo de dispatch como conclusão. Repetir a mesma delegação só
+consulta o supervisor já criado; após retry explícito, use `start_queue` restrito
+ao mesmo job. Se a sessão ainda expuser o schema antigo, use a CLI compilada atual.
+Selecione checks cadastrados pertinentes ou `taskDetails.outcomeCriteria` com
+expectativa verificável de artefato. `acceptanceCriteria` textual não basta e um
+check artificial não valida um parecer. Confira `workspaces` do perfil: worktree
+exige `baseRef` local explícito. Acoplamento moderado/alto em trabalho não defensivo
+fica com o coordenador; não mude a classificação apenas para forçar delegação.
 Delegações comuns têm rede disponível por padrão, inclusive revisão `read-only`.
 O contrato registra `taskDetails.networkAccess:true`; não exigir que o owner peça
 rede para cada subagente. Descreva as ações permitidas no objetivo e selecione o

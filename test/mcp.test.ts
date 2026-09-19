@@ -38,6 +38,14 @@ test('real MCP subprocess negotiates tools and resolves a project through the sh
   assert.equal(tools.find(tool=>tool.name==='preview_vm_access')?.annotations?.readOnlyHint,true);
   assert.notEqual(tools.find(tool=>tool.name==='validate_vm_access')?.annotations?.readOnlyHint,true);
   assert.ok(tools.some(tool=>tool.name==='delegate_task'));
+  const delegateSchema=tools.find(tool=>tool.name==='delegate_task')!.inputSchema as any;
+  assert.ok(delegateSchema.properties.input.properties.background);
+  assert.match(delegateSchema.properties.input.properties.timeoutMs.description,/foreground.*background/);
+  const tooLong=await client.callTool({name:'delegate_task',arguments:{input:{
+    project:'fixture',objective:'Read bounded fixture',idempotencyKey:'long-foreground',mode:'read-only',checkIds:[],timeoutMs:1200000,
+    qualification:{taskClass:'retrieval',complexity:'low',uncertainty:'low',risk:'low',contextCoupling:'low',bounded:true,independentlyVerifiable:true,delegationBenefit:'expected',rationale:'Bounded fixture lookup'},
+  }}});
+  assert.equal(tooLong.isError,true);assert.match(JSON.stringify(tooLong.content),/background:true/);
   assert.ok(tools.some(tool=>tool.name==='delivery_status'));
   await fs.writeFile(path.join(root,'research.txt'),'Verified fixture conclusion');
   const prepared=await client.callTool({name:'prepare_task',arguments:{project:'fixture',objective:'Verify research artifact',idempotencyKey:'outcome-wire',mode:'read-only',kind:'checks',checkIds:[],taskDetails:{outcomeCriteria:[{id:'research',description:'Fixture conclusion',kind:'artifact',path:'research.txt',contains:'Verified fixture conclusion'}]}}});

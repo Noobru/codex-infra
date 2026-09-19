@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test, type TestContext } from 'node:test';
 import { QueueCoordinator } from '../src/queue.js';
 import { StateStore, type Job, type JobStatus } from '../src/state.js';
+import {ExecutionStop} from '../src/execution-stop.js';
+import type {DispatchOptions} from '../src/objective-coordinator.js';
 
 function fixture(t: TestContext) {
   const state = new StateStore(':memory:');
@@ -15,7 +17,7 @@ function fixture(t: TestContext) {
   };
   const engine = {
     state,
-    run: async (id: string, timeout = 300000): Promise<Job> => {
+    run: async (id: string, timeout = 300000, _dispatch:DispatchOptions={}): Promise<Job> => {
       calls.push({ id, timeout });
       state.claim(id, process.pid, 1);
       return finish(id);
@@ -95,27 +97,44 @@ test('abort requests canonical cancellation and starts no following job', async 
   assert.equal(state.get(later.id).attempts, 0);
 });
 
-test('total deadline cancels active work through its owner before returning', async (t) => {
+test('total deadline interrupts active work as a retryable failure without requesting owner cancellation', async (t) => {
   const { state, create, engine } = fixture(t);
   const first = create('first');
   const later = create('later');
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  let resolveRun: ((job: Job) => void) | undefined;
-  engine.run = async (id) => {
+  engine.run = async (id,_timeout,dispatch={}) => {
     state.claim(id, process.pid, 1);
-    return new Promise<Job>((resolve) => { resolveRun = resolve; });
+    return new Promise<Job>((resolve) => { dispatch.signal!.addEventListener('abort',()=>{
+      const stop=ExecutionStop.fromSignal(dispatch.signal);assert.equal(stop.kind,'deadline');
+      resolve(state.transition(id,stop.status,{error:stop.message}));
+    },{once:true}); });
   };
-  engine.cancel = async (id) => {
-    assert.equal(id, first.id);
-    const job = state.transition(id, 'cancelled');
-    resolveRun!(job);
-    return job;
-  };
+  engine.cancel = async () => {throw new Error('Deadline is not an explicit cancellation');};
   const drain = new QueueCoordinator(engine).drain({ maxJobs: 2, totalTimeoutMs: 10000 });
   assert.equal(state.get(first.id).status, 'running');
   t.mock.timers.tick(10000);
   const result = await drain;
   assert.equal(result.stopReason, 'deadline');
-  assert.equal(result.jobs[0]?.status, 'cancelled');
+  assert.equal(result.jobs[0]?.status, 'failed');
+  assert.match(result.jobs[0]?.error??'',/deadline/);
   assert.equal(state.get(later.id).attempts, 0);
+});
+
+test('external deadline retains its cause through the queue without writing cancellation',async(t)=>{
+  const {state,create,engine}=fixture(t);
+  const first=create('first'),later=create('later'),controller=new AbortController();
+  let cancelCalls=0;
+  engine.cancel=async(id)=>{cancelCalls++;return state.get(id);};
+  engine.run=async(id,_timeout,dispatch={})=>{
+    state.claim(id,process.pid,1);
+    const pending=new Promise<Job>(resolve=>dispatch.signal!.addEventListener('abort',()=>{
+      const stop=ExecutionStop.fromSignal(dispatch.signal);
+      resolve(state.transition(id,stop.status,{error:stop.message}));
+    },{once:true}));
+    controller.abort(new ExecutionStop('deadline'));
+    return pending;
+  };
+  const result=await new QueueCoordinator(engine).drain({maxJobs:2,totalTimeoutMs:10000,signal:controller.signal});
+  assert.equal(result.stopReason,'deadline');assert.equal(cancelCalls,0);
+  assert.equal(result.jobs[0]?.status,'failed');assert.equal(state.get(later.id).attempts,0);
 });

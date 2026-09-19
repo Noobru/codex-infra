@@ -1,6 +1,7 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, openSync, writeSync } from 'node:fs';
 import path from 'node:path';
+import {ExecutionStop} from './execution-stop.js';
 
 export interface CommandOptions { signal?: AbortSignal; outputFiles?: {stdout:string;stderr:string}; pathPrepend?: string[]; /** Complete environment override; omitted preserves the existing host environment. */ env?: NodeJS.ProcessEnv }
 
@@ -63,7 +64,7 @@ export class ProcessRunner {
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       return { executable, args, cwd, exitCode: null, stdout: '', stderr: '', durationMs: 0, error: 'invalid_timeout' };
     }
-    if (options.signal?.aborted) return {executable,args,cwd,exitCode:null,stdout:'',stderr:'',durationMs:0,error:'cancelled'};
+    if (options.signal?.aborted) return {executable,args,cwd,exitCode:null,stdout:'',stderr:'',durationMs:0,error:ExecutionStop.fromSignal(options.signal).commandError};
     const logFds: number[] = [];
     if (options.outputFiles) {
       try { logFds.push(openSync(options.outputFiles.stdout,'wx')); logFds.push(openSync(options.outputFiles.stderr,'wx')); }
@@ -150,7 +151,7 @@ export class ProcessRunner {
           processError ?? (code === 0 ? undefined : signal ? `process_signal:${signal}` : `process_exit:${code}`));
       });
       timer = setTimeout(() => stop('timeout'), timeoutMs);
-      onAbort=()=>stop('cancelled');
+      onAbort=()=>stop(ExecutionStop.fromSignal(options.signal).commandError);
       options.signal?.addEventListener('abort',onAbort,{once:true});
       if(options.signal?.aborted)onAbort();
     });

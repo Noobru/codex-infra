@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
+import {ExecutionStop} from '../src/execution-stop.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,7 +33,7 @@ class FakeTransport implements WorkerTransport {
   wrongModel=false;
   wrongEffort=false;
   finalMessage: string | undefined = JSON.stringify({ status: 'completed', summary: 'Manifest inspected.' });
-  behavior: 'completed' | 'early' | 'blocked' | 'hang' | 'quota' | 'failed' = 'completed';
+  behavior: 'completed' | 'early' | 'blocked' | 'hang' | 'quota' | 'failed' | 'interrupted' = 'completed';
   async connect() {}
   async probeAccount() {
     return { type: this.auth, planType: 'pro', rateLimits: { rateLimits: { limitId: 'codex', primary: { usedPercent: this.quota } } } };
@@ -59,6 +60,7 @@ class FakeTransport implements WorkerTransport {
       else if (this.behavior === 'completed') setImmediate(() => this.finish());
       else if (this.behavior === 'quota') setImmediate(() => this.finish('failed', { codexErrorInfo: 'usageLimitExceeded', message: 'private@example.com' }));
       else if (this.behavior === 'failed') setImmediate(() => this.finish('failed', { codexErrorInfo: 'sandboxError' }));
+      else if (this.behavior === 'interrupted') setImmediate(() => this.finish('interrupted'));
       else if (this.behavior === 'blocked') setImmediate(() => this.emit('client/serverRequestRejected', { method: 'item/commandExecution/requestApproval',source:'infra-client',threadId:'thread-1',turnId:'turn-1',itemId:'exec-1',commandSha256:'a'.repeat(64) }));
       return { turn: { id: 'turn-1', status: 'inProgress' } } as T;
     }
@@ -326,6 +328,26 @@ test('deadline interrupts instead of treating turn/start acknowledgement as comp
   assert.match(result.summary, /deadline/);
   assert.equal(transport.calls.at(-1)?.method, 'turn/interrupt');
   assert.equal(transport.closed, true);
+});
+
+test('an engine deadline keeps its cause through worker interruption and cleanup', async () => {
+  const transport=new FakeTransport();transport.behavior='hang';
+  const controller=new AbortController();
+  const result=await worker(transport).run({...base,signal:controller.signal,onProgress:({turnId})=>{if(turnId)controller.abort(new ExecutionStop('deadline'));}});
+  assert.equal(result.status,'failed');assert.match(result.summary,/deadline/);
+  assert.doesNotMatch(result.summary,/cancelled by.*owner/);
+  assert.equal(transport.calls.at(-1)?.method,'turn/interrupt');assert.equal(transport.closed,true);
+});
+
+test('unattributed runtime interruption fails without inventing an owner cancellation',async()=>{
+  const transport=new FakeTransport();transport.behavior='interrupted';
+  const result=await worker(transport).run(base);
+  assert.equal(result.status,'failed');assert.match(result.summary,/interrupted/);
+  const receipt=result.receipt as {terminalStatus:string;cleanupConfirmed:boolean};
+  assert.equal(receipt.terminalStatus,'interrupted');
+  assert.equal(receipt.cleanupConfirmed,true);
+  assert.equal(transport.calls.filter(call=>call.method==='turn/start').length,1);
+  assert.equal(transport.calls.some(call=>call.method==='turn/interrupt'),false);
 });
 
 test('terminal errors remain failed or quota without retrying or retaining raw errors', async () => {

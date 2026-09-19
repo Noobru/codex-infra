@@ -1,7 +1,7 @@
 {
   "version": 1,
   "packageVersion": "0.8.0",
-  "createdAt": "2026-09-15T14:39:42.695Z",
+  "createdAt": "2026-09-19T17:22:18.889Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -99,8 +99,8 @@
     },
     {
       "path": "docs/DELEGATION.md",
-      "bytes": 5564,
-      "sha256": "ca5b18617bc1d8e3f67500f5a3c94f620aa83c150dd982596e803cdfc431c3f0"
+      "bytes": 7429,
+      "sha256": "c279e37478cfaa227a287d34b5d0744c57f81c35cf0eae3ff69a71b43f23ee29"
     },
     {
       "path": "docs/DISTRIBUICAO.md",
@@ -289,8 +289,8 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 23900,
-      "sha256": "7fec6bdd41a3463ddf35aff6739a6c6d232d40382e74954dfd9c0e0779c4407c"
+      "bytes": 24908,
+      "sha256": "3fe3078f4efb7db203c6c2cf1fc5c53f8710436c452b0f9696c3b6d938fc5f3c"
     },
     {
       "path": "profiles/model-routing.json",
@@ -349,13 +349,13 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 21847,
-      "sha256": "7fd6b9ae6fad195bb95043ad5ad28668cff51d259ab75562e184cdd351bfe10b"
+      "bytes": 21869,
+      "sha256": "0e182df50dd9f1825175feefa76e442685588d759a0073ad0d8f16a3a79df998"
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 24426,
-      "sha256": "9c89c2bdb02f37093e48bec7280a367ea530cd970f1d3fc156d780d7d527e1b7"
+      "bytes": 24635,
+      "sha256": "c85a37b8ed9e34aad0a9b5d0f70720156cf61ab02796c44953859d045f9943ba"
     },
     {
       "path": "src/context-pack.ts",
@@ -389,8 +389,8 @@
     },
     {
       "path": "src/engine.ts",
-      "bytes": 32866,
-      "sha256": "f77100fba1b9660d7b999f586f45e2e48c01cd4bef4375dab31cc872103c27f3"
+      "bytes": 36148,
+      "sha256": "f1efa6af513c00f62510fee72839615c42e0c177ce1fbad33e44991c105e121e"
     },
     {
       "path": "src/evaluation.ts",
@@ -411,6 +411,11 @@
       "path": "src/execution-policy.ts",
       "bytes": 1554,
       "sha256": "54e0c4a93406f5c0e5ecb23168d70677f88a9fba493290cb3388be4f94523c69"
+    },
+    {
+      "path": "src/execution-stop.ts",
+      "bytes": 766,
+      "sha256": "0833943ab0d95658acd58be366df018dff7bec769ed0de1818425e12c89ee2ca"
     },
     {
       "path": "src/g-ideia-bootstrap.ts",
@@ -489,8 +494,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 29326,
-      "sha256": "b3c07ef761691b0342b4e346ec330b2c1a46fc1bc7064aa9ad7a1834a2d4944d"
+      "bytes": 29742,
+      "sha256": "b24d2364206f3b35def1401ac40bbab833ed7fa4b68c934ca63a0db839dea66d"
     },
     {
       "path": "src/model-catalog.ts",
@@ -534,8 +539,8 @@
     },
     {
       "path": "src/process.ts",
-      "bytes": 8395,
-      "sha256": "a570a0059b3d78bf833584c0f5efd4509234400b1eeed27ae9566c49db7a4d96"
+      "bytes": 8530,
+      "sha256": "98310d2fe53a609ccfe21b8bbf0ea447566d174bfbe164c760a904f81a27cd9f"
     },
     {
       "path": "src/profile-manager.ts",
@@ -549,8 +554,8 @@
     },
     {
       "path": "src/queue.ts",
-      "bytes": 4846,
-      "sha256": "f3fa25b0cfbe032271abde2ba03a689c7348b729a332c5ac4a5e12cebacbb90b"
+      "bytes": 5050,
+      "sha256": "14dddd4a19521568fb498c563fc81bdcfb77c459d5d31fd647873c1ed5da6fa0"
     },
     {
       "path": "src/recovery.ts",
@@ -699,8 +704,8 @@
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 22539,
-      "sha256": "e7f0118114c21ae78900e71cf93428c94c6ac8ba5fcc0d7ea7cf81a7a84e4baa"
+      "bytes": 23980,
+      "sha256": "f93eba5018176f0cfef700c775e09185c6afca81f51e44b29057c7f7a5048026"
     },
     {
       "path": "test/context-pack.test.ts",
@@ -734,8 +739,8 @@
     },
     {
       "path": "test/engine.test.ts",
-      "bytes": 21603,
-      "sha256": "7d6277462a9ab204710251f8b0e600b4c49272cf86442cafe47270122e6699ee"
+      "bytes": 27746,
+      "sha256": "e9dccc71ce68ddd0d8316e8c0b5f6bf2fe3cbb0f2507275e00877632ef6ad517"
     },
     {
       "path": "test/evaluation.test.ts",
@@ -809,8 +814,8 @@
     },
     {
       "path": "test/mcp.test.ts",
-      "bytes": 5812,
-      "sha256": "bc4e094f7168349b25d75ea5cb878ccea3d57e90cacb5f748b69286a864e85ff"
+      "bytes": 6619,
+      "sha256": "8d2cbd66cea26e140abeea4e37f1cd98a3d9793a21c105b934d3cc9317fffce4"
     },
     {
       "path": "test/observability.test.ts",
@@ -849,8 +854,8 @@
     },
     {
       "path": "test/queue.test.ts",
-      "bytes": 5188,
-      "sha256": "2a8851d9c5d51254d81cc73db00e7ad3fdcf278e82ef31188863792cc170f3b2"
+      "bytes": 6547,
+      "sha256": "aa001d639fc78f621c2049fbf8d2676f4dfe696e594a05dabbcd0579d5eea8a8"
     },
     {
       "path": "test/recovery.test.ts",

@@ -166,7 +166,7 @@ try {
       case 'execution-policy': print(values.file?await engine.execution.configure(await readJson(values.file,null)):await engine.execution.read());break;
       case 'delegate':
         if (!values.file) throw new Error('--file qualified-task.json is required; the orchestrator supplies qualification');
-        { const result = await engine.delegate(await readJson(values.file, null)); print(result); if (result.job.status !== 'completed') process.exitCode = 2; }
+        { const result = await engine.delegate(await readJson(values.file, null)); print(result); if (!result.supervisor && result.job.status !== 'completed') process.exitCode = 2; }
         break;
       case 'workflow-prepare': {
         if(!values.file)throw new Error('--file workflow.json is required');
