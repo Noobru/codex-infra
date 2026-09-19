@@ -1,7 +1,7 @@
 {
   "version": 1,
   "packageVersion": "0.8.0",
-  "createdAt": "2026-09-19T17:22:18.889Z",
+  "createdAt": "2026-09-19T17:53:02.814Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -109,8 +109,8 @@
     },
     {
       "path": "docs/DOCKER-RECOVERY.md",
-      "bytes": 2883,
-      "sha256": "476d80d7a5d566639b5f109f125677e2a7e03b9175a2e83df3e3871143f1df10"
+      "bytes": 3679,
+      "sha256": "6183bc1aa34e7efe4eb63ffeedf6935fa5e6b1f60086c5eb7fd68c088049f335"
     },
     {
       "path": "docs/INTERACTIONS.md",
@@ -283,14 +283,19 @@
       "sha256": "2ab4bffd7875b537a4cc424955f4cbf9ef3bcc7635bf7c02e7ef08c808fb3a37"
     },
     {
+      "path": "plugins/codex-infra/skills/start-docker/SKILL.md",
+      "bytes": 3104,
+      "sha256": "540593d5eaaca8e1827dc9cfe6607bb6095d3c527f8565fa60da9ecfd121370c"
+    },
+    {
       "path": "plugins/codex-infra/skills/start-project/agents/openai.yaml",
       "bytes": 200,
       "sha256": "425614164e6786f9c5fc2716545dfc6e90d34bb19491558b5fd5ef968b6cd25d"
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 24908,
-      "sha256": "3fe3078f4efb7db203c6c2cf1fc5c53f8710436c452b0f9696c3b6d938fc5f3c"
+      "bytes": 25066,
+      "sha256": "1c05fb7d57bcbb88eddbb53ad670d55f00e94e684c95224b2189830cfff188bd"
     },
     {
       "path": "profiles/model-routing.json",
@@ -354,8 +359,8 @@
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 24635,
-      "sha256": "c85a37b8ed9e34aad0a9b5d0f70720156cf61ab02796c44953859d045f9943ba"
+      "bytes": 24934,
+      "sha256": "c91882071fa812c41db0534844f861dc172a3b6dd0a3a11af34574befb6475ad"
     },
     {
       "path": "src/context-pack.ts",
@@ -379,8 +384,8 @@
     },
     {
       "path": "src/docker-recovery.ts",
-      "bytes": 5095,
-      "sha256": "b76507fcd7f4045122fb35e3e288fbcae4d2ae33169b8d32f6d1d73e56c8f3ec"
+      "bytes": 6167,
+      "sha256": "db27716410c815c20ef9d98261f3fbc5567530c633c4346f7502522af93d541e"
     },
     {
       "path": "src/efficiency-history.ts",
@@ -434,8 +439,8 @@
     },
     {
       "path": "src/interaction-entry.ts",
-      "bytes": 9114,
-      "sha256": "d4fccf2b77b64e3b0e3da9bbf046be3aaaf6a222f1d6b7661f3a1d1306945c5a"
+      "bytes": 9231,
+      "sha256": "ff0b805cf482a57552dae4bcd2c938f05a684ff465eb93adf61dde51e72ebdb0"
     },
     {
       "path": "src/interaction-telemetry.ts",
@@ -494,8 +499,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 29742,
-      "sha256": "b24d2364206f3b35def1401ac40bbab833ed7fa4b68c934ca63a0db839dea66d"
+      "bytes": 30049,
+      "sha256": "85aaee157c9786d6ec5629f27d3ee6427aaad277316f2238995baec5c3ce4c76"
     },
     {
       "path": "src/model-catalog.ts",
@@ -704,8 +709,8 @@
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 23980,
-      "sha256": "f93eba5018176f0cfef700c775e09185c6afca81f51e44b29057c7f7a5048026"
+      "bytes": 24379,
+      "sha256": "a87b23b6586225afdba13a82f1ed5246b770d518d272066be9b852b3def79598"
     },
     {
       "path": "test/context-pack.test.ts",
@@ -729,8 +734,8 @@
     },
     {
       "path": "test/docker-recovery.test.ts",
-      "bytes": 5232,
-      "sha256": "2baa9e8728933ee20675009d3d0ab9f00733b683637d1c8533d56799a8bb98fd"
+      "bytes": 5396,
+      "sha256": "9356d47fbed8a98b4c88112f5e799d382f24d4acb452e2984d8ec47bfc50cc4c"
     },
     {
       "path": "test/efficiency-history.test.ts",
@@ -769,8 +774,8 @@
     },
     {
       "path": "test/interaction-entry.test.ts",
-      "bytes": 7601,
-      "sha256": "a4c7314f4fbd42d8f2d46d3215262167a29f9c208d7b299540390ed0eecbe2d3"
+      "bytes": 9454,
+      "sha256": "63011cffa8fd099190ca7a55440733aefa90484b3c1df73850bcf6475fa5051d"
     },
     {
       "path": "test/interaction-telemetry.test.ts",

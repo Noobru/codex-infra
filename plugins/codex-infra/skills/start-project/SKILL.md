@@ -7,6 +7,14 @@ description: Entrada operacional do CodexInfra para conversas novas ou retomadas
 
 Use o MCP `codex-infra`, servido por a instalação indicada em `docs/LOCAL-ADOPTION.md`. CLI/MCP compartilham registry, TaskEngine e StateStore. Não crie cadastro, fila ou executor paralelos.
 
+## Operações do host em qualquer projeto
+
+Antes de abrir Docker Desktop, use obrigatoriamente a skill
+[`start-docker`](../start-docker/SKILL.md), inclusive para uma abertura normal
+destinada a testes, build, Compose ou CI. Preserve o projeto atual. Essa entrada
+não depende do catálogo de capacidades aprendidas do projeto. `enter_interaction`
+também retorna esse procedimento em `hostOperations.docker`, sem iniciar Docker.
+
 ## Entrada e continuidade
 
 Após adoção no contrato global, esta é a entrada padrão para todas as tarefas locais.
@@ -247,14 +255,11 @@ escolhido expressamente. Entrada ou preparo local não autorizam acesso remoto.
 
 ### Docker Desktop no Windows
 
-Antes de abrir Docker para validação autorizada, use `inspect_docker_recovery`
-(CLI `docker-recovery`) para detectar sockets órfãos conhecidos. Se houver o erro
-de socket inacessível e nenhum processo ativo, use `recover_docker_start` apenas
-com a autorização explícita já recebida para recuperar/iniciar. O fluxo preserva
-as pastas de sockets e não apaga dados. Confirme `healthy:true` em nova inspeção;
-lançamento não comprova funcionamento. Não repetir abertura ou limpeza em loop.
-Consulte `docs/DOCKER-RECOVERY.md`. A manutenção de aprendizado e o
-sandbox não ganham autorização para iniciar ou encerrar Docker/WSL.
+Siga [`start-docker`](../start-docker/SKILL.md) como entrada principal, independente
+do projeto. Ela reutiliza `inspect_docker_recovery` e `recover_docker_start`, ou
+CLI `docker-recovery`, para abertura comum e recuperação. Não abra o executável
+diretamente. A manutenção de aprendizado e o sandbox não ganham autorização para
+iniciar ou encerrar Docker/WSL.
 
 Declare `performanceScope` (taskClass, language e problemCategory quando pertinentes)
 na entrada/atualização da interação e nos taskDetails do job, antes do trabalho ao

@@ -42,13 +42,19 @@ export class WindowsDockerRecoveryHost implements DockerRecoveryHost {
 }
 
 export class DockerRecovery {
+  /** Host lifecycle guidance is shared by every project; it is not a learned project capability. */
+  static startupPolicy() {
+    return {scope:'host' as const,skill:'start-docker',projectBindingRequired:false,
+      inspectTool:'inspect_docker_recovery',startTool:'recover_docker_start',
+      guidance:'Before opening Docker Desktop for any project or a projectless task, use the installed start-docker skill. Call inspect_docker_recovery first; when startup is authorized and needed, use recover_docker_start, then confirm healthy:true. Do not launch Docker Desktop.exe, Start-Process or docker desktop start directly. Keep the current project identity; this host operation needs no codex-infra project selection. Reuse existing startup authorization; this guidance grants no new authority to start, stop or reset services.'};
+  }
   private readonly host:DockerRecoveryHost;
   constructor(readonly root:string,host?:DockerRecoveryHost){this.host=host??new WindowsDockerRecoveryHost(root);}
   async inspect(){
     const inventory=await this.host.inspect(),healthy=await this.host.healthy();
     const hasOrphanEntries=inventory.directories.some(item=>item.exists&&item.entries.length>0);
     const status=healthy?'healthy':inventory.owners.length?'docker-active':!inventory.directories.every(item=>item.safe)?'manual-inspection':hasOrphanEntries?'orphan-sockets':'docker-stopped';
-    return {status,healthy,...inventory,nextAction:healthy?'No recovery required.':status==='orphan-sockets'?'With explicit owner authorization, preserve both known socket directories and start Docker once.':status==='docker-active'?'Wait for startup or close the failed Docker instance before recovery.':'Inspect the current failure before changing files.'};
+    return {status,healthy,...inventory,nextAction:healthy?'No recovery required.':status==='orphan-sockets'?'With existing owner startup authorization, use recover_docker_start to preserve both known socket directories and start Docker once. Do not preserve sockets or start Docker manually.':status==='docker-stopped'?'With existing owner startup authorization, use recover_docker_start to start Docker once; no socket quarantine is needed.':status==='docker-active'?'Wait for startup or close the failed Docker instance before recovery.':'Inspect the current failure before changing files.'};
   }
   async recover(raw:unknown){
     const decision=KnowledgeOwnerDecisionSchema.parse(raw),before=await this.inspect();

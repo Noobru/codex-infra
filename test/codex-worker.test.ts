@@ -112,6 +112,8 @@ test('one job starts one turn and waits for confirmed terminal completion', asyn
   assert.deepEqual(turn.sandboxPolicy, { type: 'readOnly', networkAccess: false });
   assert.equal(turn.cwd, cwd);
   assert.equal(turn.approvalPolicy, 'on-request');
+  assert.match(turn.input[0].text,/installed start-docker skill/);
+  assert.match(turn.input[0].text,/Keep the current project identity/);
   assert.equal(turn.model, 'gpt-5.6-luna');
   assert.equal(turn.effort, 'medium');
   const thread = transport.calls.find(call => call.method === 'thread/start')!.params;
@@ -138,6 +140,9 @@ test('learning file-only workers remove inherited integrations without relaxing 
   assert.equal(options.config.web_search,'disabled');
   assert.equal(options.approvalPolicy,'on-request');assert.equal(options.sandbox,'read-only');
   assert.equal((result.receipt as any).toolScope.kind,'local-files');
+  const prompt=transport.calls.find(call=>call.method==='turn/start')!.params.input[0].text;
+  assert.match(prompt,/must not start, stop or recover Docker\/WSL/);
+  assert.doesNotMatch(prompt,/when startup is authorized and needed, use recover_docker_start/);
 });
 
 test('captures completion delivered before turn/start response', async () => {

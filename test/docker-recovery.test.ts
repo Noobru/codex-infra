@@ -19,6 +19,7 @@ async function fixture(t:import('node:test').TestContext){
 test('Docker preflight is read-only and does not interpret launch as health',async t=>{
   const {root,state,recovery}=await fixture(t);
   assert.equal((await recovery.inspect()).status,'orphan-sockets');
+  assert.match((await recovery.inspect()).nextAction,/use recover_docker_start/);
   assert.deepEqual(await fs.readdir(root),[]);assert.equal(state.starts,0);
   const receipt=await recovery.recover(decision);assert.equal(receipt.status,'starting-or-failed');
   assert.equal(state.starts,1);assert.equal(state.quarantines,1);
@@ -36,6 +37,7 @@ test('healthy Docker is never restarted and a clean stopped installation needs n
   const {state,recovery}=await fixture(t);state.healthy=true;
   assert.equal((await recovery.recover(decision)).changed,false);assert.equal(state.starts,0);
   state.healthy=false;state.inventory.knownSocketError=false;state.inventory.directories=[];
+  assert.match((await recovery.inspect()).nextAction,/use recover_docker_start/);
   await recovery.recover(decision);assert.equal(state.quarantines,0);assert.equal(state.starts,1);
 });
 test('known orphan sockets are detected before a new startup even if the crash log rotated',async t=>{

@@ -1,4 +1,16 @@
-# Recuperar a inicialização do Docker Desktop no Windows
+# Abrir e recuperar Docker Desktop no Windows
+
+A skill instalada `start-docker` é a entrada principal antes de qualquer abertura
+pelo agente, para todos os projetos e tarefas sem projeto. `start-project`,
+`enter_interaction.hostOperations.docker` e os workers comuns apontam para o mesmo
+procedimento. Não é necessário selecionar o projeto codex-infra nem executar um
+bundle aprendido. O projeto consumidor conserva sua identidade e autoridade.
+
+Use o recuperador abaixo também na abertura normal; ele não faz quarentena quando
+não há sockets órfãos e não reinicia um engine saudável. Não substitua o fluxo por
+`Start-Process`, abertura direta de `Docker Desktop.exe` ou `docker desktop start`.
+Esses comandos ficam encapsulados na implementação canônica. A skill orienta o
+agente; não instala um interceptador de comandos no aplicativo.
 
 O preflight reconhece a falha `The file cannot be accessed by the system` ao
 renomear sockets de `Docker/run` ou `docker-secrets-engine`. A ocorrência observada

@@ -9,6 +9,7 @@ import { StateStore } from './state.js';
 import { WorkflowStore } from './workflow.js';
 import { InteractionTelemetry } from './interaction-telemetry.js';
 import { RoutingConfigurationStore } from './routing-configuration.js';
+import { DockerRecovery } from './docker-recovery.js';
 
 export const InteractionEntrySchema = z.object({
   interaction: InteractionBeginSchema,
@@ -48,6 +49,7 @@ export class InteractionEntry {
     const telemetry=input.persist?await this.captureTelemetry():null;
     const learningMaintenance = input.persist && interaction?.intent === 'work' ? await this.learningMaintenance(interaction.projectId ?? undefined) : null;
     return { persisted: input.persist, interaction, projectContext, executionPolicy: policy, linked,telemetry,learningMaintenance,
+      hostOperations:{docker:DockerRecovery.startupPolicy()},
       modelRouting: { version: modelRouting.version, hash: modelRouting.hash, configuration: modelRouting.configuration, configurationSource: modelRouting.configurationSource,
         qualificationOwner: 'orchestrator', delegationTool: 'delegate_task', nativeSpawnIntercepted: false },
       routes: ['direct', 'job', 'workflow'], dispatchStarted: false,

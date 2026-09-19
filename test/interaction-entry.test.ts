@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { InteractionEntry } from '../src/interaction-entry.js';
 import { StateStore } from '../src/state.js';
 import { KnowledgeLearningStore } from '../src/knowledge-learning.js';
+import { DockerRecovery } from '../src/docker-recovery.js';
 
 test('read-only conversation entry leaves no files, persistence reuses identity and does not create a queue', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'infra-entry-'));
@@ -15,6 +16,7 @@ test('read-only conversation entry leaves no files, persistence reuses identity 
   const preview = await entry.enter({ interaction, persist: false });
   assert.equal(preview.interaction, null);
   assert.equal(preview.telemetry,null);
+  assert.deepEqual(preview.hostOperations.docker,DockerRecovery.startupPolicy());
   assert.deepEqual(await fs.readdir(root), []);
   const opened = await entry.enter({ interaction });
   assert.equal(opened.dispatchStarted, false);
@@ -26,6 +28,31 @@ test('read-only conversation entry leaves no files, persistence reuses identity 
   const done = await entry.record(opened.interaction!.id, { expectedRevision: 1, source: 'local result', status: 'completed', summary: 'Answer delivered' });
   assert.equal(done.revision, 2);
   await assert.rejects(fs.access(path.join(root, 'state/jobs.sqlite')));
+});
+
+test('Docker startup entry is shared across projects without rebinding their identity or dispatching',async t=>{
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'infra-host-entry-'));
+  t.after(async()=>{assert.ok(path.resolve(root).startsWith(path.resolve(os.tmpdir())+path.sep));await fs.rm(root,{recursive:true,force:true});});
+  await fs.mkdir(path.join(root,'profiles'));
+  await fs.writeFile(path.join(root,'profiles/registry.json'),JSON.stringify({version:1,projects:[
+    {id:'consumer',name:'Consumer',root,status:'active',stack:[],modes:['read-only'],sourceRoots:[],sources:[],checks:[]},
+  ]}));
+  const entry=new InteractionEntry(root);
+  for(const projectId of [null,'consumer'])for(const includeProjectContext of [false,true]) {
+    const threadId=randomUUID();
+    const opened=await entry.enter({interaction:{threadId,title:null,source:'Owner fixture',projectId},includeProjectContext});
+    assert.equal(opened.interaction!.projectId,projectId);
+    assert.equal(opened.interaction!.threadId,threadId);
+    assert.equal(opened.dispatchStarted,false);
+    assert.equal(opened.hostOperations.docker.scope,'host');
+    assert.equal(opened.hostOperations.docker.projectBindingRequired,false);
+    assert.equal(opened.hostOperations.docker.skill,'start-docker');
+    assert.deepEqual(opened.hostOperations.docker,DockerRecovery.startupPolicy());
+    const recorded=await entry.record(opened.interaction!.id,{expectedRevision:1,source:'Fixture outcome',status:'completed'});
+    assert.equal(recorded.projectId,projectId);
+  }
+  await assert.rejects(fs.access(path.join(root,'state/jobs.sqlite')));
+  await assert.rejects(fs.access(path.join(root,'artifacts/integration/docker-recovery')));
 });
 
 test('entry verifies execution links and rejects cross-project links without writing a revision', async () => {
