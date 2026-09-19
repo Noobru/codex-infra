@@ -26,6 +26,16 @@ test('Docker preflight is read-only and does not interpret launch as health',asy
   const entries=await fs.readdir(path.join(root,'artifacts/integration/docker-recovery'));assert.equal(entries.length,1);
   assert.deepEqual((await fs.readdir(path.join(root,'artifacts/integration/docker-recovery',entries[0]!))).sort(),['intent.json','preserved.json','result.json']);
 });
+test('Docker startup guidance is unavailable outside Windows and directs macOS to Colima without starting a service',()=>{
+  const policy=DockerRecovery.startupPolicy('darwin');
+  assert.equal(policy.supported,false);assert.equal(policy.skill,null);
+  assert.match(policy.guidance,/Colima/);assert.match(policy.guidance,/neither starts nor stops/);
+});
+test('Docker startup guidance on Windows uses the recovery skill and host tools',()=>{
+  const policy=DockerRecovery.startupPolicy('win32');
+  assert.equal(policy.supported,true);assert.equal(policy.skill,'start-docker');
+  assert.equal(policy.inspectTool,'inspect_docker_recovery');assert.equal(policy.startTool,'recover_docker_start');
+});
 test('Docker recovery refuses active owners, unexpected contents and non-owner requests',async t=>{
   const {root,state,recovery}=await fixture(t);
   await assert.rejects(recovery.recover({...decision,author:{name:'Agent',role:'model'}}));

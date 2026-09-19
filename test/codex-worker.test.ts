@@ -112,8 +112,13 @@ test('one job starts one turn and waits for confirmed terminal completion', asyn
   assert.deepEqual(turn.sandboxPolicy, { type: 'readOnly', networkAccess: false });
   assert.equal(turn.cwd, cwd);
   assert.equal(turn.approvalPolicy, 'on-request');
-  assert.match(turn.input[0].text,/installed start-docker skill/);
-  assert.match(turn.input[0].text,/Keep the current project identity/);
+  if (process.platform === 'win32') {
+    assert.match(turn.input[0].text,/start-docker/);
+    assert.match(turn.input[0].text,/Keep the current project identity/);
+  } else {
+    assert.match(turn.input[0].text,/Docker recovery is Windows-only/);
+    assert.match(turn.input[0].text,/Colima/);
+  }
   assert.equal(turn.model, 'gpt-5.6-luna');
   assert.equal(turn.effort, 'medium');
   const thread = transport.calls.find(call => call.method === 'thread/start')!.params;
