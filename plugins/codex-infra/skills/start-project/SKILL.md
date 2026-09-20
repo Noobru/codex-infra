@@ -9,11 +9,13 @@ Use o MCP `codex-infra`, servido por a instalação indicada em `docs/LOCAL-ADOP
 
 ## Operações do host em qualquer projeto
 
-Antes de abrir Docker Desktop, use obrigatoriamente a skill
+Antes de abrir Docker Desktop no Windows, use obrigatoriamente a skill
 [`start-docker`](../start-docker/SKILL.md), inclusive para uma abertura normal
 destinada a testes, build, Compose ou CI. Preserve o projeto atual. Essa entrada
 não depende do catálogo de capacidades aprendidas do projeto. `enter_interaction`
 também retorna esse procedimento em `hostOperations.docker`, sem iniciar Docker.
+No macOS, esta entrada de recuperação Windows não se aplica: mantenha o Colima
+existente e não inicie, pare ou substitua serviços por causa dela.
 
 ## Entrada e continuidade
 
@@ -291,7 +293,8 @@ Siga [`start-docker`](../start-docker/SKILL.md) como entrada principal, independ
 do projeto. Ela reutiliza `inspect_docker_recovery` e `recover_docker_start`, ou
 CLI `docker-recovery`, para abertura comum e recuperação. Não abra o executável
 diretamente. A manutenção de aprendizado e o sandbox não ganham autorização para
-iniciar ou encerrar Docker/WSL.
+iniciar ou encerrar Docker/WSL. No macOS, essa recuperação Windows não se aplica:
+mantenha o Colima existente, sem iniciar, parar ou criar backend alternativo.
 
 Declare `performanceScope` (taskClass, language e problemCategory quando pertinentes)
 na entrada/atualização da interação e nos taskDetails do job, antes do trabalho ao

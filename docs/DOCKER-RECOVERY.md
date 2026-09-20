@@ -51,6 +51,12 @@ de iniciar serviços dentro do sandbox. O agente deve usar este preflight antes
 de abrir Docker em tarefas autorizadas. Uma nova ocorrência desconhecida continua
 exigindo diagnóstico, em vez de aplicar esta receita indiscriminadamente.
 
+## Limite de plataforma local
+
+Este procedimento é exclusivo do Windows. No macOS, mantenha o Colima existente;
+esta atualização não autoriza iniciar, parar ou alterar serviços nem criar backend
+alternativo. Não trate o fluxo Windows como instrução operacional para Colima.
+
 Referências: [Docker Desktop CLI](https://docs.docker.com/desktop/features/desktop-cli/),
 [start](https://docs.docker.com/reference/cli/docker/desktop/start/),
 [stop](https://docs.docker.com/reference/cli/docker/desktop/stop/).

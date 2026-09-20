@@ -46,7 +46,8 @@ test('Docker startup entry is shared across projects without rebinding their ide
     assert.equal(opened.dispatchStarted,false);
     assert.equal(opened.hostOperations.docker.scope,'host');
     assert.equal(opened.hostOperations.docker.projectBindingRequired,false);
-    assert.equal(opened.hostOperations.docker.skill,'start-docker');
+    assert.equal(opened.hostOperations.docker.skill,process.platform==='win32'?'start-docker':null);
+    assert.equal(opened.hostOperations.docker.supported,process.platform==='win32');
     assert.deepEqual(opened.hostOperations.docker,DockerRecovery.startupPolicy());
     const recorded=await entry.record(opened.interaction!.id,{expectedRevision:1,source:'Fixture outcome',status:'completed'});
     assert.equal(recorded.projectId,projectId);

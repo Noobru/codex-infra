@@ -50,3 +50,9 @@ Recuperação e recibos são implementados em `src/docker-recovery.ts` e
 da instalação. O interpretador aprendido de recibos é auxiliar e não é requisito
 para esta abertura. Workbenches de aprendizado continuam sem autoridade para
 iniciar Docker/WSL; devem devolver a necessidade ao coordenador do host.
+
+## Limite de plataforma local
+
+Este fluxo de recuperação é exclusivo do Windows. No macOS, mantenha o Colima
+existente; esta skill não autoriza iniciar, parar ou substituir serviços, nem criar
+backend alternativo.

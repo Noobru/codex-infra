@@ -43,8 +43,10 @@ export class WindowsDockerRecoveryHost implements DockerRecoveryHost {
 
 export class DockerRecovery {
   /** Host lifecycle guidance is shared by every project; it is not a learned project capability. */
-  static startupPolicy() {
-    return {scope:'host' as const,skill:'start-docker',projectBindingRequired:false,
+  static startupPolicy(platform=process.platform) {
+    if(platform!=='win32')return {scope:'host' as const,skill:null,projectBindingRequired:false,supported:false,
+      guidance:'Docker recovery is Windows-only. On macOS, keep using the existing Colima environment; this update neither starts nor stops a service and provides no alternate Docker backend.'};
+    return {scope:'host' as const,skill:'start-docker',projectBindingRequired:false,supported:true,
       inspectTool:'inspect_docker_recovery',startTool:'recover_docker_start',
       guidance:'Before opening Docker Desktop for any project or a projectless task, use the installed start-docker skill. Call inspect_docker_recovery first; when startup is authorized and needed, use recover_docker_start, then confirm healthy:true. Do not launch Docker Desktop.exe, Start-Process or docker desktop start directly. Keep the current project identity; this host operation needs no codex-infra project selection. Reuse existing startup authorization; this guidance grants no new authority to start, stop or reset services.'};
   }
