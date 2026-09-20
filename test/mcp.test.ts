@@ -29,6 +29,15 @@ test('real MCP subprocess negotiates tools and resolves a project through the sh
   const source=JSON.parse(await fs.readFile(path.join(root,'profiles/registry.json'),'utf8'));
   assert.equal(source.projects.length,2);
   const tools=(await client.listTools()).tools;
+  for(const name of ['prepare_work_unit','run_work_unit','record_direct_work','work_unit_status','work_summary'])assert.ok(tools.some(tool=>tool.name===name));
+  const entered=await client.callTool({name:'enter_interaction',arguments:{input:{interaction:{threadId:'00000000-0000-4000-8000-000000000099',title:null,projectId:'fixture',intent:'work',objective:'Verify owned MCP fixture',source:'MCP integration test'}}}});
+  const interaction=JSON.parse((entered.content as {text:string}[])[0]!.text).interaction;
+  await fs.writeFile(path.join(root,'work-result.txt'),'MCP unit verified');
+  const plannedUnit=await client.callTool({name:'prepare_work_unit',arguments:{input:{interactionId:interaction.id,expectedRevision:interaction.revision,unitId:'mcp-slice',objective:'Verify own artifact',mode:'read-only',routing:{taskClass:'deterministic'},decisionEvidence:['Owned test artifact with known content'],recoveryReason:'No recovery needed for read-only fixture verification',checkIds:[],taskDetails:{outcomeCriteria:[{id:'content',description:'Known fixture content',kind:'artifact',path:'work-result.txt',contains:'MCP unit verified'}]}}}});
+  assert.notEqual(plannedUnit.isError,true,JSON.stringify(plannedUnit.content));
+  const unitRun=await client.callTool({name:'run_work_unit',arguments:{input:{interactionId:interaction.id,unitId:'mcp-slice',background:false,timeoutMs:10000}}});
+  assert.notEqual(unitRun.isError,true,JSON.stringify(unitRun.content));
+  assert.equal(JSON.parse((unitRun.content as {text:string}[])[0]!.text).delivery.outcomeStatus,'passed');
   const vmTools=['preview_vm_access','prepare_vm_access','inspect_vm_access','start_vm_access','validate_vm_access','close_vm_access','vm_access_session_command'];
   for(const name of vmTools) {
     assert.ok(tools.some(tool=>tool.name===name));

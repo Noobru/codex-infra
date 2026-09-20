@@ -41,6 +41,8 @@ export class ObjectiveCoordinator {
       const action=receipt&&policy.actions.find(a=>a.id===receipt.blocker.recoveryActionId&&a.triggers.includes(receipt.trigger));
       let reason:string|undefined;
       if(!receipt||receipt.taskContractHash!==manifest.taskContract.hash||receipt.blocker.kind!=='recoverable'||!action)reason='No authorized recovery action for this result';
+      else if(receipt.blocker.cause==='approval')reason='Approval blockers cannot be retried by another executor or recovery action';
+      else if(action.causes&&!action.causes.includes(receipt.blocker.cause??'unknown'))reason='Recovery action does not cover the observed blocker cause';
       else if(job.ownerPid!==null||!['failed','waiting_user'].includes(job.status))reason='Job is not safely stopped';
       else if(job.attempts>=policy.maxAttempts)reason='Recovery attempt budget exhausted';
       else if(deadline-performance.now()<1000)reason='Recovery deadline exhausted';

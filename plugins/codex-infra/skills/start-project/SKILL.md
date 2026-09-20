@@ -111,6 +111,38 @@ delimitado; elas não autorizam dispensar o G-IDEIA em um projeto de engenharia.
 
 ## Qualificar e delegar pelo Infra
 
+### Decidir e executar uma unidade de trabalho
+
+Para trabalho substantivo novo, use `prepare_work_unit` antes de executar, incluindo
+o que ficar no coordenador. Informe interação/revisão reais, unitId estável,
+objetivo, qualificação, `decisionEvidence`, `recoveryReason` e resultado verificável
+em `taskDetails.outcomeCriteria`. Não crie unidades para cada pergunta ou comando
+trivial. Preserve fontes e contratos do projeto.
+
+Trabalho separável usa `routing.executionTarget:worker` e `evidenceRefs`; a política
+escolhe modelo/esforço. Dificuldade alta não exige manter toda a execução na conversa:
+pode usar o modelo forte como worker quando delimitada, verificável, pouco acoplada
+e sem risco alto. Trabalho retido registra motivo e `executionTarget:coordinator`.
+A seleção nunca muda o modelo do Desktop.
+
+Use `run_work_unit` para despachar pelo executor existente (background por padrão).
+Para execução direta, depois chame `record_direct_work`; o mesmo `run_work_unit`
+executa os checks de resultado. Declaração não é validação. O núcleo recusa objetivo,
+modo, qualificação ou contrato diferentes do vínculo salvo.
+
+Contrate `resolution` para recuperação local autorizada, com ações e `causes`
+explícitas; caso contrário registre a razão. Aprovação pendente não vira retry em
+outro executor. Pré-requisitos determinísticos podem ser checks registrados em
+`capabilities`, stage execution; falham antes do modelo. Use o supervisor para
+aguardar processos, sem loops frequentes de chamadas do modelo. Leia
+`work_unit_status` e integre evidências antes de arquivar.
+
+`work_summary` mostra cobertura, resultado e uso com limites: direto não interceptado;
+turnos incompletos desconhecidos; contadores cumulativos não somados entre tentativas;
+consumo da interação não atribuível a cada unidade. Revise adequação semântica pelos
+resultados. Caminhos legados abaixo continuam válidos, sem governança retrospectiva.
+Guia: `docs/WORK-UNITS.md`.
+
 O próprio orquestrador qualifica cada tarefa antes de criar um worker. Não peça ao
 owner para escolher categoria, modelo ou esforço; não use regex do título nem outro
 LLM apenas para classificar. Considere o objetivo, fontes, limites, incerteza e aceite

@@ -4,6 +4,7 @@ import type { JobMode } from './state.js';
 import {PerformanceScopeSchema} from './performance-scope.js';
 import {OutcomeCriterionSchema} from './outcome.js';
 import {IntentSchema,ResolutionPolicySchema} from './delegation-contract.js';
+import {WorkUnitRefSchema} from './work-unit-contract.js';
 
 const statements = z.array(z.string().trim().min(1).max(2000)).max(40);
 const identifier = z.string().trim().min(1).max(128);
@@ -30,6 +31,7 @@ export const OpenDecisionSchema = z.object({
   if(decision.status==='defaulted'&&decision.material)ctx.addIssue({code:'custom',message:'A material decision cannot use an automatic default.'});
 });
 export const TaskDetailsSchema = z.object({
+  workUnit: WorkUnitRefSchema.optional(),
   intent: IntentSchema.optional(),
   outcomeCriteria: z.array(OutcomeCriterionSchema).min(1).max(40).optional(),
   resolution: ResolutionPolicySchema.optional(),

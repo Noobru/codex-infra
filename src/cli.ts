@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TaskEngine } from './engine.js';
+import {WorkCoordinator} from './work-coordinator.js';
 import { AppServerClient } from './app-server.js';
 import { RecoveryManager } from './recovery.js';
 import { HealthInspector } from './health.js';
@@ -163,6 +164,12 @@ try {
     engine = new TaskEngine(root);
     const id = positionals[1] ?? '';
     switch (command) {
+      case 'work-prepare': case 'work-run': case 'work-direct': case 'work-status': {
+        if(!values.file)throw new Error('--file work-unit.json is required');
+        const work=new WorkCoordinator(engine),input=await readJson(values.file,null);
+        print(command==='work-prepare'?await work.prepare(input):command==='work-run'?await work.run(input):command==='work-direct'?await work.recordDirect(input):await work.status(input));break;
+      }
+      case 'work-summary': print(await new WorkCoordinator(engine).summary(id));break;
       case 'execution-policy': print(values.file?await engine.execution.configure(await readJson(values.file,null)):await engine.execution.read());break;
       case 'delegate':
         if (!values.file) throw new Error('--file qualified-task.json is required; the orchestrator supplies qualification');

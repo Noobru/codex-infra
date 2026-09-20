@@ -173,6 +173,7 @@ test('unavailable coordinator effort, missing defensive specialist and effective
   const result=await worker(transport).run({...base,routing});
   assert.equal(result.status,'blocked');
   assert.equal(transport.calls.some(call=>call.method==='turn/start'),false);
+  if(condition==='mismatch'||condition==='effort-mismatch')assert.equal(result.threadId,'thread-1');
  }
 });
 
@@ -306,6 +307,8 @@ test('approval refusal becomes blocked after interrupt and transport cleanup', a
   const transport = new FakeTransport(); transport.behavior = 'blocked';
   const result = await worker(transport).run(base);
   assert.equal(result.status, 'blocked');
+  assert.equal(result.blocker?.cause,'approval');
+  assert.equal(result.blocker?.recoveryActionId,null);
   assert.equal(transport.calls.at(-1)?.method, 'turn/interrupt');
   assert.equal(transport.closed, true);
   assert.equal((result.receipt as any).interruptionConfirmed, true);

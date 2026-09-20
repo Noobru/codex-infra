@@ -70,7 +70,8 @@ test('repair has its own bounded worker deadline while initial build and review 
   await fs.writeFile(file,JSON.stringify({...policy,workerTimeoutMs:300000,repairWorkerTimeoutMs:600000}));
   await f.builder.build({...buildInput,attempt:2,feedback:'Review found a concrete mismatch.'});
   assert.deepEqual(f.calls.map(call=>call.timeoutMs),[600000,300000]);
-  assert.equal(new RoutingPolicy().decide(f.calls[0]!.routing!).candidate!.model,'gpt-6-astra');
+  assert.equal(new RoutingPolicy().decide(f.calls[0]!.routing!).candidate!.model,'gpt-5.6-luna');
+  assert.equal(f.calls[0]!.routing!.complexity,'low'); // Failure count alone is not semantic requalification.
 });
 
 test('quota failure preserves waiting job identity and stops before review', async t => {
@@ -104,9 +105,15 @@ test('rejected review remains rejected and a bounded retry is routed by the exis
   const f = await fixture(t, 'reject');
   const result = await f.builder.build({ ...buildInput, attempt: 2, feedback: 'The earlier validation did not establish the claimed behavior.' });
   assert.equal(result.review.decision, 'rejected');
-  assert.equal(new RoutingPolicy().decide(f.calls[0]!.routing!).candidate!.model, 'gpt-6-astra');
+  assert.equal(new RoutingPolicy().decide(f.calls[0]!.routing!).candidate!.model, 'gpt-5.6-luna');
   await assert.rejects(f.builder.build({ ...buildInput, attempt: 3 }), error => error instanceof LearningBuildError && error.status === 'waiting_user');
   assert.equal(f.calls.length, 2);
+});
+
+test('evidenced requalification can change a learning executor independently of attempt count',async t=>{
+  const f=await fixture(t);
+  await f.builder.build({...buildInput,attempt:1,qualification:{taskClass:'implementation',complexity:'moderate',uncertainty:'moderate',risk:'low',bounded:true,independentlyVerifiable:true,contextCoupling:'low',delegationBenefit:'expected',rationale:'The observed capability combines two independently tested transformations; schema alone does not make it low complexity.',evidenceRefs:['fixture requirements']}});
+  assert.equal(new RoutingPolicy().decide(f.calls[0]!.routing!).candidate!.model,'gpt-5.6-sol');
 });
 
 test('Python-only input reaches both workers while schema checking remains host-owned Node', async t => {

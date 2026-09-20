@@ -1,7 +1,7 @@
 {
   "version": 1,
   "packageVersion": "0.8.0",
-  "createdAt": "2026-09-19T17:53:02.814Z",
+  "createdAt": "2026-09-20T21:27:31.839Z",
   "scope": "Sanitized source, tests, UI, examples and generic setup/documentation only",
   "exclusions": [
     "Local project-specific extensions and their exclusive tests",
@@ -119,8 +119,8 @@
     },
     {
       "path": "docs/MODEL-ROUTING.md",
-      "bytes": 4636,
-      "sha256": "55e49b38580bb013472b1c0d2052711abadd36f3cd869cc721267486a0bbe002"
+      "bytes": 4970,
+      "sha256": "d7d9ba2ec453e376f034ce5ba76c08e1e9334c4b9839aa3fc6323dd462d0b5f0"
     },
     {
       "path": "docs/PROPOSTA.md",
@@ -136,6 +136,11 @@
       "path": "docs/VM-ACCESS.md",
       "bytes": 7688,
       "sha256": "87a1ec73baad30625490b05b30730e401f0565e9ef9f96b09f10a5eb006a18b2"
+    },
+    {
+      "path": "docs/WORK-UNITS.md",
+      "bytes": 5272,
+      "sha256": "43a3f8dff586ee36347d145248ba291e6f8cb57d1f81cbe3f3ce86b8a455eb93"
     },
     {
       "path": "fixtures/model-routing/AGENTS.md",
@@ -294,8 +299,8 @@
     },
     {
       "path": "plugins/codex-infra/skills/start-project/SKILL.md",
-      "bytes": 25066,
-      "sha256": "1c05fb7d57bcbb88eddbb53ad670d55f00e94e684c95224b2189830cfff188bd"
+      "bytes": 27061,
+      "sha256": "26a465ede57be220db7d4581a153c96fe49c876bd87c07259fd116d86add533b"
     },
     {
       "path": "profiles/model-routing.json",
@@ -354,13 +359,13 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 21869,
-      "sha256": "0e182df50dd9f1825175feefa76e442685588d759a0073ad0d8f16a3a79df998"
+      "bytes": 22466,
+      "sha256": "61c309ef6114a68bca2e96ce74cab83f3923f3312e0cd81a5030477fac8ee764"
     },
     {
       "path": "src/codex-worker.ts",
-      "bytes": 24934,
-      "sha256": "c91882071fa812c41db0534844f861dc172a3b6dd0a3a11af34574befb6475ad"
+      "bytes": 25573,
+      "sha256": "731df8baaf97df1a692f9b80d655d4a775155de5d33348fea5f27313a8575466"
     },
     {
       "path": "src/context-pack.ts",
@@ -374,8 +379,8 @@
     },
     {
       "path": "src/delegation-contract.ts",
-      "bytes": 1830,
-      "sha256": "ee34950c70101a3755fa8909f10f2c89efa418c34e441630ed894fd3fd250c55"
+      "bytes": 2052,
+      "sha256": "81841e524f22b41e0bfc510138f072c91c887eefd548eebcd3f3421d3497668e"
     },
     {
       "path": "src/delegation-lifecycle.ts",
@@ -394,8 +399,8 @@
     },
     {
       "path": "src/engine.ts",
-      "bytes": 36148,
-      "sha256": "f1efa6af513c00f62510fee72839615c42e0c177ce1fbad33e44991c105e121e"
+      "bytes": 38364,
+      "sha256": "1ff18b2dd03460d7eda0b50c915b568d0d44e9da5e235fadcc1b4cfb8f5afc2b"
     },
     {
       "path": "src/evaluation.ts",
@@ -409,8 +414,8 @@
     },
     {
       "path": "src/execution-evidence.ts",
-      "bytes": 4708,
-      "sha256": "230409bdc0e563b81f9f73c36b6fcd66743893c58160fe5af7975aca5a3c49d1"
+      "bytes": 6899,
+      "sha256": "75c4fd0474ff01c237676b2c2eadf0bd72f5db4da6c8cd238cbc60cefa58d65e"
     },
     {
       "path": "src/execution-policy.ts",
@@ -439,8 +444,8 @@
     },
     {
       "path": "src/interaction-entry.ts",
-      "bytes": 9231,
-      "sha256": "ff0b805cf482a57552dae4bcd2c938f05a684ff465eb93adf61dde51e72ebdb0"
+      "bytes": 9470,
+      "sha256": "f68d0f5fdf6cdbc972f73a3ef2dd5112171b35c6144391844feffb85a5e72727"
     },
     {
       "path": "src/interaction-telemetry.ts",
@@ -474,8 +479,8 @@
     },
     {
       "path": "src/learning-builder.ts",
-      "bytes": 18336,
-      "sha256": "c6334f9a8fb311ad9ecf53bc27cc52e5dd2f8b6d8f84deb945117b8e4e5a2348"
+      "bytes": 18408,
+      "sha256": "0a910658e66adff15dd0cc78efe317720800416092ba298af1bdeff131c753ce"
     },
     {
       "path": "src/learning-runtime-effects.ts",
@@ -499,8 +504,8 @@
     },
     {
       "path": "src/mcp.ts",
-      "bytes": 30049,
-      "sha256": "85aaee157c9786d6ec5629f27d3ee6427aaad277316f2238995baec5c3ce4c76"
+      "bytes": 32002,
+      "sha256": "dab05ddd9497f793a2244fbbe0694a518731435386d12b101b69d4e836328b05"
     },
     {
       "path": "src/model-catalog.ts",
@@ -509,8 +514,8 @@
     },
     {
       "path": "src/objective-coordinator.ts",
-      "bytes": 5094,
-      "sha256": "7c6f8dbe239689068a2e1267052d24b90f7a598a3ddce81ff5eceb4e2830fcfe"
+      "bytes": 5383,
+      "sha256": "4ca07db8c078ffbb48324e2c32757099ba553eb252ef78e0a31a92b2d12b53f9"
     },
     {
       "path": "src/observability.ts",
@@ -584,8 +589,8 @@
     },
     {
       "path": "src/routing.ts",
-      "bytes": 12533,
-      "sha256": "06eff2bbe181fccb73c898b22446ec6a2ed2ff1bcc6c5f88ddc8ef8dae1f6f4e"
+      "bytes": 15039,
+      "sha256": "1dba2a98b708ed3a31a0cb86c59991e4d8501feaca489815c6a77c0a240621d2"
     },
     {
       "path": "src/runtime-observation.ts",
@@ -634,8 +639,8 @@
     },
     {
       "path": "src/task-contract.ts",
-      "bytes": 4398,
-      "sha256": "7028fa25e62efa23348e8c9e694a3c2840638cb40b9ac240cb27bffce9f8d7fe"
+      "bytes": 4499,
+      "sha256": "510a41cb12611e98fe34f6dc2d89e4fd6468119a3a1142c1c183af185b4fc802"
     },
     {
       "path": "src/turn-comparison.ts",
@@ -648,9 +653,24 @@
       "sha256": "55dd4d6d061329d77f862f7f8cced54dd9a7a567e3570f114c824633b555172a"
     },
     {
+      "path": "src/work-coordinator.ts",
+      "bytes": 10030,
+      "sha256": "0f48748c856d7587edf90cd462b67763d96caee8ded1e99114f7afc5d595f572"
+    },
+    {
       "path": "src/work-population.ts",
       "bytes": 1964,
       "sha256": "527264102104812d54562853496d49e6a9173ecef708eeac4081e381eb57123a"
+    },
+    {
+      "path": "src/work-unit-contract.ts",
+      "bytes": 381,
+      "sha256": "997e1db31980ccc1e7efad69815b7be2ae67a13da712adc546422e1f7fddc0eb"
+    },
+    {
+      "path": "src/work-unit.ts",
+      "bytes": 8388,
+      "sha256": "38e10f53f2f3d7bcef939dcf0d490862b549781801a429f8211c9f5831cbb86a"
     },
     {
       "path": "src/workflow.ts",
@@ -709,8 +729,8 @@
     },
     {
       "path": "test/codex-worker.test.ts",
-      "bytes": 24379,
-      "sha256": "a87b23b6586225afdba13a82f1ed5246b770d518d272066be9b852b3def79598"
+      "bytes": 24585,
+      "sha256": "d50e0dcf27d7a09078e2eff50b4d11eefb1e4d10aebebdbef0ac6a561ddf1cbc"
     },
     {
       "path": "test/context-pack.test.ts",
@@ -799,8 +819,8 @@
     },
     {
       "path": "test/learning-builder.test.ts",
-      "bytes": 9516,
-      "sha256": "d1a8611ef3dfac8f1a37cdf8326493bb169cc0358cc1c8445d33250799912f0b"
+      "bytes": 10280,
+      "sha256": "a908f6c6990fa4cc162268972ac5f7ac1111f01b3c12917e19a3479036efcd9e"
     },
     {
       "path": "test/learning-runtime-effects.test.ts",
@@ -819,8 +839,8 @@
     },
     {
       "path": "test/mcp.test.ts",
-      "bytes": 6619,
-      "sha256": "8d2cbd66cea26e140abeea4e37f1cd98a3d9793a21c105b934d3cc9317fffce4"
+      "bytes": 8189,
+      "sha256": "e3f3698181cd6d87bd84d33a72de59f638b314b9dc4753b38fd4ebc2f23d6eb2"
     },
     {
       "path": "test/observability.test.ts",
@@ -879,8 +899,8 @@
     },
     {
       "path": "test/routing.test.ts",
-      "bytes": 8954,
-      "sha256": "e0c194bf9286b6e395c937dc3b8f46693d8a0f1d047c501ed2a210f8e55db59c"
+      "bytes": 13518,
+      "sha256": "41ca936744792ac52be16011561db51da8a371dfc7261d1c901b5ec8d026764c"
     },
     {
       "path": "test/runtime-observation.test.ts",
@@ -926,6 +946,11 @@
       "path": "test/vm-access.test.ts",
       "bytes": 15208,
       "sha256": "b2336b1098dc7a856a4ac4a50892fc302c8470ef7bfbdd98d1516fdab262af56"
+    },
+    {
+      "path": "test/work-unit.test.ts",
+      "bytes": 13602,
+      "sha256": "91be899405725d7066db60fad64153ad74badcc42a2881af32c2bca1fcb3237b"
     },
     {
       "path": "test/workflow.test.ts",

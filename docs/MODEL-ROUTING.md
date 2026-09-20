@@ -1,5 +1,10 @@
 # Qualificação e dispatch de agentes
 
+Para novas unidades de trabalho, consultar [governança de execução](WORK-UNITS.md).
+Política 3.0: executionTarget distingue papel e capacidade, evidenceRefs sustenta
+a decisão e tarefas difíceis separáveis podem usar o modelo forte como worker.
+Qualificação sem esses campos conserva o comportamento legado descrito abaixo.
+
 O orquestrador interpreta a tarefa e fornece uma qualificação completa, incluindo
 a razão observada. O Infra aplica a política configurada; não classifica por título
 nem cria uma chamada de modelo apenas para classificar. O usuário define o objetivo.

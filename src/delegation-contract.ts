@@ -3,15 +3,17 @@ import {EvidenceSanitizer} from './evidence.js';
 
 const text=z.string().trim().min(1).max(2000);
 const id=z.string().trim().min(1).max(128);
+export const BlockerCauseSchema=z.enum(['environment','approval','context','solution','validation','external','unknown']);
 export const BlockerSchema=z.object({
   kind:z.enum(['recoverable','missing-information','external-dependency','owner-decision','platform','global']),
   reason:text, evidence:z.array(text).min(1).max(20),nextAction:text,
   recoveryActionId:id.nullable(),
+  cause:BlockerCauseSchema.optional(),
 }).strict();
 export type TaskBlocker=z.infer<typeof BlockerSchema>;
 export const ResolutionPolicySchema=z.object({
   maxAttempts:z.number().int().min(1).max(4),source:text,
-  actions:z.array(z.object({id,instruction:text,triggers:z.array(z.enum(['worker-blocked','check-failed','outcome-failed'])).min(1).max(3)})).min(1).max(8),
+  actions:z.array(z.object({id,instruction:text,triggers:z.array(z.enum(['worker-blocked','check-failed','outcome-failed'])).min(1).max(3),causes:z.array(BlockerCauseSchema).min(1).max(7).optional()})).min(1).max(8),
 }).refine(value=>new Set(value.actions.map(action=>action.id)).size===value.actions.length,'Recovery action IDs must be unique')
   .refine(value=>['check-failed','outcome-failed'].every(trigger=>value.actions.filter(a=>a.triggers.some(t=>t===trigger)).length<=1),'Each validation trigger must have one unambiguous recovery action');
 export type ResolutionPolicy=z.infer<typeof ResolutionPolicySchema>;

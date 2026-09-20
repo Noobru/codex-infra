@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 const LevelSchema = z.enum(['low', 'moderate', 'high']);
 const NameSchema = z.string().trim().min(1);
+const ExecutionTargetSchema = z.enum(['coordinator', 'worker']);
+const EvidenceRefsSchema = z.array(z.string().trim().min(1).max(2000)).max(40);
 
 export const ModelSelectionSchema = z.object({
   model: NameSchema,
@@ -26,6 +28,8 @@ export const TaskRoutingInputSchema = z.object({
   contextCoupling: LevelSchema.default('high'),
   risk: LevelSchema.default('high'),
   delegationBenefit: z.enum(['unknown', 'expected', 'observed']).default('unknown'),
+  executionTarget: ExecutionTargetSchema.optional(),
+  evidenceRefs: EvidenceRefsSchema.optional(),
   rationale: z.string().trim().min(1).max(2000).optional(),
   explicitRequestedModel: NameSchema.optional(),
   explicitRequestedReasoningEffort: NameSchema.optional(),
@@ -41,6 +45,7 @@ export const TaskQualificationSchema = z.object({
   complexity: LevelSchema, uncertainty: LevelSchema, risk: LevelSchema,
   bounded: z.boolean(), independentlyVerifiable: z.boolean(), contextCoupling: LevelSchema,
   delegationBenefit: z.enum(['unknown', 'expected', 'observed']),
+  executionTarget: ExecutionTargetSchema.optional(), evidenceRefs: EvidenceRefsSchema.optional(),
   rationale: z.string().trim().min(1).max(2000),
   explicitRequestedModel: NameSchema.optional(), explicitRequestedReasoningEffort: NameSchema.optional(),
 }).strict().refine(input => !input.explicitRequestedReasoningEffort || !!input.explicitRequestedModel, {
@@ -72,7 +77,7 @@ export const RoutingDecisionSchema = z.object({
   assignment: z.enum(['none', 'coordinator', 'delegate']),
   candidate: ModelSelectionSchema.nullable(),
   reason: z.string().min(1),
-  rule: z.enum(['deterministic', 'defensive-primary', 'explicit-request', 'coordinator', 'bounded-retrieval', 'bounded-implementation', 'separable-analysis']),
+  rule: z.enum(['deterministic', 'defensive-primary', 'explicit-request', 'coordinator', 'bounded-retrieval', 'bounded-implementation', 'separable-analysis', 'separable-strong-worker']),
   policyVersion: z.string(),
   policyHash: z.string().regex(/^[a-f0-9]{64}$/),
   inputHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -90,7 +95,7 @@ export const RoutingDecisionSchema = z.object({
 export type RoutingDecision = z.infer<typeof RoutingDecisionSchema>;
 export interface RoutingPolicyOptions { coordinator?: ModelSelection; configuration?: RoutingConfiguration; configurationSource?: 'profile-file' | 'built-in-default' | 'snapshot' }
 
-export const ROUTING_POLICY_VERSION = '2.0.0';
+export const ROUTING_POLICY_VERSION = '3.0.0';
 
 /** Pure preflight policy. It makes no model calls, dispatches, retries, or authorization changes. */
 export class RoutingPolicy {
@@ -115,6 +120,7 @@ export class RoutingPolicy {
 
   decide(raw: TaskRoutingInput, availableModels?: readonly RuntimeModelCapability[]): RoutingDecision {
     const input = TaskRoutingInputSchema.parse(raw);
+    const workerRequirementFailure = input.executionTarget === 'worker' ? this.workerRequirementFailure(input) : null;
     const decision: RoutingDecision = {
       status: 'candidate', assignment: 'coordinator', candidate: { ...this.coordinator },
       reason: 'Keep the task with the configured coordinator; delegation has not met the required conditions.',
@@ -139,6 +145,9 @@ export class RoutingPolicy {
           reason: 'Defensive work requires Daybreak Blue. A different requested model needs separate defensive fallback authorization; this policy does not grant it.' };
       }
       if (input.explicitRequestedReasoningEffort) decision.candidate.reasoningEffort = input.explicitRequestedReasoningEffort;
+    } else if (workerRequirementFailure) {
+      if(input.explicitRequestedModel)return {...decision,status:'blocked',assignment:'none',candidate:null,reason:workerRequirementFailure+' The explicitly requested model was not replaced.'};
+      decision.reason = workerRequirementFailure;
     } else if (input.explicitRequestedModel) {
       decision.rule = 'explicit-request';
       decision.candidate = {
@@ -149,6 +158,9 @@ export class RoutingPolicy {
       };
       decision.assignment = decision.candidate.model === this.coordinator.model ? 'coordinator' : 'delegate';
       decision.reason = 'Use the explicitly requested model; no replacement is permitted if its capability is unavailable.';
+      if (input.executionTarget === 'worker') decision.assignment = 'delegate';
+    } else if (input.executionTarget === 'coordinator') {
+      decision.reason = 'Keep the task with the coordinator because the qualified execution target is coordinator.';
     } else {
       const separable = input.bounded && input.independentlyVerifiable && input.contextCoupling === 'low';
       const benefit = input.delegationBenefit !== 'unknown';
@@ -156,6 +168,11 @@ export class RoutingPolicy {
         decision.reason = 'Keep the task with the coordinator: delegation requires a bounded, independently verifiable task with low context coupling.';
       } else if (!benefit) {
         decision.reason = 'Keep the task with the coordinator: a delegation benefit has not been identified.';
+      } else if (input.executionTarget === 'worker' && (input.complexity === 'high' || input.uncertainty === 'high') && input.risk !== 'high') {
+        decision.rule = 'separable-strong-worker';
+        decision.assignment = 'delegate';
+        decision.candidate = { ...this.coordinator };
+        decision.reason = 'Use the configured strong model as a bounded worker executor for separable high-complexity or high-uncertainty work. The caller remains the coordinator; this is not an owner model override.';
       } else if (input.complexity === 'high' || input.uncertainty === 'high' || input.risk === 'high') {
         decision.reason = 'Keep this high-complexity, high-uncertainty, or high-risk task with the coordinator; define a smaller subtask before delegating.';
       } else if (input.taskClass === 'retrieval' && input.complexity === 'low' && input.uncertainty === 'low' && input.risk === 'low') {
@@ -183,10 +200,20 @@ export class RoutingPolicy {
     const missing = this.missingCapability(decision.candidate!, catalog);
     if (!missing) return { ...decision, evidenceLevel: 'runtime-validated', requiresCapabilityValidation: false, capabilityValidation: 'matched' };
 
-    // An unavailable specialist must not silently turn a small task into an Ultra worker.
+    // An unavailable executor must not silently change either the selected model or execution role.
     return { ...decision, status: 'blocked', assignment: 'none', candidate: null,
       reason: `${missing} No permitted fallback is available; a new routing decision is required before execution.`,
       requiresCapabilityValidation: false, capabilityValidation: 'unavailable' };
+  }
+
+  private workerRequirementFailure(input: z.output<typeof TaskRoutingInputSchema>): string | null {
+    if (input.risk === 'high') return 'Keep the task with the coordinator: high-risk work must not open a worker.';
+    if (input.contextCoupling !== 'low') return `Keep the task with the coordinator: worker execution requires low context coupling; received ${input.contextCoupling}.`;
+    if (!input.bounded) return 'Keep the task with the coordinator: worker execution requires a bounded task.';
+    if (!input.independentlyVerifiable) return 'Keep the task with the coordinator: worker execution requires an independently verifiable result.';
+    if (input.delegationBenefit === 'unknown') return 'Keep the task with the coordinator: worker execution requires a known delegation benefit.';
+    if (!input.evidenceRefs?.length) return 'Keep the task with the coordinator: worker execution requires concrete evidence references.';
+    return null;
   }
 
   private missingCapability(candidate: Readonly<ModelSelection>, catalog: RuntimeModelCapability[]): string | null {

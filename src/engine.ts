@@ -25,6 +25,7 @@ import {DelegationContract,type TaskBlocker} from './delegation-contract.js';
 import {ObjectiveCoordinator,type DispatchOptions,type BlockerReceipt} from './objective-coordinator.js';
 import {ExecutionStop} from './execution-stop.js';
 import {SupervisorManager,type SupervisorReceipt} from './supervisor.js';
+import {WorkUnitStore} from './work-unit.js';
 
 export interface PrepareInput {
   project: string; objective: string; idempotencyKey: string; mode: JobMode;
@@ -81,6 +82,7 @@ export class TaskEngine {
     return {taskContract,contextPack,knowledge,capabilityPlan:new CapabilityPlanner().plan(profile,taskContract,contextPack)};
   }
   async prepare(input: PrepareInput, admission: { delegateOnly?: boolean } = {}): Promise<Job> {
+    if(input.taskDetails?.workUnit)await new WorkUnitStore(this.root).assertTask(input.taskDetails.workUnit,input);
     // The orchestrator classifies the task before any job/context side effect, never the owner.
     const routing = input.kind === 'checks'
       ? TaskRoutingInputSchema.parse({ taskClass: 'deterministic' }) : TaskQualificationSchema.parse(input.routing);
@@ -144,18 +146,7 @@ export class TaskEngine {
   async delegate(raw: DelegationInput) {
     const { qualification, timeoutMs, background, ...task } = DelegationInputSchema.parse(raw);
     const job = await this.prepare({ ...task, kind: 'codex', routing: qualification }, { delegateOnly: true });
-    let supervisor:SupervisorReceipt|null=null;
-    if(background) {
-      supervisor=await this.profiles.withLock(async()=>{
-        const receiptPath=path.join(this.artifactDir(job.id),'delegation-supervisor.json');
-        const previous=await readJson(receiptPath,null) as SupervisorReceipt|null;
-        if(previous)return previous; // Idempotent calls observe the existing dispatch, never start a second one.
-        if(this.state.get(job.id).status!=='ready')return null;
-        const receipt=await new SupervisorManager(this.root).start({maxJobs:1,totalTimeoutMs:timeoutMs,concurrency:1,jobIds:[job.id]});
-        await atomicWriteJson(receiptPath,receipt);
-        return receipt;
-      });
-    }
+    const supervisor=background?await this.startPrepared(job.id,timeoutMs):null;
     const completed = background ? this.state.get(job.id) : await this.run(job.id, timeoutMs);
     const manifest = await this.manifest(job.id);
     const worker = completed.attempts > 0
@@ -165,6 +156,18 @@ export class TaskEngine {
         threadId: worker.threadId ?? null, turnId: worker.turnId ?? null, status: worker.status } : null,
       artifactDirectory: this.artifactDir(job.id), delivery:await this.delivery(job.id), supervisor,
       ...(background?{guidance:'Dispatch is asynchronous, not completion. Inspect task_status and queue_status using the returned job/supervisor IDs. Failed jobs require explicit retry; use start_queue for the same prepared job after retry. Never infer completion from a PID.'}:{}) };
+  }
+  /** Shared idempotent background dispatch; no model is needed to wait for completion. */
+  async startPrepared(id:string,timeoutMs:number):Promise<SupervisorReceipt|null>{
+    z.number().int().min(1000).max(1800000).parse(timeoutMs);
+    return this.profiles.withLock(async()=>{
+      const job=this.state.get(id),receiptPath=path.join(this.artifactDir(id),`dispatch-${job.attempts}.json`);
+      const previous=await readJson(receiptPath,null) as SupervisorReceipt|null;
+      if(previous)return previous;
+      if(job.status!=='ready')return null;
+      const receipt=await new SupervisorManager(this.root).start({maxJobs:1,totalTimeoutMs:timeoutMs,concurrency:1,jobIds:[id]});
+      await atomicWriteJson(receiptPath,receipt);return receipt;
+    });
   }
   private async assertActivated(projectId:string):Promise<void>{
     const restore=await readJson(path.join(this.root,'recovery/RESTORE.json'),null) as {activatedProjectIds?:string[]}|null;
@@ -208,6 +211,9 @@ export class TaskEngine {
     await this.assertActivated(job.projectId);
     if (job.status !== 'ready') throw new Error('An explicit retry is required for a waiting or failed task');
     const manifest = await this.manifest(id);
+    if(manifest.taskContract?.details.workUnit)await new WorkUnitStore(this.root).assertTask(manifest.taskContract.details.workUnit,{
+      project:job.projectId,objective:job.objective,mode:job.mode,kind:manifest.kind,checkIds:manifest.checkIds,
+      taskDetails:manifest.taskContract.details,routing:manifest.routing,workspace:manifest.workspace?.kind,baseRef:manifest.workspace?.baseRef,requirementIds:manifest.requirementIds},manifest.routingPolicy);
     if(manifest.kind==='codex'&&!manifest.routing)throw new Error('Legacy model task has no explicit routing contract. Prepare a new task with the approved model policy; the old contract is preserved.');
     if(manifest.kind==='codex'&&!manifest.routingPolicy)throw new Error('Legacy model task has no pinned routing policy. Prepare a newly qualified task; history is preserved.');
     const profile = await this.profiles.withLock(async () => {
@@ -262,6 +268,14 @@ export class TaskEngine {
       await atomicWriteJson(path.join(attempt,'capability-plan.json'),capabilityPlan);
       const executionGate=capabilityPlan.gates.find(gate=>gate.stage==='execution')!;
       if(!executionGate.ready){await evidence.effect('execute','deny',executionGate.reasons.join(', '));await this.recordGateBlocker(attempt,job,taskContract,'execution',executionGate.reasons);return this.state.transition(id,'waiting_user',{error:'Execution capability gate: '+executionGate.reasons.join(', ')});}
+      const preflightChecks=[];
+      for(const checkId of new Set(capabilityPlan.capabilities.filter(c=>c.stage==='execution'&&c.kind==='deterministic'&&c.required&&c.checkId).map(c=>c.checkId!))){
+        const check=await this.registry.check(runtimeProfile,checkId,job.mode,{signal:controller.signal});
+        preflightChecks.push(check);await atomicWriteJson(path.join(attempt,'preflight-checks.json'),preflightChecks);
+        if(check.cleanupFailed)return this.state.transition(id,'running',{error:'Unconfirmed cleanup: preflight process. Inspect evidence before releasing lock.'});
+        if(controller.signal.aborted)return await this.stopAttempt(id,attempt,controller.signal);
+        if(check.exitCode!==0){await this.recordBlocker(attempt,job,taskContract,'worker-blocked',{kind:'missing-information',cause:'environment',reason:'Contracted preflight check failed: '+checkId,evidence:[`attempt-${job.attempts}/preflight-checks.json`],nextAction:'Resolve the observed environment prerequisite within existing authority, then explicitly retry this contract.',recoveryActionId:null});return this.state.transition(id,'waiting_user',{error:'Environment preflight failed before model dispatch'});}
+      }
       const previousAttempt=await evidence.previousAttempt(job.attempts);
       const recovery=job.attempts>1?await readJson(path.join(this.artifactDir(id),`attempt-${job.attempts-1}`,'recovery.json'),null):null;
       const dependencyHandoffs=await evidence.dependencies(this.state,id);
@@ -271,11 +285,13 @@ export class TaskEngine {
       await atomicWriteJson(path.join(attempt,'context-pack.json'),contextPack);
       if(manifest.routing)await atomicWriteJson(path.join(attempt,'routing.json'),new RoutingPolicy({ configuration: manifest.routingPolicy }).decide(manifest.routing));
       if (manifest.kind === 'codex') {
+        const contextTransfer=await evidence.resumeContext(contextPack,job.attempts,job.threadId);
+        await atomicWriteJson(path.join(attempt,'context-transfer.json'),contextTransfer.transfer);
         await evidence.effect('worker-dispatch','allow','One model turn under the saved routing contract and runtime admission');
         const result = await this.worker.run({cwd: runtimeProfile.root, mode: job.mode, objective: job.objective,
           networkAccess: taskContract.details.networkAccess ?? false,
           gitHubAuth: taskContract.details.gitHubAuth ?? false,
-          context: JSON.stringify({taskContract,contextPack,capabilityPlan,previousAttempt,dependencyHandoffs,recovery}), ...(job.threadId ? {threadId: job.threadId} : {}), timeoutMs,
+          context: JSON.stringify({taskContract,contextPack:contextTransfer.contextPack,capabilityPlan,previousAttempt,dependencyHandoffs,recovery}), ...(job.threadId ? {threadId: job.threadId} : {}), timeoutMs,
           structuredBlockers:Boolean(taskContract.details.resolution||taskContract.details.outcomeCriteria),
           ...(manifest.routing?{routing:manifest.routing}:{}),
           ...(manifest.routingPolicy?{routingPolicy:manifest.routingPolicy}:{}),
@@ -358,6 +374,7 @@ export class TaskEngine {
   private async recordValidationBlocker(attempt:string,job:Job,contract:TaskContract,trigger:'check-failed'|'outcome-failed',reason:string) {
     const action=contract.details.resolution?.actions.find(a=>a.triggers.includes(trigger));
     await this.recordBlocker(attempt,job,contract,trigger,{kind:'recoverable',reason,
+      cause:'validation',
       evidence:[`attempt-${job.attempts}/${trigger==='check-failed'?'checks.json':'outcome.json'}`],
       nextAction:action?.instruction??'Inspect failed criterion and prepare an authorized correction',recoveryActionId:action?.id??null});
   }
