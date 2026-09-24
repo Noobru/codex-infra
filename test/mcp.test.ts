@@ -38,7 +38,7 @@ test('real MCP subprocess negotiates tools and resolves a project through the sh
   const unitRun=await client.callTool({name:'run_work_unit',arguments:{input:{interactionId:interaction.id,unitId:'mcp-slice',background:false,timeoutMs:10000}}});
   assert.notEqual(unitRun.isError,true,JSON.stringify(unitRun.content));
   assert.equal(JSON.parse((unitRun.content as {text:string}[])[0]!.text).delivery.outcomeStatus,'passed');
-  const vmTools=['preview_vm_access','prepare_vm_access','inspect_vm_access','start_vm_access','validate_vm_access','close_vm_access','vm_access_session_command'];
+  const vmTools=['preview_vm_access','prepare_vm_access','inspect_vm_access','start_vm_access','validate_vm_access','close_vm_access','reconcile_vm_access_cleanup','vm_access_session_command'];
   for(const name of vmTools) {
     assert.ok(tools.some(tool=>tool.name===name));
     const invalid=await client.callTool({name,arguments:{input:{}}});
