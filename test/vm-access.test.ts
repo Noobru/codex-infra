@@ -4,22 +4,25 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {ProcessCleanupError} from '../src/process.js';
 import {VirtualBoxVmAccessHost,VmAccessConfigSchema,VmAccessService,type VmAccessConfig,type VmAccessHostAdapter,type VmHostObservation,type VmProbeResult} from '../src/vm-access.js';
 
 const emptyObservation=():VmHostObservation=>({exists:false,powerState:'unknown',uuid:null,nics:Array(8).fill(null),forwardingRules:[],sharedFolderCount:0,hostIntegrationsDisabled:false});
 const baseObservation=():VmHostObservation=>({exists:true,powerState:'poweroff',uuid:'base-uuid',nics:Array(8).fill('none'),forwardingRules:[],sharedFolderCount:0,hostIntegrationsDisabled:true});
 const fingerprint=(key:Buffer)=>`SHA256:${createHash('sha256').update(key).digest('base64').replace(/=+$/,'')}`;
 const hostKey=Buffer.from('fixture-host-public-key'),targetKey=Buffer.from('fixture-target-public-key');
+const cleanupError=()=>new ProcessCleanupError({executable:'fixture-command',args:[],cwd:'fixture',exitCode:null,stdout:'',stderr:'',durationMs:1,cleanupFailed:true,ownedPid:4242});
 
 class FakeHost implements VmAccessHostAdapter {
   readonly vms=new Map<string,VmHostObservation>([['prepared-base',baseObservation()]]);
   clones=0;configures=0;starts=0;validates=0;closes=0;failConfigure=false;failValidation=false;failCloneAfterCreate=false;
-  async inspect(name:string,_config?:VmAccessConfig):Promise<VmHostObservation>{return structuredClone(this.vms.get(name)??emptyObservation());}
+  failConfigureCleanup=false;failStartCleanup=false;failValidationCleanup=false;failCloseCleanup=false;failInspectCleanup=false;
+  async inspect(name:string,_config?:VmAccessConfig):Promise<VmHostObservation>{if(this.failInspectCleanup)throw cleanupError();return structuredClone(this.vms.get(name)??emptyObservation());}
   async clone(config:VmAccessConfig){this.clones++;this.vms.set(config.vmName,{...baseObservation(),uuid:`uuid-${config.resourceId}`,hostIntegrationsDisabled:false});if(this.failCloneAfterCreate)throw new Error('fixture clone interrupted');}
-  async configure(config:VmAccessConfig){this.configures++;if(this.failConfigure)throw new Error('fixture configuration failed');const vm=this.vms.get(config.vmName)!;vm.nics=[config.profile==='offline'?'none':'nat',...Array(7).fill('none')];vm.forwardingRules=config.profile==='bridge'?[`vmaccess-ssh,tcp,127.0.0.1,${config.hostSsh!.port},,22`]:[];vm.sharedFolderCount=0;vm.hostIntegrationsDisabled=true;}
-  async start(config:VmAccessConfig){this.starts++;this.vms.get(config.vmName)!.powerState='running';}
-  async validate(config:VmAccessConfig):Promise<VmProbeResult>{this.validates++;if(this.failValidation)throw new Error('fixture probe failed');return {guestReady:config.profile==='offline'?null:true,networkProfile:config.profile,hostIdentityVerified:config.profile==='offline'?null:true,targetIdentityVerified:config.profile==='bridge'?true:null,targetReached:config.profile==='bridge'?true:null,details:['fixture probe']};}
-  async close(config:VmAccessConfig){this.closes++;this.vms.get(config.vmName)!.powerState='poweroff';}
+  async configure(config:VmAccessConfig){this.configures++;if(this.failConfigureCleanup)throw cleanupError();if(this.failConfigure)throw new Error('fixture configuration failed');const vm=this.vms.get(config.vmName)!;vm.nics=[config.profile==='offline'?'none':'nat',...Array(7).fill('none')];vm.forwardingRules=config.profile==='bridge'?[`vmaccess-ssh,tcp,127.0.0.1,${config.hostSsh!.port},,22`]:[];vm.sharedFolderCount=0;vm.hostIntegrationsDisabled=true;}
+  async start(config:VmAccessConfig){this.starts++;if(this.failStartCleanup)throw cleanupError();this.vms.get(config.vmName)!.powerState='running';}
+  async validate(config:VmAccessConfig):Promise<VmProbeResult>{this.validates++;if(this.failValidationCleanup)throw cleanupError();if(this.failValidation)throw new Error('fixture probe failed');return {guestReady:config.profile==='offline'?null:true,networkProfile:config.profile,hostIdentityVerified:config.profile==='offline'?null:true,targetIdentityVerified:config.profile==='bridge'?true:null,targetReached:config.profile==='bridge'?true:null,details:['fixture probe']};}
+  async close(config:VmAccessConfig){this.closes++;if(this.failCloseCleanup)throw cleanupError();this.vms.get(config.vmName)!.powerState='poweroff';}
 }
 
 async function fixture(t:import('node:test').TestContext,profile:'offline'|'bridge'='offline'){
@@ -80,6 +83,115 @@ test('failed state cannot start and running does not retain stale validation',as
   const restarted=await current.service.start(current.selector);assert.equal(restarted.status,'running');assert.equal(restarted.state?.status,'running');assert.equal(restarted.probe,undefined);
   await current.service.close(current.selector);current.host.vms.get(current.config.vmName)!.nics[7]='nat';
   await assert.rejects(current.service.start(current.selector),/isolated NIC configuration/i);assert.equal(current.host.starts,1);
+});
+
+test('unconfirmed cleanup is structured, persisted, and requires explicit owner reconciliation for every lifecycle mutation',async t=>{
+  const verify=async(operation:'prepare'|'start'|'validate'|'close')=>{
+    const current=await fixture(t);
+    let failed;
+    if(operation==='prepare'){current.host.failConfigureCleanup=true;failed=await current.service.prepare({config:current.config});}
+    else {
+      await current.service.prepare({config:current.config});
+      if(operation==='start'){current.host.failStartCleanup=true;failed=await current.service.start(current.selector);}
+      else {
+        await current.service.start(current.selector);
+        if(operation==='validate'){current.host.failValidationCleanup=true;failed=await current.service.validate(current.selector);}
+        else {current.host.failCloseCleanup=true;failed=await current.service.close(current.selector);}
+      }
+    }
+    assert.equal(failed.operation,operation);assert.equal(failed.status,'failed');assert.equal(failed.cleanupFailed,true);assert.equal(failed.lockRetained,true);
+    assert.equal(failed.state?.cleanupFailed,true);assert.equal(failed.state?.lockRetained,true);assert.ok(failed.receiptPath);
+    const persisted=JSON.parse(await fs.readFile(path.join(current.root,'artifacts','vm-access','resources',current.config.resourceId,'state.json'),'utf8'));
+    assert.equal(persisted.cleanupFailed,true);assert.equal(persisted.lockRetained,true);assert.equal(persisted.ownerId,current.config.ownerId);
+    const receipt=JSON.parse(await fs.readFile(path.join(current.root,failed.receiptPath!),'utf8'));assert.equal(receipt.cleanupFailed,true);assert.equal(receipt.lockRetained,true);
+    await assert.rejects(current.service.close(current.selector),/cleanup remains unconfirmed/i);
+    await assert.rejects(current.service.reconcileCleanup({...current.selector,ownerId:'wrong-owner',evidence:'actual inspected process stopped'}),/ownership differs/i);
+    await assert.rejects(current.service.reconcileCleanup({...current.selector,evidence:'short'}));
+    const lockOwnerPath=path.join(current.root,'artifacts','vm-access','resources',current.config.resourceId,'.operation-lock','owner.json');
+    const lockOwner=JSON.parse(await fs.readFile(lockOwnerPath,'utf8'));await fs.writeFile(lockOwnerPath,JSON.stringify({...lockOwner,ownerId:'other-owner'}));
+    await assert.rejects(current.service.reconcileCleanup({...current.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'}),/lock ownership differs/i);
+    await fs.writeFile(lockOwnerPath,JSON.stringify(lockOwner));
+    const reconciled=await current.service.reconcileCleanup({...current.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'});
+    assert.equal(reconciled.operation,'reconcile-cleanup');assert.equal(reconciled.cleanupFailed,true);assert.equal(reconciled.lockRetained,false);
+    assert.equal(reconciled.state?.cleanupFailed,true);assert.equal(reconciled.state?.lockRetained,false);assert.ok(reconciled.state?.cleanupReconciledAt);
+    assert.equal((await current.service.inspect(current.selector)).state?.lockRetained,false);
+    if(operation==='prepare'){current.host.failConfigureCleanup=false;assert.equal((await current.service.prepare({config:current.config})).status,'prepared');}
+    else {current.host.failCloseCleanup=false;assert.equal((await current.service.close(current.selector)).status,'closed');}
+  };
+  for(const operation of ['prepare','start','validate','close'] as const)await verify(operation);
+});
+
+test('VirtualBox command cleanup failure is never downgraded to a normal command failure',async t=>{
+  const {root,config}=await fixture(t);const runner={async run(executable:string,args:string[],cwd:string){return {executable,args,cwd,exitCode:null,stdout:'',stderr:'',durationMs:1,cleanupFailed:true as const,ownedPid:4242};}};
+  await assert.rejects(new VirtualBoxVmAccessHost(root,runner).inspect(config.vmName,config),error=>error instanceof ProcessCleanupError);
+});
+
+test('cleanup retention survives state or receipt persistence failures and a first inspection cleanup failure',async t=>{
+  const inspectFailure=await fixture(t);inspectFailure.host.failInspectCleanup=true;
+  const initial=await inspectFailure.service.prepare({config:inspectFailure.config});assert.equal(initial.cleanupFailed,true);assert.equal(initial.lockRetained,true);assert.equal(initial.observationUnavailable,true);assert.equal(initial.state?.cleanupFailed,true);
+  inspectFailure.host.failInspectCleanup=false;
+  await inspectFailure.service.reconcileCleanup({...inspectFailure.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'});
+
+  for(const persistenceTarget of ['state','receipt'] as const){
+    const current=await fixture(t);await current.service.prepare({config:current.config});await current.service.start(current.selector);current.host.failCloseCleanup=true;
+    const service=current.service as unknown as {writeState:(state:unknown)=>Promise<void>;receipt:(operation:string,state:unknown,observation:unknown,extra?:Record<string,unknown>)=>Promise<string>;close:(selector:unknown)=>Promise<unknown>;reconcileCleanup:(input:unknown)=>Promise<unknown>};
+    if(persistenceTarget==='state'){
+      const original=service.writeState.bind(service);let failed=false;service.writeState=async state=>{if(!failed&&(state as {cleanupFailed?:boolean}).cleanupFailed){failed=true;throw new Error('fixture state write failed');}return original(state);};
+    }else{
+      const original=service.receipt.bind(service);let failed=false;service.receipt=async(operation,state,observation,extra)=>{if(!failed&&operation==='close'&&(state as {cleanupFailed?:boolean}).cleanupFailed){failed=true;throw new Error('fixture receipt write failed');}return original(operation,state,observation,extra);};
+    }
+    await assert.rejects(service.close(current.selector),error=>(error as {cleanupFailed?:unknown}).cleanupFailed===true);
+    const markerPath=path.join(current.root,'artifacts','vm-access','resources',current.config.resourceId,'.operation-lock','.cleanup-pending.json');
+    const marker=JSON.parse(await fs.readFile(markerPath,'utf8'));assert.equal(marker.resourceId,current.config.resourceId);assert.equal(marker.ownerId,current.config.ownerId);
+    const reconciled=await service.reconcileCleanup({...current.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'}) as {lockRetained:boolean;state?:{cleanupFailed:boolean}};
+    assert.equal(reconciled.lockRetained,false);assert.equal(reconciled.state?.cleanupFailed,true);
+  }
+
+  const noState=await fixture(t);noState.host.failInspectCleanup=true;
+  const noStateService=noState.service as unknown as {writeState:(state:unknown)=>Promise<void>;prepare:(input:unknown)=>Promise<unknown>;reconcileCleanup:(input:unknown)=>Promise<{state:null;desiredHash:null;lockRetained:boolean}>};
+  const originalWrite=noStateService.writeState.bind(noStateService);noStateService.writeState=async state=>{if((state as {cleanupFailed?:boolean}).cleanupFailed)throw new Error('fixture initial retained state write failed');return originalWrite(state);};
+  await assert.rejects(noStateService.prepare({config:noState.config}),error=>(error as {cleanupFailed?:unknown}).cleanupFailed===true);
+  noState.host.failInspectCleanup=false;
+  const noStateReconciled=await noStateService.reconcileCleanup({...noState.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'}) as {state:null;desiredHash:null;lockRetained:boolean;observationUnavailable:boolean};
+  assert.equal(noStateReconciled.state,null);assert.equal(noStateReconciled.desiredHash,null);assert.equal(noStateReconciled.observationUnavailable,true);assert.equal(noStateReconciled.lockRetained,false);
+
+  const reconcileReceipt=await fixture(t);await reconcileReceipt.service.prepare({config:reconcileReceipt.config});await reconcileReceipt.service.start(reconcileReceipt.selector);reconcileReceipt.host.failCloseCleanup=true;
+  await reconcileReceipt.service.close(reconcileReceipt.selector);
+  const receiptService=reconcileReceipt.service as unknown as {receipt:(operation:string,state:unknown,observation:unknown,extra?:Record<string,unknown>)=>Promise<string>;reconcileCleanup:(input:unknown)=>Promise<unknown>};
+  const originalReceipt=receiptService.receipt.bind(receiptService);receiptService.receipt=async(operation,state,observation,extra)=>{if(operation==='reconcile-cleanup')throw new Error('fixture reconciliation receipt failed');return originalReceipt(operation,state,observation,extra);};
+  await assert.rejects(receiptService.reconcileCleanup({...reconcileReceipt.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'}));
+  await fs.access(path.join(reconcileReceipt.root,'artifacts','vm-access','resources',reconcileReceipt.config.resourceId,'.operation-lock','owner.json'));
+  receiptService.receipt=originalReceipt;
+  await receiptService.reconcileCleanup({...reconcileReceipt.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'});
+});
+
+test('retained cleanup blocks bridge sessions and reconciliation claims one lock generation',async t=>{
+  const retainedState=await fixture(t,'bridge');await retainedState.service.prepare({config:retainedState.config});await retainedState.service.start(retainedState.selector);await retainedState.service.validate(retainedState.selector);retainedState.host.failCloseCleanup=true;
+  const retainedClose=await retainedState.service.close(retainedState.selector);assert.equal(retainedClose.lockRetained,true);
+  await assert.rejects(retainedState.service.sessionCommand(retainedState.selector),/lifecycle operation or retained cleanup lock exists/i);
+
+  const session=await fixture(t,'bridge');await session.service.prepare({config:session.config});await session.service.start(session.selector);await session.service.validate(session.selector);session.host.failCloseCleanup=true;
+  const sessionService=session.service as unknown as {writeState:(state:unknown)=>Promise<void>;close:(selector:unknown)=>Promise<unknown>;sessionCommand:(selector:unknown)=>Promise<unknown>;reconcileCleanup:(input:unknown)=>Promise<unknown>};
+  const originalWrite=sessionService.writeState.bind(sessionService);sessionService.writeState=async state=>{if((state as {cleanupFailed?:boolean}).cleanupFailed)throw new Error('fixture session state write failed');return originalWrite(state);};
+  await assert.rejects(sessionService.close(session.selector),error=>(error as {cleanupFailed?:unknown}).cleanupFailed===true);
+  await assert.rejects(sessionService.sessionCommand(session.selector),/retained cleanup evidence/i);
+
+  const concurrent=await fixture(t);await concurrent.service.prepare({config:concurrent.config});await concurrent.service.start(concurrent.selector);concurrent.host.failCloseCleanup=true;await concurrent.service.close(concurrent.selector);
+  const concurrentService=concurrent.service as unknown as {receipt:(operation:string,state:unknown,observation:unknown,extra?:Record<string,unknown>)=>Promise<string>;reconcileCleanup:(input:unknown)=>Promise<unknown>;prepare:(input:unknown)=>Promise<{status:string}>};
+  const originalReceipt=concurrentService.receipt.bind(concurrentService);let entered!:()=>void,release!:()=>void;const enteredPromise=new Promise<void>(resolve=>{entered=resolve;}),releasePromise=new Promise<void>(resolve=>{release=resolve;});
+  concurrentService.receipt=async(operation,state,observation,extra)=>{if(operation==='reconcile-cleanup'){entered();await releasePromise;}return originalReceipt(operation,state,observation,extra);};
+  const first=concurrentService.reconcileCleanup({...concurrent.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'});await enteredPromise;
+  await assert.rejects(concurrentService.reconcileCleanup({...concurrent.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'}),/another explicit cleanup reconciliation owns/i);
+  release();await first;
+  assert.equal((await concurrentService.prepare({config:concurrent.config})).status,'prepared');
+
+  const generation=await fixture(t);await generation.service.prepare({config:generation.config});await generation.service.start(generation.selector);generation.host.failCloseCleanup=true;await generation.service.close(generation.selector);
+  const generationService=generation.service as unknown as {receipt:(operation:string,state:unknown,observation:unknown,extra?:Record<string,unknown>)=>Promise<string>;reconcileCleanup:(input:unknown)=>Promise<unknown>};
+  const generationReceipt=generationService.receipt.bind(generationService);let changedGeneration=false;
+  generationService.receipt=async(operation,state,observation,extra)=>{if(operation==='reconcile-cleanup'&&!changedGeneration){changedGeneration=true;const ownerPath=path.join(generation.root,'artifacts','vm-access','resources',generation.config.resourceId,'.operation-lock','owner.json');const owner=JSON.parse(await fs.readFile(ownerPath,'utf8'));await fs.writeFile(ownerPath,JSON.stringify({...owner,token:'00000000-0000-4000-8000-000000000000'}));}return generationReceipt(operation,state,observation,extra);};
+  await assert.rejects(generationService.reconcileCleanup({...generation.selector,evidence:'Fixture process 4242 was inspected and confirmed stopped.'}),/generation changed before release/i);
+  const generationState=JSON.parse(await fs.readFile(path.join(generation.root,'artifacts','vm-access','resources',generation.config.resourceId,'state.json'),'utf8'));assert.equal(generationState.lockRetained,true);
+  await fs.access(path.join(generation.root,'artifacts','vm-access','resources',generation.config.resourceId,'.operation-lock','owner.json'));
 });
 
 test('schemas separate a NIC-less offline profile from an explicit bridge',async t=>{

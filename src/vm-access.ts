@@ -3,7 +3,7 @@ import path from 'node:path';
 import {isIP} from 'node:net';
 import {createHash,randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import {ProcessRunner, type CommandResult} from './process.js';
+import {ProcessCleanupError,ProcessRunner, type CommandResult} from './process.js';
 import {KnowledgeFiles} from './knowledge-store.js';
 import {EvidenceSanitizer} from './evidence.js';
 import {atomicWriteJson} from './legacy/command-os-utils.js';
@@ -49,6 +49,10 @@ export const VmAccessStartInputSchema=VmAccessSelectorSchema;
 export const VmAccessValidateInputSchema=VmAccessSelectorSchema;
 export const VmAccessCloseInputSchema=VmAccessSelectorSchema;
 export const VmAccessSessionInputSchema=VmAccessSelectorSchema;
+export const VmAccessCleanupReconcileInputSchema=VmAccessSelectorSchema.extend({
+  /** Evidence from an actual process/host inspection; this is never inferred from a missing PID. */
+  evidence:z.string().trim().min(10).max(2000),
+}).strict();
 
 export const VmHostObservationSchema=z.object({
   exists:z.boolean(),powerState:z.enum(['poweroff','running','saved','aborted','unknown']),uuid:z.string().nullable(),
@@ -68,15 +72,31 @@ export const VmAccessStateSchema=z.object({
   status:z.enum(['preparing','prepared','running','validated','closed','failed']),
   createdAt:z.iso.datetime(),updatedAt:z.iso.datetime(),lastOperation:z.enum(['prepare','start','validate','close']),
   lastError:z.string().max(2000).nullable(),
+  /** A command owned by this lifecycle operation could still be alive.  The state is fail-closed until explicit reconciliation. */
+  cleanupFailed:z.boolean().default(false),
+  /** The operation lock was intentionally preserved because command cleanup was not confirmed. */
+  lockRetained:z.boolean().default(false),
+  cleanupReconciledAt:z.iso.datetime().nullable().default(null),
 }).strict();
 export type VmAccessState=z.output<typeof VmAccessStateSchema>;
 
 export const VmAccessResultSchema=z.object({
-  operation:z.enum(['preview','prepare','inspect','start','validate','close']),resourceId:id,
-  status:z.string(),changed:z.boolean(),reused:z.boolean(),desiredHash:z.string().regex(/^[a-f0-9]{64}$/),
+  operation:z.enum(['preview','prepare','inspect','start','validate','close','reconcile-cleanup']),resourceId:id,
+  status:z.string(),changed:z.boolean(),reused:z.boolean(),desiredHash:z.string().regex(/^[a-f0-9]{64}$/).nullable(),
   observation:VmHostObservationSchema,state:VmAccessStateSchema.nullable(),probe:VmProbeResultSchema.optional(),receiptPath:z.string().optional(),
+  cleanupFailed:z.boolean().default(false),lockRetained:z.boolean().default(false),observationUnavailable:z.boolean().default(false),
 }).strict();
 export type VmAccessResult=z.output<typeof VmAccessResultSchema>;
+
+const VmAccessLockOwnerSchema=z.object({version:z.literal(1),resourceId:id,ownerId:id,createdAt:z.iso.datetime(),token:z.uuid()}).strict();
+type VmAccessLockOwner=z.output<typeof VmAccessLockOwnerSchema>;
+const VmAccessCleanupPendingSchema=z.object({version:z.literal(1),resourceId:id,ownerId:id,recordedAt:z.iso.datetime(),error:z.string().max(2000)}).strict();
+type VmAccessCleanupPending=z.output<typeof VmAccessCleanupPendingSchema>;
+
+class VmAccessCleanupRetentionError extends Error {
+  readonly cleanupFailed=true;
+  constructor(message:string){super(message);this.name='VmAccessCleanupRetentionError';}
+}
 
 export const VmAccessSessionCommandSchema=z.object({executable:absolutePath,args:z.array(z.string().min(1)).min(1)}).strict();
 export type VmAccessSessionCommand=z.output<typeof VmAccessSessionCommandSchema>;
@@ -115,6 +135,7 @@ export class VirtualBoxVmAccessHost implements VmAccessHostAdapter {
   constructor(private readonly root:string,private readonly runner:Runner=new ProcessRunner()){}
   private async command(executable:string,args:string[],timeoutMs=30_000,allowNonZero=false):Promise<CommandResult>{
     const result=await this.runner.run(executable,args,this.root,timeoutMs);
+    if(result.cleanupFailed)throw new ProcessCleanupError(result);
     if(!allowNonZero&&result.exitCode!==0)throw new Error(this.safeCommandError(result));
     return result;
   }
@@ -219,6 +240,10 @@ export class VmAccessService {
   constructor(readonly root:string,adapter?:VmAccessHostAdapter){this.files=new KnowledgeFiles(root);this.adapter=adapter??new VirtualBoxVmAccessHost(root);}
   private resourceDir(resourceId:string){return path.join(this.root,'artifacts','vm-access','resources',resourceId);}
   private stateFile(resourceId:string){return path.join(this.resourceDir(resourceId),'state.json');}
+  private operationLock(resourceId:string){return path.join(this.resourceDir(resourceId),'.operation-lock');}
+  private operationLockOwner(resourceId:string){return path.join(this.operationLock(resourceId),'owner.json');}
+  private reconciliationLock(resourceId:string){return path.join(this.operationLock(resourceId),'.reconcile-lock');}
+  private cleanupPendingFile(resourceId:string){return path.join(this.operationLock(resourceId),'.cleanup-pending.json');}
   private desiredHash(config:VmAccessConfig){return KnowledgeFiles.hash(JSON.stringify(config));}
   private safeError(error:unknown,config?:VmAccessConfig){
     let message=error instanceof Error?error.message:String(error);
@@ -230,6 +255,54 @@ export class VmAccessService {
     try{return VmAccessStateSchema.parse(JSON.parse(await fs.readFile(this.stateFile(resourceId),'utf8')));}
     catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return null;throw error;}
   }
+  private cleanupFailed(error:unknown):boolean{return error instanceof ProcessCleanupError||(typeof error==='object'&&error!==null&&(error as {cleanupFailed?:unknown}).cleanupFailed===true);}
+  private retentionError(operation:string,persistenceError:unknown){return new VmAccessCleanupRetentionError(`Cleanup remained unconfirmed during ${operation}; state or receipt persistence also failed: ${this.safeError(persistenceError)}`);}
+  private async readCleanupPending(resourceId:string):Promise<VmAccessCleanupPending|null>{
+    try{return VmAccessCleanupPendingSchema.parse(JSON.parse(await fs.readFile(this.cleanupPendingFile(resourceId),'utf8')));}
+    catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return null;throw error;}
+  }
+  private async operationLockExists(resourceId:string):Promise<boolean>{
+    try{await fs.access(this.operationLock(resourceId));return true;}
+    catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return false;throw error;}
+  }
+  private async writeCleanupPending(resourceId:string,ownerId:string,error:unknown){
+    await atomicWriteJson(this.cleanupPendingFile(resourceId),VmAccessCleanupPendingSchema.parse({version:1,resourceId,ownerId,recordedAt:new Date().toISOString(),error:this.safeError(error)}));
+  }
+  private async readLockOwner(resourceId:string):Promise<VmAccessLockOwner>{
+    try{return VmAccessLockOwnerSchema.parse(JSON.parse(await fs.readFile(this.operationLockOwner(resourceId),'utf8')));}
+    catch{throw new Error('Retained operation lock has no valid ownership record; it cannot be released automatically.');}
+  }
+  private async claimReconciliation(resourceId:string,ownerId:string):Promise<VmAccessLockOwner>{
+    const owner=await this.readLockOwner(resourceId);
+    if(owner.resourceId!==resourceId||owner.ownerId!==ownerId)throw new Error('Retained operation lock ownership differs from the selected state.');
+    try{await fs.mkdir(this.reconciliationLock(resourceId));}
+    catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST')throw new Error('Another explicit cleanup reconciliation owns this resource lock; inspect its result before retrying.');throw error;}
+    try{
+      const current=await this.readLockOwner(resourceId);
+      if(current.resourceId!==owner.resourceId||current.ownerId!==owner.ownerId||current.createdAt!==owner.createdAt||current.token!==owner.token)throw new Error('Retained operation lock generation changed during reconciliation.');
+      return owner;
+    }catch(error){await fs.rm(this.reconciliationLock(resourceId),{recursive:true,force:true}).catch(()=>undefined);throw error;}
+  }
+  private async retireClaimedLock(resourceId:string,owner:VmAccessLockOwner):Promise<string>{
+    const current=await this.readLockOwner(resourceId);
+    if(current.resourceId!==owner.resourceId||current.ownerId!==owner.ownerId||current.createdAt!==owner.createdAt||current.token!==owner.token)throw new Error('Retained operation lock generation changed before release.');
+    const retired=path.join(this.resourceDir(resourceId),`.operation-lock-reconciled-${randomUUID()}`);
+    await fs.rename(this.operationLock(resourceId),retired);
+    return retired;
+  }
+  private result(input:z.input<typeof VmAccessResultSchema>):VmAccessResult{return VmAccessResultSchema.parse(input);}
+  private failureResult(operation:'prepare'|'start'|'validate'|'close',state:VmAccessState,observation:VmHostObservation,receiptPath:string,observationUnavailable=false):VmAccessResult{
+    return this.result({operation,resourceId:state.resourceId,status:state.status,changed:true,reused:false,desiredHash:state.desiredHash,observation,state,receiptPath,
+      cleanupFailed:state.cleanupFailed,lockRetained:state.lockRetained,observationUnavailable});
+  }
+  private async retainCleanupFailure(operation:'prepare'|'start'|'validate'|'close',state:VmAccessState,observation:VmHostObservation,error:unknown,observationUnavailable=false):Promise<VmAccessResult>{
+    const retained={...state,status:'failed' as const,updatedAt:new Date().toISOString(),lastOperation:operation,lastError:this.safeError(error,state.config),cleanupFailed:true,lockRetained:true};
+    try{await this.writeState(retained);}catch(persistenceError){throw this.retentionError(operation,persistenceError);}
+    let receiptPath:string;
+    try{receiptPath=await this.receipt(operation,retained,observation,{error:retained.lastError,resumable:false,observationUnavailable});}
+    catch(persistenceError){throw this.retentionError(operation,persistenceError);}
+    return this.failureResult(operation,retained,observation,receiptPath,observationUnavailable);
+  }
   private async writeState(state:VmAccessState){await fs.mkdir(this.resourceDir(state.resourceId),{recursive:true});await atomicWriteJson(this.stateFile(state.resourceId),state);}
   private assertOwner(state:VmAccessState,selector:VmAccessSelector){if(state.ownerId!==selector.ownerId)throw new Error('Resource ownership mismatch; select the owning task explicitly.');}
   private assertConfig(state:VmAccessState,config:VmAccessConfig){this.assertOwner(state,config);if(state.desiredHash!==this.desiredHash(config))throw new Error('Resource ID already has a different immutable VM access configuration.');}
@@ -239,15 +312,32 @@ export class VmAccessService {
     if(observation.uuid!==state.vmUuid)throw new Error('Observed VM UUID differs from the owned clone UUID; refusing to touch a replacement VM with the same name.');
   }
   private async requireState(raw:unknown){const selector=VmAccessSelectorSchema.parse(raw),state=await this.readState(selector.resourceId);if(!state)throw new Error('Owned VM access state does not exist; preview and prepare it first.');this.assertOwner(state,selector);return state;}
-  private async withLock<T>(resourceId:string,action:()=>Promise<T>):Promise<T>{
-    const dir=this.resourceDir(resourceId),lock=path.join(dir,'.operation-lock');await fs.mkdir(dir,{recursive:true});
-    try{await fs.mkdir(lock);}catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST')throw new Error('Another VM access operation owns this resource lock; inspect before retrying.');throw error;}
-    try{return await action();}finally{await fs.rmdir(lock).catch(()=>undefined);}
+  private async withLock<T>(resourceId:string,ownerId:string,action:()=>Promise<T>):Promise<T>{
+    const persisted=await this.readState(resourceId);
+    if(persisted?.lockRetained)throw new Error('Owned VM cleanup remains unconfirmed; inspect the retained state and reconcile it only with actual process or host evidence.');
+    if(await this.readCleanupPending(resourceId))throw new Error('Owned VM cleanup remains unconfirmed; inspect the retained cleanup evidence and reconcile it only with actual process or host evidence.');
+    const dir=this.resourceDir(resourceId),lock=this.operationLock(resourceId);await fs.mkdir(dir,{recursive:true});
+    try{await fs.mkdir(lock);}
+    catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST')throw new Error('Another VM access operation owns this resource lock; inspect before retrying.');throw error;}
+    try{await atomicWriteJson(this.operationLockOwner(resourceId),VmAccessLockOwnerSchema.parse({version:1,resourceId,ownerId,createdAt:new Date().toISOString(),token:randomUUID()}));}
+    catch(error){await fs.rm(lock,{recursive:true,force:true}).catch(()=>undefined);throw error;}
+    let retain=false;
+    try{
+      const value=await action();
+      const parsed=VmAccessResultSchema.safeParse(value);
+      retain=parsed.success&&parsed.data.lockRetained;
+      return value;
+    }catch(error){
+      retain=this.cleanupFailed(error);
+      if(retain)await this.writeCleanupPending(resourceId,ownerId,error).catch(()=>undefined);
+      throw error;
+    }
+    finally{if(!retain)await fs.rm(lock,{recursive:true,force:true}).catch(()=>undefined);}
   }
-  private async receipt(operation:'prepare'|'start'|'validate'|'close',state:VmAccessState,observation:VmHostObservation,extra:Record<string,unknown>={}){
+  private async receipt(operation:'prepare'|'start'|'validate'|'close'|'reconcile-cleanup',state:VmAccessState,observation:VmHostObservation,extra:Record<string,unknown>={}){
     const relative=`artifacts/integration/vm-access/${state.resourceId}/${new Date().toISOString().replace(/[:.]/g,'-')}-${operation}-${randomUUID()}.json`;
     await this.files.writeJsonNew(relative,{version:1,operation,resourceId:state.resourceId,ownerId:state.ownerId,desiredHash:state.desiredHash,status:state.status,
-      observation,recordedAt:new Date().toISOString(),credentialMaterialStored:false,...extra});return relative;
+      cleanupFailed:state.cleanupFailed,lockRetained:state.lockRetained,observation,recordedAt:new Date().toISOString(),credentialMaterialStored:false,...extra});return relative;
   }
   async preview(raw:unknown):Promise<VmAccessResult>{
     const {config}=VmAccessPreviewInputSchema.parse(raw),desiredHash=this.desiredHash(config),state=await this.readState(config.resourceId);
@@ -260,28 +350,35 @@ export class VmAccessService {
   private async inspectWithConfig(name:string,config:VmAccessConfig){
     return VmHostObservationSchema.parse(await this.adapter.inspect(name,config));
   }
+  private unavailableObservation():VmHostObservation{return {exists:false,powerState:'unknown',uuid:null,nics:Array(8).fill(null),forwardingRules:[],sharedFolderCount:0,hostIntegrationsDisabled:false};}
   async prepare(raw:unknown):Promise<VmAccessResult>{
-    const {config}=VmAccessPrepareInputSchema.parse(raw);return this.withLock(config.resourceId,async()=>{
+    const {config}=VmAccessPrepareInputSchema.parse(raw);return this.withLock(config.resourceId,config.ownerId,async()=>{
       const desiredHash=this.desiredHash(config),existing=await this.readState(config.resourceId);if(existing)this.assertConfig(existing,config);
-      let observation=await this.inspectWithConfig(config.vmName,config);
+      let observation:VmHostObservation;
+      try{observation=await this.inspectWithConfig(config.vmName,config);}
+      catch(error){
+        if(!this.cleanupFailed(error))throw error;
+        const now=new Date().toISOString(),state=existing??{version:1 as const,resourceId:config.resourceId,ownerId:config.ownerId,desiredHash,config,vmUuid:null,status:'preparing' as const,createdAt:now,updatedAt:now,lastOperation:'prepare' as const,lastError:null,cleanupFailed:false,lockRetained:false,cleanupReconciledAt:null};
+        return this.retainCleanupFailure('prepare',state,this.unavailableObservation(),error,true);
+      }
       if(existing)this.assertBoundVm(existing,observation);
       if(existing&&observation.exists&&['prepared','running','validated','closed'].includes(existing.status))
         return VmAccessResultSchema.parse({operation:'prepare',resourceId:config.resourceId,status:existing.status,changed:false,reused:true,desiredHash,observation,state:existing});
       if(!existing&&observation.exists)throw new Error('Refusing to adopt or alter a pre-existing VM without owned state.');
       const base=await this.inspectWithConfig(config.baseVmName,config);if(!base.exists)throw new Error('Explicit base VM was not found.');if(base.powerState!=='poweroff')throw new Error('Explicit base VM must be powered off before cloning.');
       if(base.sharedFolderCount!==0||base.forwardingRules.length!==0)throw new Error('Explicit base VM must not contain inherited shared folders or forwarding rules.');
-      const now=new Date().toISOString();let state:VmAccessState=existing??{version:1,resourceId:config.resourceId,ownerId:config.ownerId,desiredHash,config,vmUuid:null,status:'preparing',createdAt:now,updatedAt:now,lastOperation:'prepare',lastError:null};
-      state={...state,status:'preparing',updatedAt:now,lastOperation:'prepare',lastError:null};await this.writeState(state);
+      const now=new Date().toISOString();let state:VmAccessState=existing??{version:1,resourceId:config.resourceId,ownerId:config.ownerId,desiredHash,config,vmUuid:null,status:'preparing',createdAt:now,updatedAt:now,lastOperation:'prepare',lastError:null,cleanupFailed:false,lockRetained:false,cleanupReconciledAt:null};
+      state={...state,status:'preparing',updatedAt:now,lastOperation:'prepare',lastError:null,cleanupFailed:false,lockRetained:false,cleanupReconciledAt:null};await this.writeState(state);
       try{
         if(!observation.exists){await this.adapter.clone(config);observation=await this.inspectWithConfig(config.vmName,config);if(!observation.exists||!observation.uuid)throw new Error('Clone command returned without an observable VM UUID.');state={...state,vmUuid:observation.uuid,updatedAt:new Date().toISOString()};await this.writeState(state);}
         this.assertBoundVm(state,observation);
         await this.adapter.configure(config);observation=await this.inspectWithConfig(config.vmName,config);
         this.assertBoundVm(state,observation);
         assertConfiguredVmHost(config,observation);
-        state={...state,status:'prepared',updatedAt:new Date().toISOString(),lastError:null};await this.writeState(state);
+        state={...state,status:'prepared',updatedAt:new Date().toISOString(),lastError:null,cleanupFailed:false,lockRetained:false};await this.writeState(state);
         const receiptPath=await this.receipt('prepare',state,observation,{baseVmName:config.baseVmName,basePreserved:true,profile:config.profile});
         return VmAccessResultSchema.parse({operation:'prepare',resourceId:config.resourceId,status:state.status,changed:true,reused:Boolean(existing),desiredHash,observation,state,receiptPath});
-      }catch(error){state={...state,status:'failed',updatedAt:new Date().toISOString(),lastError:this.safeError(error,config)};await this.writeState(state);await this.receipt('prepare',state,observation,{error:state.lastError,resumable:true});throw error;}
+      }catch(error){if(this.cleanupFailed(error))return this.retainCleanupFailure('prepare',state,observation,error);state={...state,status:'failed',updatedAt:new Date().toISOString(),lastError:this.safeError(error,config),cleanupFailed:false,lockRetained:false};await this.writeState(state);await this.receipt('prepare',state,observation,{error:state.lastError,resumable:true});throw error;}
     });
   }
   async inspect(raw:unknown):Promise<VmAccessResult>{
@@ -290,48 +387,94 @@ export class VmAccessService {
     return VmAccessResultSchema.parse({operation:'inspect',resourceId:state.resourceId,status:state.status,changed:false,reused:true,desiredHash:state.desiredHash,observation,state});
   }
   async start(raw:unknown):Promise<VmAccessResult>{
-    const selector=VmAccessStartInputSchema.parse(raw);return this.withLock(selector.resourceId,async()=>{
-      let state=await this.requireState(selector),observation=await this.inspectWithConfig(state.config.vmName,state.config);
+    const selector=VmAccessStartInputSchema.parse(raw);return this.withLock(selector.resourceId,selector.ownerId,async()=>{
+      let state=await this.requireState(selector),observation:VmHostObservation;
+      try{observation=await this.inspectWithConfig(state.config.vmName,state.config);}
+      catch(error){if(this.cleanupFailed(error))return this.retainCleanupFailure('start',state,this.unavailableObservation(),error,true);throw error;}
       this.assertBoundVm(state,observation);
       if(state.status==='failed')throw new Error('Failed VM state must be recovered by its failed lifecycle operation before start.');
       if(observation.powerState==='running'){
-        const changed=state.status!=='running';if(changed){state={...state,status:'running',updatedAt:new Date().toISOString(),lastOperation:'start',lastError:null};await this.writeState(state);}
+        const changed=state.status!=='running';if(changed){state={...state,status:'running',updatedAt:new Date().toISOString(),lastOperation:'start',lastError:null,cleanupFailed:false,lockRetained:false,cleanupReconciledAt:null};await this.writeState(state);}
         return VmAccessResultSchema.parse({operation:'start',resourceId:state.resourceId,status:'running',changed,reused:true,desiredHash:state.desiredHash,observation,state});
       }
       if(!observation.exists)throw new Error('Owned VM is missing; inspect the failed resource before preparing again.');
       if(!['prepared','closed'].includes(state.status))throw new Error(`VM cannot start from lifecycle state ${state.status}.`);
       assertConfiguredVmHost(state.config,observation);
       try{await this.adapter.start(state.config);observation=await this.inspectWithConfig(state.config.vmName,state.config);if(observation.powerState!=='running')throw new Error('Start command returned without an observed running VM.');
-        state={...state,status:'running',updatedAt:new Date().toISOString(),lastOperation:'start',lastError:null};await this.writeState(state);const receiptPath=await this.receipt('start',state,observation);
+        state={...state,status:'running',updatedAt:new Date().toISOString(),lastOperation:'start',lastError:null,cleanupFailed:false,lockRetained:false,cleanupReconciledAt:null};await this.writeState(state);const receiptPath=await this.receipt('start',state,observation);
         return VmAccessResultSchema.parse({operation:'start',resourceId:state.resourceId,status:state.status,changed:true,reused:false,desiredHash:state.desiredHash,observation,state,receiptPath});
-      }catch(error){state={...state,status:'failed',updatedAt:new Date().toISOString(),lastOperation:'start',lastError:this.safeError(error,state.config)};await this.writeState(state);await this.receipt('start',state,observation,{error:state.lastError,resumable:true});throw error;}
+      }catch(error){if(this.cleanupFailed(error))return this.retainCleanupFailure('start',state,observation,error);state={...state,status:'failed',updatedAt:new Date().toISOString(),lastOperation:'start',lastError:this.safeError(error,state.config),cleanupFailed:false,lockRetained:false};await this.writeState(state);await this.receipt('start',state,observation,{error:state.lastError,resumable:true});throw error;}
     });
   }
   async validate(raw:unknown):Promise<VmAccessResult>{
-    const selector=VmAccessValidateInputSchema.parse(raw);return this.withLock(selector.resourceId,async()=>{
-      let state=await this.requireState(selector),observation=await this.inspectWithConfig(state.config.vmName,state.config);if(observation.powerState!=='running')throw new Error('Validation requires the owned VM to be observed running.');
+    const selector=VmAccessValidateInputSchema.parse(raw);return this.withLock(selector.resourceId,selector.ownerId,async()=>{
+      let state=await this.requireState(selector),observation:VmHostObservation;
+      try{observation=await this.inspectWithConfig(state.config.vmName,state.config);}
+      catch(error){if(this.cleanupFailed(error))return this.retainCleanupFailure('validate',state,this.unavailableObservation(),error,true);throw error;}
+      if(observation.powerState!=='running')throw new Error('Validation requires the owned VM to be observed running.');
       this.assertBoundVm(state,observation);
       try{const probe=VmProbeResultSchema.parse(await this.adapter.validate(state.config));if(state.config.profile==='bridge'&&probe.guestReady!==true)throw new Error('Guest probe did not establish readiness.');
         if(state.config.profile==='offline'&&probe.guestReady!==null)throw new Error('Offline validation must leave guest readiness explicitly unknown.');
-        state={...state,status:'validated',updatedAt:new Date().toISOString(),lastOperation:'validate',lastError:null};await this.writeState(state);observation=await this.inspectWithConfig(state.config.vmName,state.config);const receiptPath=await this.receipt('validate',state,observation,{probe});
+        state={...state,status:'validated',updatedAt:new Date().toISOString(),lastOperation:'validate',lastError:null,cleanupFailed:false,lockRetained:false,cleanupReconciledAt:null};await this.writeState(state);observation=await this.inspectWithConfig(state.config.vmName,state.config);const receiptPath=await this.receipt('validate',state,observation,{probe});
         return VmAccessResultSchema.parse({operation:'validate',resourceId:state.resourceId,status:state.status,changed:true,reused:false,desiredHash:state.desiredHash,observation,state,probe,receiptPath});
-      }catch(error){state={...state,status:'failed',updatedAt:new Date().toISOString(),lastOperation:'validate',lastError:this.safeError(error,state.config)};await this.writeState(state);await this.receipt('validate',state,observation,{error:state.lastError,resumable:true});throw error;}
+      }catch(error){if(this.cleanupFailed(error))return this.retainCleanupFailure('validate',state,observation,error);state={...state,status:'failed',updatedAt:new Date().toISOString(),lastOperation:'validate',lastError:this.safeError(error,state.config),cleanupFailed:false,lockRetained:false};await this.writeState(state);await this.receipt('validate',state,observation,{error:state.lastError,resumable:true});throw error;}
     });
   }
   async close(raw:unknown):Promise<VmAccessResult>{
-    const selector=VmAccessCloseInputSchema.parse(raw);return this.withLock(selector.resourceId,async()=>{
-      let state=await this.requireState(selector),observation=await this.inspectWithConfig(state.config.vmName,state.config);
+    const selector=VmAccessCloseInputSchema.parse(raw);return this.withLock(selector.resourceId,selector.ownerId,async()=>{
+      let state=await this.requireState(selector),observation:VmHostObservation;
+      try{observation=await this.inspectWithConfig(state.config.vmName,state.config);}
+      catch(error){if(this.cleanupFailed(error))return this.retainCleanupFailure('close',state,this.unavailableObservation(),error,true);throw error;}
       this.assertBoundVm(state,observation);
       if(observation.powerState==='poweroff'&&state.status==='closed')return VmAccessResultSchema.parse({operation:'close',resourceId:state.resourceId,status:'closed',changed:false,reused:true,desiredHash:state.desiredHash,observation,state});
       if(!observation.exists)throw new Error('Owned VM is missing; close will not target another resource.');
       try{if(observation.powerState!=='poweroff')await this.adapter.close(state.config);observation=await this.inspectWithConfig(state.config.vmName,state.config);if(observation.powerState!=='poweroff')throw new Error('Close did not confirm poweroff for the owned VM.');
-        state={...state,status:'closed',updatedAt:new Date().toISOString(),lastOperation:'close',lastError:null};await this.writeState(state);const receiptPath=await this.receipt('close',state,observation,{resourcePreserved:true,deleted:false});
+        state={...state,status:'closed',updatedAt:new Date().toISOString(),lastOperation:'close',lastError:null,cleanupFailed:false,lockRetained:false,cleanupReconciledAt:null};await this.writeState(state);const receiptPath=await this.receipt('close',state,observation,{resourcePreserved:true,deleted:false});
         return VmAccessResultSchema.parse({operation:'close',resourceId:state.resourceId,status:state.status,changed:true,reused:false,desiredHash:state.desiredHash,observation,state,receiptPath});
-      }catch(error){state={...state,status:'failed',updatedAt:new Date().toISOString(),lastOperation:'close',lastError:this.safeError(error,state.config)};await this.writeState(state);await this.receipt('close',state,observation,{error:state.lastError,resumable:true});throw error;}
+      }catch(error){if(this.cleanupFailed(error))return this.retainCleanupFailure('close',state,observation,error);state={...state,status:'failed',updatedAt:new Date().toISOString(),lastOperation:'close',lastError:this.safeError(error,state.config),cleanupFailed:false,lockRetained:false};await this.writeState(state);await this.receipt('close',state,observation,{error:state.lastError,resumable:true});throw error;}
     });
   }
+  async reconcileCleanup(raw:unknown):Promise<VmAccessResult>{
+    const input=VmAccessCleanupReconcileInputSchema.parse(raw);
+    const lockOwner=await this.claimReconciliation(input.resourceId,input.ownerId);
+    const pending=await this.readCleanupPending(input.resourceId),pendingOwned=Boolean(pending&&pending.resourceId===input.resourceId&&pending.ownerId===input.ownerId);
+    const state=await this.readState(input.resourceId);
+    let retired=false;
+    try{
+      if(state)this.assertOwner(state,input);
+      if(!(state?.cleanupFailed&&state.lockRetained)&&!pendingOwned)throw new Error('This owned VM has no retained cleanup failure to reconcile.');
+      if(!state){
+      const observation=this.unavailableObservation(),relative=`artifacts/integration/vm-access/${input.resourceId}/${new Date().toISOString().replace(/[:.]/g,'-')}-reconcile-cleanup-${randomUUID()}.json`;
+      await this.files.writeJsonNew(relative,{version:1,operation:'reconcile-cleanup',resourceId:input.resourceId,ownerId:input.ownerId,desiredHash:null,status:'failed-state-unavailable',observation,
+        recordedAt:new Date().toISOString(),credentialMaterialStored:false,cleanupFailed:true,lockRetained:true,cleanupReconciliationEvidence:EvidenceSanitizer.text(input.evidence,2000),
+        stateUnavailable:true,lockReleaseAuthorized:true,lockReleased:false});
+      const retiredLock=await this.retireClaimedLock(input.resourceId,lockOwner);retired=true;await fs.rm(retiredLock,{recursive:true,force:false});
+      return this.result({operation:'reconcile-cleanup',resourceId:input.resourceId,status:'failed-state-unavailable',changed:true,reused:false,desiredHash:null,observation,state:null,receiptPath:relative,cleanupFailed:true,lockRetained:false,observationUnavailable:true});
+      }
+      const observation=await this.inspectWithConfig(state.config.vmName,state.config);this.assertBoundVm(state,observation);
+      const reconciled={...state,status:'failed' as const,lastError:state.lastError??pending?.error??'Cleanup was unconfirmed; explicit reconciliation evidence recorded.',cleanupFailed:true,lockRetained:false,cleanupReconciledAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+      const receiptPath=await this.receipt('reconcile-cleanup',reconciled,observation,{cleanupReconciliationEvidence:EvidenceSanitizer.text(input.evidence,2000),
+        cleanupFailurePreserved:true,lockReleaseAuthorized:true,lockReleased:false});
+      await this.writeState(reconciled);
+      let retiredLock:string;
+      try{retiredLock=await this.retireClaimedLock(state.resourceId,lockOwner);}
+      catch(error){
+        const retained={...reconciled,lockRetained:true,cleanupReconciledAt:state.cleanupReconciledAt,updatedAt:new Date().toISOString()};
+        await this.writeState(retained).catch(()=>undefined);
+        await this.writeCleanupPending(state.resourceId,state.ownerId,error).catch(()=>undefined);
+        throw error;
+      }
+      retired=true;await fs.rm(retiredLock,{recursive:true,force:false});
+      return this.result({operation:'reconcile-cleanup',resourceId:reconciled.resourceId,status:reconciled.status,changed:true,reused:false,desiredHash:reconciled.desiredHash,
+        observation,state:reconciled,receiptPath,cleanupFailed:true,lockRetained:false});
+    }finally{if(!retired)await fs.rm(this.reconciliationLock(input.resourceId),{recursive:true,force:true}).catch(()=>undefined);}
+  }
   async sessionCommand(raw:unknown):Promise<VmAccessSessionCommand>{
-    const selector=VmAccessSessionInputSchema.parse(raw),state=await this.requireState(selector),observation=await this.inspectWithConfig(state.config.vmName,state.config);
+    const selector=VmAccessSessionInputSchema.parse(raw),pending=await this.readCleanupPending(selector.resourceId);
+    if(pending)throw new Error('Interactive bridge session is blocked by retained cleanup evidence.');
+    if(await this.operationLockExists(selector.resourceId))throw new Error('Interactive bridge session is blocked while an owned VM lifecycle operation or retained cleanup lock exists.');
+    const state=await this.requireState(selector);if(state.lockRetained)throw new Error('Interactive bridge session is blocked by retained cleanup ownership.');
+    const observation=await this.inspectWithConfig(state.config.vmName,state.config);
     this.assertBoundVm(state,observation);
     if(state.status!=='validated'||state.config.profile!=='bridge'||observation.powerState!=='running')throw new Error('Interactive bridge session requires this owned VM to be currently running and validated.');
     assertConfiguredVmHost(state.config,observation,true);
