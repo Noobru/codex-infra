@@ -1,32 +1,32 @@
 # CodexInfra
 
-Uma infraestrutura local de trabalho para o Codex: contexto de projetos, tarefas persistentes, execução com limites, workflows, evidências e aprendizado executável acompanhado no painel. A versão 0.6.0 transforma achados sustentados em capacidades revisadas, testadas e ativadas pela política permanente do owner; cada versão tem um hash para uso e desativação.
+A local work infrastructure for Codex: project context, persistent tasks, bounded execution, workflows, evidence, and executable learning monitored through a dashboard. Version 0.6.0 turns substantiated findings into reviewed, tested capabilities activated under the owner's permanent policy. Each version has a hash for use and deactivation.
 
-O fluxo começa na conversa e no discovery. Ao formalizar ou executar engenharia, o coordenador carrega o vault de coding e seus contratos, aplica o G-IDEIA, mantém PRD/PREVC e as referências técnicas pertinentes, escolhe execução direta, tarefa isolada ou workflow, valida o resultado e faz o write-back. O painel é a camada de consulta desse processo.
+The workflow starts with conversation and discovery. When engineering work is formalized or executed, the coordinator loads the coding vault and its contracts, applies G-IDEIA, maintains the PRD/PREVC and relevant technical references, chooses between direct execution, an isolated task, or a workflow, validates the result, and writes it back. The dashboard is the query layer for this process.
 
-**Esta distribuição pressupõe um vault de coding equivalente já disponível**, com práticas curadas e contratos de agentes. Ele é a fonte básica de verdade de engenharia; deve ser configurado para cada destinatário. O G-IDEIA existente é preservado; quando faltar, o bootstrap complementar permite adotá-lo com método e templates. O pacote não inclui o vault pessoal do autor nem cria uma base vazia para substituí-lo. Consulte [Contrato de contexto](docs/CONTEXT-CONTRACT.md) antes do primeiro trabalho de engenharia.
+**This distribution assumes that an equivalent coding vault is already available**, containing curated practices and agent contracts. It is the basic source of truth for engineering and must be configured for each recipient. The existing G-IDEIA is preserved; when it is missing, the complementary bootstrap allows it to be adopted with its method and templates. The package does not include the author's personal vault or create an empty replacement for it. See [Context Contract](docs/CONTEXT-CONTRACT.md) before the first engineering task.
 
-## O que vem nesta distribuição
+## What is included in this distribution
 
-A versão 0.8.0 acrescenta as skills `prepare-audit-vm` e `access-dedicated-host`, com ciclo de vida compartilhado para clones VirtualBox e pontes SSH autorizadas. Recibos de aprovação distinguem recusas do cliente não interativo de recusas da ferramenta. Consulte [VMs e pontes](docs/VM-ACCESS.md) e [diagnóstico de aprovações](docs/APPROVAL-DIAGNOSTICS.md).
+Version 0.8.0 adds the `prepare-audit-vm` and `access-dedicated-host` skills, with a shared lifecycle for VirtualBox clones and authorized SSH bridges. Approval receipts distinguish client-side refusals from refusals by the tool. See [VMs and Bridges](docs/VM-ACCESS.md) and [Approval Diagnostics](docs/APPROVAL-DIAGNOSTICS.md).
 
-| Capacidade | Comportamento disponível |
+| Capability | Available behavior |
 |---|---|
-| Contexto | Perfis explícitos, fontes com proveniência, seleção por tarefa e grafo de links locais. |
-| Execução | Estado em SQLite, checks nomeados, tentativas, cancelamento, recuperação e worktrees isoladas. |
-| Coordenação | Limites de workers e modelos, DAG de dependências, repasses de evidências e replanejamento limitado. |
-| Aprendizado | Achados e retrabalho observado geram bundles com revisão independente, testes isolados, ativação por política e desativação por hash; invocações reais têm receipts. |
-| Avaliação | Checks finalizados geram avaliações compatíveis; Efficiency acompanha problemas, melhorias, inclusão no contexto e resultados posteriores com evidência. |
-| Histórico | Janelas de 7/14/30/90 dias, fontes separadas e tokens por turno completo com telemetria local opcional; sem transcrições nos recibos. |
-| Segurança | Leitura de relatórios, enriquecimento opcional OSV/KEV e publisher GitHub com autorização por destino/SHA. |
-| Observação | Seis telas sobre o estado real, com navegação para tarefas/evidências e alerta quando o backend carregado difere do build instalado. |
-| Integração | CLI e MCP compartilham o mesmo núcleo. Plugin e instrução de adoção acompanham o código. |
+| Context | Explicit profiles, sources with provenance, task-based selection, and a local link graph. |
+| Execution | SQLite state, named checks, attempts, cancellation, recovery, and isolated worktrees. |
+| Coordination | Worker and model limits, dependency DAGs, evidence handoffs, and bounded replanning. |
+| Learning | Findings and observed rework generate bundles with independent review, isolated tests, policy-based activation, and hash-based deactivation. Real invocations have receipts. |
+| Evaluation | Completed checks generate compatible evaluations. Efficiency tracks problems, improvements, context inclusion, and subsequent results with evidence. |
+| History | 7/14/30/90-day windows, separated sources, and tokens per complete turn with optional local telemetry. No transcripts are stored in receipts. |
+| Security | Report reading, optional OSV/KEV enrichment, and GitHub publishing with authorization by destination/SHA. |
+| Observation | Six screens over the actual state, with navigation to tasks/evidence and an alert when the loaded backend differs from the installed build. |
+| Integration | CLI and MCP share the same core. Plugin and adoption instructions are included with the code. |
 
-## Instalação inicial no Windows
+## Initial installation on Windows
 
-Requer Windows 11, Node.js 22.16 ou mais recente, npm, Git e Codex Desktop com acesso ao Codex, além do vault de coding e dos contratos compatíveis descritos acima. PowerShell 7 e Python 3 são necessários somente para o instalador de plugin pessoal. O Codex roda nativamente no Windows, sem exigir WSL. A execução de capacidades geradas usa Docker já ativo e imagens locais Node/Python fixadas; o restante da infraestrutura não depende desse adaptador nem de banco externo.
+Requires Windows 11, Node.js 22.16 or newer, npm, Git, and Codex Desktop with access to Codex, as well as the coding vault and compatible contracts described above. PowerShell 7 and Python 3 are required only for the personal plugin installer. Codex runs natively on Windows and does not require WSL. Generated capabilities run using an already-running Docker installation and pinned local Node/Python images. The rest of the infrastructure does not depend on this adapter or on an external database.
 
-Na pasta deste repositório:
+From the repository folder:
 
 ```powershell
 npm ci
@@ -38,66 +38,74 @@ node dist/src/cli.js doctor --project codex-infra
 npm run verify
 ```
 
-`Configure-Local` registra apenas esta cópia da infraestrutura, com caminhos descobertos neste computador. Preserva registros existentes, gera a configuração MCP local ignorada pelo Git e aplica inicialmente 2 workers, até 1 de modelo simultâneo. Esse bootstrap e o `doctor` verificam a instalação; não atestam que o vault ou um projeto está preparado para engenharia. Cada usuário configura suas fontes e mantém seu próprio estado e autenticação.
+`Configure-Local` registers only this copy of the infrastructure, using paths discovered on the current computer. It preserves existing records, generates the local MCP configuration ignored by Git, and initially applies 2 workers, with up to 1 model running simultaneously. This bootstrap and `doctor` verify the installation; they do not attest that the vault or a project is ready for engineering. Each user configures their own sources and maintains their own state and authentication.
 
-Prepare `bootstrap.local.json` com o vault existente e, opcionalmente, os dados do projeto conforme [Contrato de contexto](docs/CONTEXT-CONTRACT.md). O bootstrap G-IDEIA tem preview e aplicação explícita:
+Prepare `bootstrap.local.json` with the existing vault and, optionally, project data as described in [Context Contract](docs/CONTEXT-CONTRACT.md). The G-IDEIA bootstrap supports preview and explicit application:
 
 ```powershell
 node scripts/Bootstrap-GIdeia.mjs --input bootstrap.local.json
 node scripts/Bootstrap-GIdeia.mjs --input bootstrap.local.json --apply
 ```
 
-O preview não grava nem executa projeto. A aplicação preserva as instruções existentes, adota o contrato complementar quando necessário e pode criar a estrutura documental e o perfil do projeto. Os documentos gerados precisam de conteúdo e revisão; sua criação não declara Planning, execução ou validação concluídos.
+Preview mode does not write to disk or execute the project. Applying it preserves existing instructions, adopts the complementary contract when necessary, and can create the project's documentation structure and profile. Generated documents still require content and review. Their creation does not declare Planning, execution, or validation complete.
 
-Instale o plugin pessoal após a configuração:
+Install the personal plugin after configuration:
 
 ```powershell
 pwsh -NoProfile -File scripts/Install-PersonalPlugin.ps1
 ```
 
-O instalador reutiliza os helpers de `plugin-creator` fornecidos pelo Codex. Se não estiverem disponíveis, use a configuração MCP gerada em `plugins/codex-infra/.mcp.json` no cliente e siga [Instalação e operação](docs/USO.md). Abra uma nova tarefa para o cliente carregar o plugin atualizado.
+The installer reuses the `plugin-creator` helpers provided by Codex. If they are not available, use the MCP configuration generated at `plugins/codex-infra/.mcp.json` in the client and follow [Installation and Operation](docs/USO.md). Open a new task in the client so it loads the updated plugin.
 
-Para tornar este caminho a regra do seu trabalho, peça ao Codex para incorporar [a instrução de adoção](docs/ADOPTION.md) ao seu contrato global existente. O instalador não substitui suas instruções e não importa suas conversas automaticamente. O bootstrap cria `docs/LOCAL-ADOPTION.md`, ignorado pelo Git, com a raiz desta instalação para esse ajuste.
+To make this path the default for your work, ask Codex to incorporate [the adoption instruction](docs/ADOPTION.md) into your existing global contract. The installer does not replace your instructions or automatically import your conversations. The bootstrap creates `docs/LOCAL-ADOPTION.md`, ignored by Git, containing the root of this installation for that adjustment.
 
-## Primeira utilização
+## First use
 
-Peça: **“Carregue o contrato do meu vault de coding, localize o PRD/PREVC canônico deste projeto e cadastre suas fontes e checks na infraestrutura.”** Confira raiz, fontes, permissões e comandos. Depois use objetivos concretos, por exemplo: **“No projeto exemplo, corrija a validação de entrada dentro do requisito existente e confirme com o teste cadastrado.”**
+Ask:
 
-Em projeto existente, reaproveite e atualize PRD/PREVC canônicos. Um bug pequeno não exige criar outro PRD a cada tarefa. Em ideia nova, conversa e discovery precedem a formalização proporcional exigida pelo G-IDEIA. Registrar a conversa não substitui esse contrato nem autoriza implementar.
+**“Load the contract from my coding vault, locate the canonical PRD/PREVC for this project, and register its sources and checks in the infrastructure.”**
 
-Selecionar um projeto sem objetivo apenas carrega contexto. A execução direta continua disponível para trabalho simples; persistência e workers entram quando ajudam a execução, a retomada ou o isolamento. Publicação, merge e deploy mantêm suas autorizações próprias. Para aprendizado automático, o owner configura sua autorização permanente uma vez conforme [Aprendizado executável](docs/AUTONOMOUS-LEARNING.md); cada melhoria passa por revisão e testes sem nova aprovação individual.
+Check the root, sources, permissions, and commands. Then use concrete objectives, for example:
 
-Para abrir o painel temporário:
+**“In the example project, fix the input validation within the existing requirement and confirm it with the registered test.”**
+
+For an existing project, reuse and update the canonical PRD/PREVC. A small bug does not require creating another PRD for every task. For a new idea, conversation and discovery come before the proportional formalization required by G-IDEIA. Recording the conversation does not replace this contract or authorize implementation.
+
+Selecting a project without an objective only loads context. Direct execution remains available for simple work; persistence and workers are introduced when they help with execution, resumption, or isolation. Publishing, merging, and deployment retain their own authorization boundaries.
+
+For automatic learning, the owner configures their permanent authorization once according to [Executable Learning](docs/AUTONOMOUS-LEARNING.md). Each improvement then goes through review and testing without requiring individual approval again.
+
+To open the temporary dashboard:
 
 ```powershell
 node dist/src/cli.js observe --port 4317 --timeout 7200000
 ```
 
-Acesse o endereço loopback exibido no terminal. O painel consulta estado; seus cards não iniciam tarefas.
+Open the loopback address displayed in the terminal. The dashboard queries state; its cards do not start tasks.
 
-Após uma atualização, Refresh não troca o código carregado pelo backend. Se o painel indicar diferença de versão/fingerprint, reinicie somente o processo `observe` dessa instalação após a validação local. [Instalação e operação](docs/USO.md) explica o reinício e distingue campos não aplicáveis de métricas ausentes.
+After an update, Refresh does not replace the code loaded by the backend. If the dashboard indicates a version/fingerprint mismatch, restart only the `observe` process for that installation after local validation. [Installation and Operation](docs/USO.md) explains the restart procedure and distinguishes non-applicable fields from missing metrics.
 
-O agente registra resultados materiais e `findings` pela entrada operacional. Sob a política habilitada, achados e retrabalho observado seguem síntese, revisão independente, teste isolado e ativação automática. Efficiency apresenta o caso, a versão, o hash, as execuções reais e seus resultados. Para impedir usos futuros, informe ao agente o hash a desativar. Consultar o painel não inicia esses jobs; a manutenção começa a partir de atividade autorizada e usa os limites compartilhados da fila.
+The agent records material results and `findings` through the operational entry point. Under an enabled policy, findings and observed rework go through synthesis, independent review, isolated testing, and automatic activation. Efficiency displays the case, version, hash, real executions, and their results. To prevent future use, provide the agent with the hash to deactivate. Dashboard queries do not start these jobs; maintenance begins from authorized activity and uses the shared queue limits.
 
-Para acompanhar tokens ao longo das semanas, declare `performanceScope` na interação e opte pela telemetria local de contadores. O histórico separa projeto/classe/linguagem, apresenta média por turno completo ou total diário e preserva campos ausentes. Aplicação explícita de uma release pode ser ligada ao turno para comparar antes/depois dentro de escopo compatível. Os recibos não guardam transcrições nem convertem tokens em cota da assinatura. [Interações e continuidade](docs/INTERACTIONS.md) explica o registro; [Instalação e operação](docs/USO.md) explica a configuração opcional e as consultas.
+To track tokens over multiple weeks, declare `performanceScope` during the interaction and optionally enable local counter telemetry. History separates project/class/language, presents averages per complete turn or daily totals, and preserves missing fields. Explicit application of a release can be linked to a turn to compare before/after within a compatible scope. Receipts do not store transcripts or convert tokens into subscription quota. [Interactions and Continuity](docs/INTERACTIONS.md) explains the recording mechanism; [Installation and Operation](docs/USO.md) explains optional configuration and queries.
 
-## Ganhos esperados e mudança de hábito
+## Expected benefits and changes in workflow
 
-O objetivo é reduzir a reconstrução de contexto, o retrabalho e a supervisão manual, além de aproveitar melhor a cota disponível. **São hipóteses de benefício ainda não verificadas**: não há percentual de economia, ganho de produtividade ou melhoria de qualidade estabelecido para esta distribuição.
+The goal is to reduce context reconstruction, rework, and manual supervision, while making better use of the available quota. **These are still unverified benefit hypotheses**: there is no established percentage for savings, productivity gains, or quality improvements for this distribution.
 
-O mecanismo e o novo fluxo estão detalhados em [Proposta e hipóteses](docs/PROPOSTA.md). O uso contínuo mostra se essas mudanças ajudam no seu trabalho; o registro de evidências permite comparar experiências sem transformar estimativas em medições.
+The mechanism and the new workflow are detailed in [Proposal and Hypotheses](docs/PROPOSTA.md). Continued use will show whether these changes actually help with your work; the evidence records make it possible to compare experiences without turning estimates into measurements.
 
-## Documentação
+## Documentation
 
-- [Instalação, cadastro, comandos e recuperação](docs/USO.md)
-- [Aprendizado executável, política e desativação por hash](docs/AUTONOMOUS-LEARNING.md)
-- [Vault, G-IDEIA e fontes obrigatórias](docs/CONTEXT-CONTRACT.md)
-- [Como o workflow pessoal muda](docs/PROPOSTA.md)
-- [Adoção no contrato do agente](docs/ADOPTION.md)
-- [Interações, achados e continuidade](docs/INTERACTIONS.md)
-- [Privacidade e distribuição](docs/DISTRIBUICAO.md)
-- [Arquitetura e referência do código](docs/ARQUITETURA.md)
-- [Proveniência e dependências](THIRD_PARTY_NOTICES.md)
-- [Condição de uso do código próprio](LICENSE)
+- [Installation, registration, commands, and recovery](docs/USO.md)
+- [Executable learning, policy, and hash-based deactivation](docs/AUTONOMOUS-LEARNING.md)
+- [Vault, G-IDEIA, and required sources](docs/CONTEXT-CONTRACT.md)
+- [How the personal workflow changes](docs/PROPOSTA.md)
+- [Adoption in the agent contract](docs/ADOPTION.md)
+- [Interactions, findings, and continuity](docs/INTERACTIONS.md)
+- [Privacy and distribution](docs/DISTRIBUICAO.md)
+- [Architecture and code reference](docs/ARQUITETURA.md)
+- [Provenance and dependencies](THIRD_PARTY_NOTICES.md)
+- [Terms of use for original code](LICENSE)
 
-Este repositório contém código e exemplos sanitizados. Perfis reais, conversas, credenciais, vaults, históricos, relatórios privados e cópias de recuperação ficam fora do Git.
+This repository contains sanitized code and examples. Real profiles, conversations, credentials, vaults, histories, private reports, and recovery copies remain outside Git.
